@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production / build output
+dist/
+out-tsc/
+bazel-out/
+*.tsbuildinfo
+
+# Angular
+.angular/
+
+# Environment files
+.env
+*.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Editor and IDE
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+*.swp
+*.swo
+
+# Operating System files
+.DS_Store
+Thumbs.db

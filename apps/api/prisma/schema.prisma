@@ -1,0 +1,154 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [ltree]
+}
+
+enum FlowType {
+  CONTEXT
+  MUTEX
+  OBSERVER
+  FSM
+  TIMER
+}
+
+enum FlowStatus {
+  INACTIVE
+  ACTIVE
+  PAUSED
+  PROCESSING
+}
+
+enum ActionType {
+  FSM
+  SLA
+  TIMER
+  COUNTER
+}
+
+model Folder {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  parentId  String?  @map("parent_id") @db.Uuid
+  // ltree column; GIST index created in raw SQL migration
+  path      Unsupported("ltree")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children Folder[] @relation("FolderTree")
+  flows    Flow[]
+
+  @@index([parentId])
+  @@map("folders")
+}
+
+model Tag {
+  id       String @id @default(uuid()) @db.Uuid
+  name     String @unique
+  colorHex String? @map("color_hex")
+  flows    FlowTag[]
+
+  @@map("tags")
+}
+
+model Flow {
+  id                String     @id @default(uuid()) @db.Uuid
+  name              String
+  description       String?
+  type              FlowType
+  status            FlowStatus @default(INACTIVE)
+  isExclusive       Boolean    @default(false) @map("is_exclusive")
+  folderId          String?    @map("folder_id") @db.Uuid
+  config            Json?
+  orchestratorRules Json?      @map("orchestrator_rules")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+
+  folder   Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  tags     FlowTag[]
+  sessions FlowSession[]
+  subscriptions CardFlowSubscription[]
+
+  @@index([folderId])
+  @@index([type])
+  @@index([status])
+  @@map("flows")
+}
+
+model FlowTag {
+  flowId String @map("flow_id") @db.Uuid
+  tagId  String @map("tag_id") @db.Uuid
+  flow   Flow   @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([flowId, tagId])
+  @@map("flow_tags")
+}
+
+model FlowSession {
+  id        String    @id @default(uuid()) @db.Uuid
+  flowId    String    @map("flow_id") @db.Uuid
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+  closedBy  String?   @map("closed_by")
+  flow      Flow      @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@index([flowId, endedAt])
+  @@map("flow_sessions")
+}
+
+model Card {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id")
+  title         String
+  content       String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  actions       Action[]
+  subscriptions CardFlowSubscription[]
+
+  @@map("cards")
+}
+
+model Action {
+  id           String     @id @default(uuid()) @db.Uuid
+  cardId       String     @map("card_id") @db.Uuid
+  type         ActionType
+  currentState String?    @map("current_state")
+  config       Json?
+  card         Card       @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  events       ActionEvent[]
+
+  @@index([cardId])
+  @@map("actions")
+}
+
+model ActionEvent {
+  id                   String   @id @default(uuid()) @db.Uuid
+  actionId             String   @map("action_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at")
+  eventType            String   @map("event_type")
+  payload              Json     @default("{}")
+  activeFlowSessionIds String[] @default([]) @map("active_flow_session_ids") @db.Uuid
+  action               Action   @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@index([actionId, createdAt])
+  @@map("action_events")
+}
+
+model CardFlowSubscription {
+  cardId          String     @map("card_id") @db.Uuid
+  flowId          String     @map("flow_id") @db.Uuid
+  requiredStatus  FlowStatus @default(ACTIVE) @map("required_status")
+  onMatchBehavior String     @default("NOTIFY") @map("on_match_behavior")
+  card            Card       @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  flow            Flow       @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@id([cardId, flowId])
+  @@map("card_flow_subscriptions")
+}

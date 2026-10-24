@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  api:
+    build: ./apps/api
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://lemon:secret@postgres:5432/lemon_db
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: lemon
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: lemon_db
+    ports:
+      - "5432:5432"
