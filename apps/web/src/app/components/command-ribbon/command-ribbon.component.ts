@@ -9,6 +9,8 @@ import {
   inject,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { I18nService } from '../../core/i18n/i18n.service';
+import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { FolderNode } from '../../core/models/flow.models';
 
 const FOLDER_ICONS: Record<string, string> = {
@@ -22,7 +24,7 @@ const FOLDER_ICONS: Record<string, string> = {
 @Component({
   selector: 'app-command-ribbon',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="bg-surface-container-lowest rounded-xl p-2.5 shadow-sm border border-outline-variant/30 flex flex-col gap-2">
@@ -30,7 +32,7 @@ const FOLDER_ICONS: Record<string, string> = {
         <div class="flex items-center gap-2">
           <span class="material-symbols-rounded text-base text-primary">tune</span>
           <span class="font-label-ui text-xs uppercase tracking-wider text-on-surface-variant font-bold"
-            >Command Ribbon · Domains &amp; Folders</span
+            >{{ 'commandRibbon.title' | trans }}</span
           >
         </div>
         <button
@@ -39,7 +41,7 @@ const FOLDER_ICONS: Record<string, string> = {
           class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-label-code-sm text-xs bg-surface-container-low hover:bg-surface-container-high text-on-surface transition-colors"
         >
           <span class="material-symbols-rounded text-sm">add</span>
-          <span>New Folder</span>
+          <span>{{ 'commandRibbon.newFolder' | trans }}</span>
         </button>
       </div>
 
@@ -57,7 +59,7 @@ const FOLDER_ICONS: Record<string, string> = {
           "
         >
           <span class="material-symbols-rounded text-sm">layers</span>
-          <span>All Flows</span>
+          <span>{{ 'commandRibbon.allFlows' | trans }}</span>
           <span
             class="font-label-code-sm text-[11px] px-1.5 py-0.2 rounded-full"
             [class]="selectedFolderId === null ? 'bg-on-primary-container/20 text-on-primary-container' : 'bg-surface-container text-on-surface-variant'"
@@ -89,7 +91,7 @@ const FOLDER_ICONS: Record<string, string> = {
                   </span>
                 }
                 <span class="material-symbols-rounded text-sm">{{ icon(node) }}</span>
-                <span class="font-medium whitespace-nowrap">{{ node.name }}</span>
+                <span class="font-medium whitespace-nowrap">{{ i18n.translateFolder(node.name) }}</span>
                 <span
                   class="font-label-code-sm text-[10px] px-1.5 py-0.5 rounded-full"
                   [class]="isNodeOrChildSelected(node) ? 'bg-on-primary-container/20 text-on-primary-container font-bold' : 'bg-surface-container text-on-surface-variant'"
@@ -101,7 +103,7 @@ const FOLDER_ICONS: Record<string, string> = {
               @if (node.children.length) {
                 <button
                   type="button"
-                  [attr.aria-label]="'Toggle subfolders of ' + node.name"
+                  [attr.aria-label]="i18n.t('commandRibbon.toggleSubfolders', { name: i18n.translateFolder(node.name) })"
                   (click)="$event.stopPropagation(); toggleDropdown(node.id)"
                   class="pr-2 pl-0.5 py-1.5 flex items-center hover:opacity-75"
                 >
@@ -120,7 +122,7 @@ const FOLDER_ICONS: Record<string, string> = {
                 class="absolute left-0 top-full mt-1.5 z-40 bg-surface-container-lowest rounded-xl shadow-lg border border-outline-variant/40 p-1.5 min-w-[210px] flex flex-col gap-1 backdrop-blur-md"
               >
                 <div class="px-2 py-1 text-[11px] font-label-ui uppercase tracking-wider text-on-surface-variant/70 border-b border-outline-variant/20">
-                  Sub-Domains of {{ node.name }}
+                  {{ 'commandRibbon.subDomainsOf' | trans: { name: i18n.translateFolder(node.name) } }}
                 </div>
                 <button
                   type="button"
@@ -130,7 +132,7 @@ const FOLDER_ICONS: Record<string, string> = {
                 >
                   <span class="flex items-center gap-1.5">
                     <span class="material-symbols-rounded text-sm">folder_open</span>
-                    <span>All in {{ node.name }}</span>
+                    <span>{{ 'commandRibbon.allIn' | trans: { name: i18n.translateFolder(node.name) } }}</span>
                   </span>
                   <span class="font-label-code-sm text-[10px] text-on-surface-variant">{{ node.flowCount }}</span>
                 </button>
@@ -146,7 +148,7 @@ const FOLDER_ICONS: Record<string, string> = {
                       @if (child.hasActiveFlow) {
                         <span class="w-1.5 h-1.5 rounded-full bg-success flex-shrink-0"></span>
                       }
-                      <span class="truncate">{{ child.name }}</span>
+                      <span class="truncate">{{ i18n.translateFolder(child.name) }}</span>
                     </span>
                     <span
                       class="font-label-code-sm text-[10px] px-1.5 py-0.5 rounded"
@@ -169,16 +171,16 @@ const FOLDER_ICONS: Record<string, string> = {
             type="text"
             [(ngModel)]="newFolderName"
             (keydown.enter)="submitCreate()"
-            placeholder="New folder name..."
+            [placeholder]="'commandRibbon.newFolderPlaceholder' | trans"
             class="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg bg-surface-container-low text-on-surface text-xs font-body-sm focus:outline-none focus:ring-2 focus:ring-primary-container"
           />
           <select
             [(ngModel)]="newParentId"
             class="px-2.5 py-1.5 rounded-lg bg-surface-container-low text-on-surface text-xs font-label-ui focus:outline-none focus:ring-2 focus:ring-primary-container"
           >
-            <option [ngValue]="null">Root (No parent)</option>
+            <option [ngValue]="null">{{ 'commandRibbon.rootNoParent' | trans }}</option>
             @for (folder of folderNodes; track folder.id) {
-              <option [ngValue]="folder.id">In: {{ folder.name }}</option>
+              <option [ngValue]="folder.id">{{ 'commandRibbon.inFolder' | trans: { name: i18n.translateFolder(folder.name) } }}</option>
             }
           </select>
           <button
@@ -187,14 +189,14 @@ const FOLDER_ICONS: Record<string, string> = {
             [disabled]="!newFolderName.trim()"
             class="px-3 py-1.5 rounded-lg bg-primary-container hover:bg-primary-fixed-dim disabled:opacity-50 text-on-primary-container font-label-ui text-xs font-bold transition-all"
           >
-            Save Folder
+            {{ 'commandRibbon.saveFolder' | trans }}
           </button>
           <button
             type="button"
             (click)="showCreateModal = false"
             class="px-2.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface font-label-ui text-xs"
           >
-            Cancel
+            {{ 'commandRibbon.cancel' | trans }}
           </button>
         </div>
       }
@@ -203,6 +205,7 @@ const FOLDER_ICONS: Record<string, string> = {
 })
 export class CommandRibbonComponent {
   private readonly hostRef = inject(ElementRef);
+  protected readonly i18n = inject(I18nService);
 
   @Input({ required: true }) folderNodes: FolderNode[] = [];
   @Input() selectedFolderId: string | null = null;

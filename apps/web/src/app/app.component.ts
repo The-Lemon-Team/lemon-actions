@@ -2,27 +2,40 @@ import { AsyncPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { map, switchMap, take, timer } from 'rxjs';
 import { FlowDashboardComponent } from './components/flow-dashboard/flow-dashboard.component';
+import { HomeTrackerComponent } from './components/home-tracker/home-tracker.component';
 import { LayoutComponent } from './components/layout/layout.component';
 import { SidebarComponent } from './components/sidebar/sidebar.component';
 import { FlowOrchestratorService } from './core/services/flow-orchestrator.service';
+import { ProfileService } from './core/services/profile.service';
 import { ThemeService } from './core/services/theme.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [AsyncPipe, LayoutComponent, SidebarComponent, FlowDashboardComponent],
+  imports: [AsyncPipe, LayoutComponent, SidebarComponent, FlowDashboardComponent, HomeTrackerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-layout [isDark]="(theme.theme$ | async) === 'dark'" (themeToggle)="theme.toggle()">
+    <app-layout
+      [isDark]="(theme.theme$ | async) === 'dark'"
+      [appMode]="(profileService.appMode$ | async) ?? 'home'"
+      [profileName]="(profileService.activeProfile$ | async)?.displayName ?? 'Мой Дом'"
+      (themeToggle)="theme.toggle()"
+      (modeChange)="profileService.setAppMode($event)"
+    >
       <app-sidebar
         slot="sidebar"
+        [workspaceName]="(profileService.activeProfile$ | async)?.displayName ?? 'Мой Дом'"
         [tags]="(tags$ | async) ?? []"
         [activeFlows]="(activeFlows$ | async) ?? 0"
         [isMutexLocked]="(isMutexLocked$ | async) ?? false"
         [activeLocks]="(activeLocks$ | async) ?? []"
         (tagSelect)="orchestrator.selectTag($event)"
       />
-      <app-flow-dashboard />
+      @if (((profileService.appMode$ | async) ?? 'home') === 'home') {
+        <app-home-tracker />
+      } @else {
+        <app-flow-dashboard />
+      }
     </app-layout>
     @if (toast$ | async; as message) {
       <div
@@ -37,6 +50,7 @@ import { ThemeService } from './core/services/theme.service';
 })
 export class AppComponent {
   protected readonly orchestrator = inject(FlowOrchestratorService);
+  protected readonly profileService = inject(ProfileService);
   protected readonly theme = inject(ThemeService);
 
   readonly tags$ = this.orchestrator.tags$;

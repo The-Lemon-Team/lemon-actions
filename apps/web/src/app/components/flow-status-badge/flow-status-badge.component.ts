@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input, inject } from '@angular/core';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { FlowStatus } from '../../core/models/flow.models';
 
 @Component({
@@ -16,6 +17,8 @@ import { FlowStatus } from '../../core/models/flow.models';
   `,
 })
 export class FlowStatusBadgeComponent {
+  protected readonly i18n = inject(I18nService);
+
   @Input() status: FlowStatus = FlowStatus.INACTIVE;
   @Input() label?: string;
   @Input() variant?: 'active' | 'paused' | 'idle' | 'warning' | 'success';
@@ -57,14 +60,16 @@ export class FlowStatusBadgeComponent {
   }
 
   get displayLabel(): string {
-    if (this.label) return this.label;
+    if (this.label) {
+      return this.i18n.translateFsmLabel(this.label);
+    }
     switch (this.resolvedVariant) {
       case 'active':
-        return 'Active';
+        return this.i18n.translateFlowStatus(FlowStatus.ACTIVE);
       case 'paused':
-        return 'Paused';
+        return this.i18n.translateFlowStatus(FlowStatus.PAUSED);
       default:
-        return 'Idle';
+        return this.i18n.translateFlowStatus(FlowStatus.INACTIVE);
     }
   }
 }

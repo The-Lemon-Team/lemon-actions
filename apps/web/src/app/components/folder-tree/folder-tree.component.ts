@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { I18nService } from '../../core/i18n/i18n.service';
 import { FolderNode } from '../../core/models/flow.models';
 
 const FOLDER_ICONS: Record<string, string> = {
@@ -30,7 +31,7 @@ const FOLDER_ICONS: Record<string, string> = {
               type="button"
               class="p-1 flex items-center"
               [class.invisible]="!node.children.length"
-              [attr.aria-label]="node.isExpanded ? 'Collapse ' + node.name : 'Expand ' + node.name"
+              [attr.aria-label]="(node.isExpanded ? i18n.t('folderTree.collapse') : i18n.t('folderTree.expand')) + ' ' + i18n.translateFolder(node.name)"
               (click)="toggle.emit(node.id)"
             >
               <span
@@ -55,7 +56,7 @@ const FOLDER_ICONS: Record<string, string> = {
                   >
                 }
                 <span class="truncate" [class]="node.depth === 0 ? 'font-body-md text-body-md' : 'font-body-sm text-body-sm'">{{
-                  node.name
+                  i18n.translateFolder(node.name)
                 }}</span>
               </span>
               <span
@@ -74,6 +75,8 @@ const FOLDER_ICONS: Record<string, string> = {
   `,
 })
 export class FolderTreeComponent {
+  protected readonly i18n = inject(I18nService);
+
   @Input({ required: true }) nodes: FolderNode[] = [];
   @Output() select = new EventEmitter<string>();
   @Output() toggle = new EventEmitter<string>();

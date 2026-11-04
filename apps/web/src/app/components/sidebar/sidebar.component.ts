@@ -1,11 +1,13 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { I18nService } from '../../core/i18n/i18n.service';
+import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { Flow, TagWithCount } from '../../core/models/flow.models';
 import { TagCloudComponent } from '../tag-cloud/tag-cloud.component';
 
 @Component({
   selector: 'app-sidebar',
   standalone: true,
-  imports: [TagCloudComponent],
+  imports: [TagCloudComponent, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <aside class="flex flex-col gap-space-md">
@@ -29,7 +31,9 @@ import { TagCloudComponent } from '../tag-cloud/tag-cloud.component';
                   ></span>
                   <span class="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
                 </span>
-                <span class="font-label-code-sm text-xs text-on-surface-variant">{{ activeFlows }} Channels Active</span>
+                <span class="font-label-code-sm text-xs text-on-surface-variant">
+                  {{ activeFlows }} {{ 'sidebar.channelsActive' | trans }}
+                </span>
               </div>
             </div>
           </div>
@@ -58,36 +62,36 @@ import { TagCloudComponent } from '../tag-cloud/tag-cloud.component';
               {{ isMutexLocked ? 'lock' : 'verified_user' }}
             </span>
             <span class="font-label-ui text-xs uppercase tracking-wider font-bold text-on-surface">
-              {{ isMutexLocked ? 'Mutex Lock Engaged' : 'System Guard: Clear' }}
+              {{ isMutexLocked ? ('sidebar.mutexLockedEngaged' | trans) : ('sidebar.systemGuardClear' | trans) }}
             </span>
           </div>
           <span
             class="font-label-code-sm text-[10px] px-1.5 py-0.5 rounded font-bold uppercase"
             [class]="isMutexLocked ? 'bg-warning text-on-warning' : 'bg-success-container text-on-success-container'"
           >
-            {{ isMutexLocked ? 'LOCKED' : 'READY' }}
+            {{ isMutexLocked ? ('sidebar.lockedBadge' | trans) : ('sidebar.readyBadge' | trans) }}
           </span>
         </div>
 
         <div class="pt-2.5 flex flex-col gap-1.5 font-body-sm text-xs">
           @if (isMutexLocked) {
             <p class="text-on-surface font-medium leading-relaxed">
-              Exclusive flow holding system lock:
+              {{ 'sidebar.exclusiveLockDesc' | trans }}
             </p>
             @for (lock of activeLocks; track lock.id) {
               <div
                 class="flex items-center gap-1.5 px-2 py-1 rounded bg-surface-container text-on-surface font-label-code-sm text-xs"
               >
                 <span class="material-symbols-rounded text-xs text-warning">lock</span>
-                <span class="font-bold truncate">{{ lock.name }}</span>
+                <span class="font-bold truncate">{{ i18n.translateFlow(lock).name }}</span>
               </div>
             }
             <p class="text-on-surface-variant text-[11px] leading-tight">
-              Dependent context tasks &amp; cards are queued or paused per orchestrator rules.
+              {{ 'sidebar.dependentRulesDesc' | trans }}
             </p>
           } @else {
             <p class="text-on-surface-variant leading-relaxed">
-              No concurrency conflicts. All parallel channels are unblocked and accepting triggers.
+              {{ 'sidebar.noConflictsDesc' | trans }}
             </p>
           }
         </div>
@@ -96,10 +100,12 @@ import { TagCloudComponent } from '../tag-cloud/tag-cloud.component';
       <!-- Tags & Labels Section -->
       <div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm border border-outline-variant/30 flex flex-col gap-space-sm">
         <div class="flex items-center justify-between px-space-xs pb-space-xs">
-          <span class="font-label-ui text-xs uppercase tracking-wider text-on-surface-variant font-bold"
-            >Taxonomy Filters</span
-          >
-          <span class="font-label-code-sm text-[11px] text-outline">{{ tags.length }} tags</span>
+          <span class="font-label-ui text-xs uppercase tracking-wider text-on-surface-variant font-bold">
+            {{ 'sidebar.taxonomyFilters' | trans }}
+          </span>
+          <span class="font-label-code-sm text-[11px] text-outline">
+            {{ tags.length }} {{ 'sidebar.tagsCount' | trans }}
+          </span>
         </div>
         <app-tag-cloud [tags]="tags" (select)="tagSelect.emit($event)" />
       </div>
@@ -107,6 +113,8 @@ import { TagCloudComponent } from '../tag-cloud/tag-cloud.component';
   `,
 })
 export class SidebarComponent {
+  protected readonly i18n = inject(I18nService);
+
   @Input() workspaceName = 'Acme Production';
   @Input() activeFlows = 0;
   @Input() isMutexLocked = false;
