@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { CreateFolderDto, UpdateFolderDto } from './folder.dto';
+import { CreateFolderDto, ListFoldersQueryDto, UpdateFolderDto } from './folder.dto';
 import { FolderDto } from './folder.types';
 import { FoldersRepository } from './folders.repository';
 
@@ -17,8 +17,8 @@ export function toLtreeLabel(name: string): string {
 export class FoldersService {
   constructor(private readonly repo: FoldersRepository) {}
 
-  findAll(): Promise<FolderDto[]> {
-    return this.repo.findAll();
+  findAll(q: ListFoldersQueryDto = {}): Promise<FolderDto[]> {
+    return this.repo.findAll(q);
   }
 
   async findOne(id: string): Promise<FolderDto> {
@@ -32,11 +32,54 @@ export class FoldersService {
     return this.repo.findSubtree(id);
   }
 
+  /**
+   * Срез контекста Нейрона-Контейнера (папки) для внешних императивных приложений:
+   * возвращает права доступа (статусы потоков/мьютексов), открытые сессии и последние события.
+   */
+  async context(id: string) {
+    const folder = await this.findOne(id);
+    const { flows, activeSessions, recentEvents } = await this.repo.findFolderContextData(id);
+
+    const gates: Record<
+      string,
+      { id: string; type: string; status: string; isExclusive: boolean; config: unknown }
+    > = {};
+    const activeFlows: string[] = [];
+    let isExclusiveLocked = false;
+
+    for (const f of flows) {
+      const running = f.status === 'ACTIVE' || f.status === 'PROCESSING';
+      if (running) {
+        activeFlows.push(f.name);
+        if (f.isExclusive) isExclusiveLocked = true;
+      }
+      gates[f.name] = {
+        id: f.id,
+        type: f.type,
+        status: f.status,
+        isExclusive: f.isExclusive,
+        config: f.config,
+      };
+    }
+
+    return {
+      neuron: folder,
+      permissions: {
+        isExclusiveLocked,
+        activeFlows,
+        gates,
+      },
+      activeSessions,
+      recentEvents,
+    };
+  }
+
   create(dto: CreateFolderDto): Promise<FolderDto> {
     return this.repo.transaction(async (tx) => {
       const parent = dto.parentId ? await this.requireFolder(dto.parentId, tx) : null;
-      const path = await this.uniquePath(parent?.path ?? null, toLtreeLabel(dto.name), tx);
-      return this.repo.insert(dto.name, parent?.id ?? null, path, tx);
+      const profileId = dto.profileId ?? parent?.profileId ?? null;
+      const path = await this.uniquePath(parent?.path ?? null, toLtreeLabel(dto.name), profileId, tx);
+      return this.repo.insert(dto.name, parent?.id ?? null, path, profileId, tx);
     });
   }
 
@@ -54,8 +97,8 @@ export class FoldersService {
           throw new BadRequestException('Cannot move a folder into itself or its descendants');
         }
         const ownLabel = folder.path.split('.').pop() as string;
-        const newPath = await this.uniquePath(parent?.path ?? null, ownLabel, tx);
-        await this.repo.moveSubtree(id, folder.path, newPath, parent?.id ?? null, tx);
+        const newPath = await this.uniquePath(parent?.path ?? null, ownLabel, folder.profileId, tx);
+        await this.repo.moveSubtree(id, folder.path, newPath, parent?.id ?? null, folder.profileId, tx);
       }
       return this.requireFolder(id, tx);
     });
@@ -78,11 +121,12 @@ export class FoldersService {
   private async uniquePath(
     parentPath: string | null,
     label: string,
-    tx: Parameters<FoldersRepository['pathExists']>[1],
+    profileId: string | null,
+    tx: Parameters<FoldersRepository['pathExists']>[2],
   ): Promise<string> {
     const build = (l: string) => (parentPath ? `${parentPath}.${l}` : l);
     let candidate = build(label);
-    for (let i = 2; await this.repo.pathExists(candidate, tx); i++) {
+    for (let i = 2; await this.repo.pathExists(candidate, profileId, tx); i++) {
       candidate = build(`${label}_${i}`);
     }
     return candidate;

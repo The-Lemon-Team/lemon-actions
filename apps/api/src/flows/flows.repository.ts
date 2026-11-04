@@ -16,6 +16,7 @@ export interface FlowView {
   status: Flow['status'];
   isExclusive: boolean;
   folderId: string | null;
+  profileId: string | null;
   tags: { id: string; name: string; colorHex?: string }[];
   config?: unknown;
   orchestratorRules?: unknown;
@@ -32,6 +33,7 @@ export function toFlowView(f: FlowWithTags): FlowView {
     status: f.status,
     isExclusive: f.isExclusive,
     folderId: f.folderId,
+    profileId: f.profileId ?? null,
     tags: f.tags.map((t: { tag: Tag }) => ({
       id: t.tag.id,
       name: t.tag.name,
@@ -52,9 +54,28 @@ export class FlowsRepository {
     return this.prisma.$transaction(fn);
   }
 
-  findMany(q: ListFlowsQueryDto): Promise<FlowWithTags[]> {
+  async findMany(q: ListFlowsQueryDto): Promise<FlowWithTags[]> {
+    let folderFilter: Prisma.StringNullableFilter | string | undefined = q.folderId;
+
+    if (q.scope) {
+      const scopedRows = q.profileId
+        ? await this.prisma.$queryRaw<{ id: string }[]>`
+            SELECT id FROM folders
+            WHERE path <@ ${q.scope}::ltree AND profile_id = ${q.profileId}::uuid`
+        : await this.prisma.$queryRaw<{ id: string }[]>`
+            SELECT id FROM folders
+            WHERE path <@ ${q.scope}::ltree`;
+      const scopedIds = scopedRows.map((r) => r.id);
+      if (q.folderId) {
+        folderFilter = scopedIds.includes(q.folderId) ? q.folderId : { in: [] };
+      } else {
+        folderFilter = { in: scopedIds };
+      }
+    }
+
     const where: Prisma.FlowWhereInput = {
-      folderId: q.folderId,
+      folderId: folderFilter,
+      profileId: q.profileId,
       type: q.type,
       status: q.status,
       tags: q.tag ? { some: { tag: { name: q.tag } } } : undefined,
@@ -135,14 +156,76 @@ export class FlowsRepository {
     });
   }
 
-  async countByStatus(): Promise<Record<FlowStatus, number>> {
-    const rows = await this.prisma.flow.groupBy({ by: ['status'], _count: { _all: true } });
+  async countByStatus(profileId?: string): Promise<Record<FlowStatus, number>> {
+    const rows = await this.prisma.flow.groupBy({
+      by: ['status'],
+      where: profileId ? { profileId } : undefined,
+      _count: { _all: true },
+    });
     const out = { INACTIVE: 0, ACTIVE: 0, PAUSED: 0, PROCESSING: 0 } as Record<FlowStatus, number>;
     rows.forEach((r) => (out[r.status] = r._count._all));
     return out;
   }
 
-  async folderExists(id: string): Promise<boolean> {
-    return (await this.prisma.folder.count({ where: { id } })) > 0;
+  async getFolderMeta(id: string): Promise<{ id: string; profileId: string | null } | null> {
+    return this.prisma.folder.findUnique({
+      where: { id },
+      select: { id: true, profileId: true },
+    });
+  }
+
+  listSessions(flowId: string) {
+    return this.prisma.flowSession.findMany({
+      where: { flowId },
+      orderBy: { startedAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  listEvents(flowId: string, sessionId?: string) {
+    return this.prisma.flowEvent.findMany({
+      where: {
+        flowId,
+        ...(sessionId ? { activeFlowSessionIds: { has: sessionId } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
+
+  /**
+   * Находит все открытые сессии потоков в том же контейнере-папке (Neuron),
+   * чтобы каждое событие автоматически получало слепок активных мьютексов и расписаний.
+   */
+  findOpenSessionsInFolder(folderId: string | null, includeFlowId: string, db: Db = this.prisma) {
+    return db.flowSession.findMany({
+      where: {
+        endedAt: null,
+        flow: folderId
+          ? { OR: [{ folderId }, { id: includeFlowId }] }
+          : { id: includeFlowId },
+      },
+      select: { id: true, flowId: true },
+    });
+  }
+
+  createFlowEvent(
+    data: {
+      flowId: string;
+      source: string;
+      eventType: string;
+      payload: Prisma.InputJsonObject;
+      activeFlowSessionIds: string[];
+    },
+    db: Db = this.prisma,
+  ) {
+    return db.flowEvent.create({ data });
+  }
+
+  touchFlow(id: string, db: Db = this.prisma) {
+    return db.flow.update({
+      where: { id },
+      data: { updatedAt: new Date() },
+    });
   }
 }

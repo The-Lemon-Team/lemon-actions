@@ -6,6 +6,6 @@ import { FoldersService } from './folders.service';
 @Module({
   controllers: [FoldersController],
   providers: [FoldersService, FoldersRepository],
-  exports: [FoldersService],
+  exports: [FoldersService, FoldersRepository],
 })
 export class FoldersModule {}

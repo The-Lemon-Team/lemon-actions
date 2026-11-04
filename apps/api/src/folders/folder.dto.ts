@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
 
 export class CreateFolderDto {
   @IsString()
@@ -9,6 +9,10 @@ export class CreateFolderDto {
   @IsOptional()
   @IsUUID()
   parentId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  profileId?: string | null;
 }
 
 export class UpdateFolderDto {
@@ -22,4 +26,18 @@ export class UpdateFolderDto {
   @IsOptional()
   @IsUUID()
   parentId?: string | null;
+}
+
+export class ListFoldersQueryDto {
+  @IsOptional()
+  @IsUUID()
+  profileId?: string;
+
+  /** ltree scope prefix, e.g. 'home' or 'home.supplies' */
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-z0-9_]+(\.[a-z0-9_]+)*$/i, {
+    message: 'scope must be a valid ltree path (e.g. "home" or "home.supplies")',
+  })
+  scope?: string;
 }

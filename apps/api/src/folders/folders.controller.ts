@@ -1,7 +1,17 @@
 import {
-  Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
 } from '@nestjs/common';
-import { CreateFolderDto, UpdateFolderDto } from './folder.dto';
+import { CreateFolderDto, ListFoldersQueryDto, UpdateFolderDto } from './folder.dto';
 import { FoldersService } from './folders.service';
 
 @Controller('folders')
@@ -9,8 +19,15 @@ export class FoldersController {
   constructor(private readonly service: FoldersService) {}
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(
+    @Query() q: ListFoldersQueryDto,
+    @Headers('x-profile-id') headerProfileId?: string,
+    @Headers('x-app-scope') headerScope?: string,
+  ) {
+    return this.service.findAll({
+      profileId: q.profileId ?? headerProfileId,
+      scope: q.scope ?? headerScope,
+    });
   }
 
   @Get(':id')
@@ -23,9 +40,20 @@ export class FoldersController {
     return this.service.subtree(id);
   }
 
+  @Get(':id/context')
+  context(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.context(id);
+  }
+
   @Post()
-  create(@Body() dto: CreateFolderDto) {
-    return this.service.create(dto);
+  create(
+    @Body() dto: CreateFolderDto,
+    @Headers('x-profile-id') headerProfileId?: string,
+  ) {
+    return this.service.create({
+      ...dto,
+      profileId: dto.profileId ?? headerProfileId ?? null,
+    });
   }
 
   @Patch(':id')

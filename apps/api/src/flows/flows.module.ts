@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { FlowSchedulerService } from './flow-scheduler.service';
 import { FlowsController } from './flows.controller';
 import { FlowsRepository } from './flows.repository';
 import { FlowsService } from './flows.service';
@@ -11,9 +12,10 @@ import { FlowTypeRegistry } from './handlers/flow-type.registry';
     FlowsService,
     FlowsRepository,
     FlowTypeRegistry,
+    FlowSchedulerService,
     // Add new FlowType handlers to this list; no orchestrator change required.
     { provide: FLOW_TYPE_HANDLERS, useValue: DEFAULT_FLOW_TYPE_HANDLERS },
   ],
-  exports: [FlowsService],
+  exports: [FlowsService, FlowSchedulerService],
 })
 export class FlowsModule {}

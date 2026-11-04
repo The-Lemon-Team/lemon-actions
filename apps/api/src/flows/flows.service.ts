@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { FlowStatus, Prisma } from '@prisma/client';
-import { CreateFlowDto, ListFlowsQueryDto, UpdateFlowDto } from './flow.dto';
+import { CreateFlowDto, CreateFlowEventDto, ListFlowsQueryDto, UpdateFlowDto } from './flow.dto';
 import { FlowView, FlowsRepository, toFlowView } from './flows.repository';
 import { FlowTypeRegistry } from './handlers/flow-type.registry';
 
@@ -25,8 +25,8 @@ export class FlowsService {
     return (await this.repo.findMany(q)).map(toFlowView);
   }
 
-  async metrics() {
-    const c = await this.repo.countByStatus();
+  async metrics(profileId?: string) {
+    const c = await this.repo.countByStatus(profileId);
     return {
       registered: c.INACTIVE + c.ACTIVE + c.PAUSED + c.PROCESSING,
       executing: c.ACTIVE + c.PROCESSING,
@@ -41,7 +41,9 @@ export class FlowsService {
 
   async create(dto: CreateFlowDto): Promise<FlowView> {
     this.registry.get(dto.type).validateConfig(dto.config);
-    await this.assertFolder(dto.folderId);
+    const folderMeta = await this.assertFolder(dto.folderId);
+    const resolvedProfileId = dto.profileId ?? folderMeta?.profileId ?? null;
+
     const flow = await this.repo.create(
       {
         name: dto.name,
@@ -49,6 +51,7 @@ export class FlowsService {
         type: dto.type,
         isExclusive: dto.isExclusive ?? false,
         folder: dto.folderId ? { connect: { id: dto.folderId } } : undefined,
+        profile: resolvedProfileId ? { connect: { id: resolvedProfileId } } : undefined,
         config: this.json(dto.config),
         orchestratorRules: this.json(dto.orchestratorRules),
       },
@@ -81,7 +84,7 @@ export class FlowsService {
     await this.repo.delete(id);
   }
 
-  async updateStatus(id: string, next: FlowStatus): Promise<FlowView> {
+  async updateStatus(id: string, next: FlowStatus, closedBy = 'user'): Promise<FlowView> {
     return this.repo.transaction(async (tx) => {
       const flow = await this.repo.findById(id, tx);
       if (!flow) throw new NotFoundException(`Flow ${id} not found`);
@@ -107,9 +110,41 @@ export class FlowsService {
       if (isRunning(next)) {
         if (!(await this.repo.hasOpenSession(id, tx))) await this.repo.openSession(id, tx);
       } else {
-        await this.repo.closeSessions(id, 'user', tx);
+        await this.repo.closeSessions(id, closedBy, tx);
       }
       return toFlowView(updated);
+    });
+  }
+
+  async listSessions(id: string) {
+    await this.require(id);
+    return this.repo.listSessions(id);
+  }
+
+  async listEvents(id: string, sessionId?: string) {
+    await this.require(id);
+    return this.repo.listEvents(id, sessionId);
+  }
+
+  /**
+   * Записывает событие напрямую в поток, не отсекая историю,
+   * и автоматически прикрепляет слепок всех активных сессий в данном контейнере-папке (Neuron).
+   */
+  async appendEvent(id: string, dto: CreateFlowEventDto) {
+    const flow = await this.require(id);
+    return this.repo.transaction(async (tx) => {
+      const openSessions = await this.repo.findOpenSessionsInFolder(flow.folderId, flow.id, tx);
+      await this.repo.touchFlow(flow.id, tx);
+      return this.repo.createFlowEvent(
+        {
+          flowId: flow.id,
+          source: dto.source ?? 'external',
+          eventType: dto.eventType,
+          payload: (dto.payload ?? {}) as Prisma.InputJsonObject,
+          activeFlowSessionIds: openSessions.map((s) => s.id),
+        },
+        tx,
+      );
     });
   }
 
@@ -120,9 +155,12 @@ export class FlowsService {
   }
 
   private async assertFolder(folderId?: string | null) {
-    if (folderId && !(await this.repo.folderExists(folderId))) {
+    if (!folderId) return null;
+    const meta = await this.repo.getFolderMeta(folderId);
+    if (!meta) {
       throw new BadRequestException(`Folder ${folderId} does not exist`);
     }
+    return meta;
   }
 
   private uniqueTags(tags?: string[]): string[] {
