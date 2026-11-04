@@ -1,4 +1,5 @@
 import { FlowStatus, FlowType } from '../models/flow.models';
+import { I18nService } from '../i18n/i18n.service';
 
 export interface FlowTypeUi {
   label: string;
@@ -15,6 +16,15 @@ export const FLOW_TYPE_UI: Record<FlowType, FlowTypeUi> = {
   [FlowType.CONTEXT]: { label: 'Context', icon: 'psychology', classes: 'bg-primary-fixed text-on-primary-fixed' },
 };
 
+export function getFlowTypeUi(type: FlowType, i18n?: I18nService): FlowTypeUi {
+  const base = FLOW_TYPE_UI[type];
+  if (!i18n) return base;
+  return {
+    ...base,
+    label: i18n.translateFlowType(type),
+  };
+}
+
 export interface FlowStatusUi {
   label: string;
   pill: string;
@@ -28,6 +38,15 @@ export const FLOW_STATUS_UI: Record<FlowStatus, FlowStatusUi> = {
   [FlowStatus.PAUSED]: { label: 'Paused', pill: 'bg-warning-container text-on-warning-container', dot: 'bg-warning', pulse: false },
   [FlowStatus.INACTIVE]: { label: 'Idle', pill: 'bg-surface-container text-on-surface-variant', dot: 'bg-tertiary', pulse: false },
 };
+
+export function getFlowStatusUi(status: FlowStatus, i18n?: I18nService): FlowStatusUi {
+  const base = FLOW_STATUS_UI[status];
+  if (!i18n) return base;
+  return {
+    ...base,
+    label: i18n.translateFlowStatus(status),
+  };
+}
 
 export function formatDuration(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);

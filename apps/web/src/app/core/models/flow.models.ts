@@ -1,5 +1,15 @@
 import { Observable } from 'rxjs';
 
+export type AppMode = 'home' | 'core';
+
+export interface Profile {
+  id: string;
+  handle: string;
+  displayName: string;
+  avatarIcon?: string;
+  createdAt: string;
+}
+
 export enum FlowType {
   CONTEXT = 'CONTEXT',
   MUTEX = 'MUTEX',
@@ -25,7 +35,8 @@ export interface Folder {
   id: string;
   name: string;
   parentId: string | null;
-  /** ltree path, e.g. 'root.workspace' */
+  profileId?: string | null;
+  /** ltree path, e.g. 'home.supplies' or 'workspace.core' */
   path: string;
   createdAt: string;
   updatedAt: string;
@@ -57,11 +68,24 @@ export interface Flow {
   status: FlowStatus;
   isExclusive: boolean;
   folderId: string | null;
+  profileId?: string | null;
   tags: Tag[];
   config?: FsmConfig | any;
   orchestratorRules?: any;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateFlowPayload {
+  name: string;
+  description?: string;
+  type: FlowType;
+  isExclusive?: boolean;
+  folderId?: string | null;
+  profileId?: string | null;
+  tags?: string[];
+  config?: unknown;
+  orchestratorRules?: unknown;
 }
 
 export interface FlowRowState {
@@ -98,4 +122,63 @@ export interface FolderNode extends Folder {
 export interface TagWithCount extends Tag {
   flowCount: number;
   isSelected: boolean;
+}
+
+/* ---------- Core Combinator Rules & Chronicle Contracts ---------- */
+
+export interface FlowScheduleWindow {
+  days: number[];
+  start: string;
+  end: string;
+}
+
+export interface FlowOrchestratorRules {
+  onConflict?: 'reject' | 'pause';
+  leaseTimeoutSeconds?: number;
+  schedule?: {
+    enabled?: boolean;
+    windows: FlowScheduleWindow[];
+  };
+}
+
+export interface FlowSessionRecord {
+  id: string;
+  flowId: string;
+  startedAt: string;
+  endedAt?: string | null;
+  closedBy?: string | null;
+}
+
+export interface FlowEventRecord {
+  id: string;
+  flowId: string;
+  source: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  activeFlowSessionIds: string[];
+  createdAt: string;
+}
+
+/* ---------- Imperative App «Lemon Home» View Models ---------- */
+
+export interface HomeWidgetMeta {
+  kind?: 'supply' | 'routine';
+  icon?: string;
+  room?: string;
+  expectedDays?: number;
+  unitHint?: string;
+  scheduleLabel?: string;
+}
+
+export interface HomeWidgetView {
+  flow: Flow;
+  kind: 'supply' | 'routine';
+  icon: string;
+  room: string;
+  expectedDays: number;
+  unitHint: string;
+  scheduleLabel?: string;
+  isInStock: boolean;
+  daysSinceUpdate: number;
+  folderPath: string;
 }

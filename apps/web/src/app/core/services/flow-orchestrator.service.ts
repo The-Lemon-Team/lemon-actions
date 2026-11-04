@@ -12,10 +12,14 @@ import {
   of,
   shareReplay,
   switchMap,
+  tap,
   timer,
 } from 'rxjs';
 import { ApiService } from './api.service';
+import { ProfileService } from './profile.service';
+import { I18nService } from '../i18n/i18n.service';
 import {
+  CreateFlowPayload,
   Flow,
   FlowMetrics,
   FlowRowState,
@@ -45,6 +49,8 @@ export class FlowOrchestratorService {
   readonly mutexLocked$ = new BehaviorSubject<boolean>(false);
 
   private readonly api = inject(ApiService);
+  private readonly profileService = inject(ProfileService);
+  private readonly i18n = inject(I18nService);
   private readonly errorSubject = new Subject<string>();
 
   /** User-facing API errors (e.g. 409 mutex conflicts). */
@@ -159,14 +165,15 @@ export class FlowOrchestratorService {
 
   /* ------------------------------ commands ------------------------------ */
 
-  /** (Re)loads flows and folders from the API. */
+  /** (Re)loads flows and folders from the API for the active profile. */
   refresh(): void {
+    const profileId = this.profileService.currentProfileId;
     this.api
-      .getFolders()
+      .getFolders({ profileId })
       .pipe(this.reportError('Failed to load folders'))
       .subscribe((folders) => this.foldersSubject.next(folders));
     this.api
-      .getFlows()
+      .getFlows({ profileId })
       .pipe(this.reportError('Failed to load flows'))
       .subscribe((flows) => {
         this.flowsSubject.next(flows);
@@ -214,12 +221,12 @@ export class FlowOrchestratorService {
 
     this.api
       .updateFlow(flowId, { config: nextConfig })
-      .pipe(this.reportError('Failed to update FSM state'))
+      .pipe(this.reportError(this.i18n.t('errors.fsmUpdateFailed')))
       .subscribe({
         next: () => {
           this.api
             .updateFlowStatus(flowId, nextStatus)
-            .pipe(this.reportError('Failed to update flow status'))
+            .pipe(this.reportError(this.i18n.t('errors.statusUpdateFailed')))
             .subscribe(() => this.refresh());
         },
       });
@@ -229,7 +236,21 @@ export class FlowOrchestratorService {
     if (!name.trim()) return;
     this.api
       .createFolder({ name: name.trim(), parentId: parentId || null })
-      .pipe(this.reportError('Failed to create folder'))
+      .pipe(this.reportError(this.i18n.t('errors.folderCreateFailed')))
+      .subscribe(() => this.refresh());
+  }
+
+  createFlow(dto: CreateFlowPayload): Observable<Flow> {
+    return this.api.createFlow(dto).pipe(
+      this.reportError(this.i18n.t('errors.createFlowFailed')),
+      tap(() => this.refresh()),
+    );
+  }
+
+  deleteFlow(id: string): void {
+    this.api
+      .deleteFlow(id)
+      .pipe(this.reportError(this.i18n.t('errors.deleteFlowFailed')))
       .subscribe(() => this.refresh());
   }
 
@@ -251,10 +272,48 @@ export class FlowOrchestratorService {
     this.selectedTagName.next(this.selectedTagName.value === name ? null : name);
   }
 
+  saveFlowRules(
+    flowId: string,
+    isExclusive: boolean,
+    orchestratorRules: Record<string, unknown>,
+  ): void {
+    const updated = this.flowsSubject.value.map((f) =>
+      f.id === flowId ? { ...f, isExclusive, orchestratorRules } : f,
+    );
+    this.flowsSubject.next(updated);
+    this.syncMutexLock(updated);
+
+    this.api
+      .updateFlow(flowId, { isExclusive, orchestratorRules })
+      .pipe(this.reportError('Failed to update flow rules'))
+      .subscribe(() => this.refresh());
+  }
+
+  getFlowSessions(flowId: string) {
+    return this.api.getFlowSessions(flowId);
+  }
+
+  getFlowEvents(flowId: string) {
+    return this.api.getFlowEvents(flowId);
+  }
+
+  appendFlowEvent(
+    flowId: string,
+    dto: { source?: string; eventType: string; payload?: Record<string, unknown> },
+  ) {
+    return this.api.appendFlowEvent(flowId, dto).pipe(
+      this.reportError('Failed to append flow event'),
+      tap(() => this.refresh()),
+    );
+  }
+
   /* ------------------------------ internals ------------------------------ */
 
   constructor() {
-    this.refresh();
+    this.profileService.activeProfile$.subscribe(() => {
+      this.selectedFolderId.next(null);
+      this.refresh();
+    });
   }
 
   private syncMutexLock(flows: Flow[]): void {
