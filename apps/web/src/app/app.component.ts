@@ -5,6 +5,7 @@ import { CodeLabComponent } from './components/code-lab/code-lab.component';
 import { FlowDashboardComponent } from './components/flow-dashboard/flow-dashboard.component';
 import { HomeTrackerComponent } from './components/home-tracker/home-tracker.component';
 import { LayoutComponent } from './components/layout/layout.component';
+import { NeuronArenaComponent } from './components/neuron-arena/neuron-arena.component';
 import { SidebarComponent } from './components/sidebar/sidebar.component';
 import { FlowOrchestratorService } from './core/services/flow-orchestrator.service';
 import { ProfileService } from './core/services/profile.service';
@@ -20,12 +21,13 @@ import { ThemeService } from './core/services/theme.service';
     FlowDashboardComponent,
     HomeTrackerComponent,
     CodeLabComponent,
+    NeuronArenaComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-layout
       [isDark]="(theme.theme$ | async) === 'dark'"
-      [appMode]="(profileService.appMode$ | async) ?? 'home'"
+      [appMode]="(profileService.appMode$ | async) ?? 'arena'"
       [profileName]="(profileService.activeProfile$ | async)?.displayName ?? 'Мой Дом'"
       (themeToggle)="theme.toggle()"
       (modeChange)="profileService.setAppMode($event)"
@@ -39,9 +41,11 @@ import { ThemeService } from './core/services/theme.service';
         [activeLocks]="(activeLocks$ | async) ?? []"
         (tagSelect)="orchestrator.selectTag($event)"
       />
-      @if (((profileService.appMode$ | async) ?? 'home') === 'home') {
+      @if (((profileService.appMode$ | async) ?? 'arena') === 'arena') {
+        <app-neuron-arena />
+      } @else if (((profileService.appMode$ | async) ?? 'arena') === 'home') {
         <app-home-tracker />
-      } @else if (((profileService.appMode$ | async) ?? 'home') === 'code') {
+      } @else if (((profileService.appMode$ | async) ?? 'arena') === 'code') {
         <app-code-lab />
       } @else {
         <app-flow-dashboard />

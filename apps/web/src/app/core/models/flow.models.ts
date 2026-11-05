@@ -1,6 +1,6 @@
 import { Observable } from 'rxjs';
 
-export type AppMode = 'home' | 'code' | 'core';
+export type AppMode = 'home' | 'code' | 'arena' | 'core';
 
 export interface Profile {
   id: string;
@@ -260,4 +260,273 @@ export interface CodeRepoView {
   lastSyncAt: string | null;
   isWatching: boolean;
 }
+
+/* ---------- Imperative App «Neuron Arena · Teambuilding & Paradoxes» View Models ---------- */
+
+export type ArenaActorCategory = 'HUMAN' | 'MYTHIC' | 'CYBER' | 'SAGE';
+export type ArenaAccentColor = 'amber' | 'emerald' | 'indigo' | 'rose' | 'cyan' | 'violet';
+export type ArenaVoiceSource = 'MANUAL_PUPPET' | 'AUDIO_VOICE' | 'NEURAL_DRAFT';
+export type ArenaVoiceIntent = 'SUPPORT' | 'COUNTER_PROPOSE' | 'PARADOX_OPINION' | 'ANALYTICS';
+
+export interface ArenaActorCard {
+  id: string;
+  handle: string;
+  flowId: string;
+  name: string;
+  title: string;
+  category: ArenaActorCategory;
+  categoryLabel: string;
+  avatarIcon: string;
+  accentColor: ArenaAccentColor;
+  rankLabel: string;
+  quote: string;
+  paradoxPhilosophy: string;
+  favoriteDesire: string;
+  affinities: string[];
+  traits: {
+    charisma: number;
+    analytical: number;
+    rebelVersus: number;
+  };
+  voicePitch: number;
+  voiceRate: number;
+  sampleVoices: {
+    support: string;
+    counter: string;
+    paradox: string;
+  };
+  isLead: boolean;
+  voicesCount: number;
+}
+
+export interface ArenaVoiceEntry {
+  id: string;
+  actorId: string;
+  actorName: string;
+  actorTitle: string;
+  actorIcon: string;
+  actorAccent: ArenaAccentColor;
+  paradoxId: string;
+  threadId?: string | null;
+  threadTitle?: string | null;
+  intent: ArenaVoiceIntent;
+  sourceMode: ArenaVoiceSource;
+  text: string;
+  durationSec: number;
+  audioDataUrl?: string;
+  activeNeuronSessions: string[];
+  createdAt: string;
+}
+
+export interface ArenaDesireCardMatchRecord {
+  id: string;
+  gameTitle: string;
+  paradoxId: string;
+  playedAt: string;
+  outcome: 'WON' | 'LOST';
+  votesReceived: number;
+  totalGameVotes: number;
+  winnerCardId: string;
+  winnerCardTitle: string;
+  opponentTitles: string[];
+  note: string;
+}
+
+export interface ArenaDesireCard {
+  id: string;
+  flowId: string;
+  title: string;
+  category: string;
+  description: string;
+  icon: string;
+  colorTheme: ArenaAccentColor;
+  tags: string[];
+  createdByActorName: string;
+  gamesPlayed: number;
+  winsCount: number;
+  lossesCount: number;
+  winRatePercent: number;
+  totalHistoricalVotes: number;
+  nemesisCardTitle?: string | null;
+  nemesisScore?: string | null;
+  analyticsInsight: string;
+  matchHistory: ArenaDesireCardMatchRecord[];
+  isInCurrentField: boolean;
+}
+
+export interface ArenaDeckAnalytics {
+  totalGamesAnalyzed: number;
+  topWinnerCard: ArenaDesireCard | null;
+  mostPlayedCard: ArenaDesireCard | null;
+  headlineConclusion: string;
+  rivalryInsights: string[];
+}
+
+export interface ArenaDesireThread {
+  id: string;
+  desireCardId?: string;
+  flowId: string;
+  paradoxId: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  colorTheme: ArenaAccentColor;
+  proposerActorId: string;
+  proposerName: string;
+  proposerIcon: string;
+  supporterActorIds: string[];
+  supporters: Array<{
+    id: string;
+    name: string;
+    title: string;
+    icon: string;
+    accentColor: ArenaAccentColor;
+  }>;
+  votesCount: number;
+  sharePercent: number;
+  isLeading: boolean;
+  isWinner?: boolean;
+  tags: string[];
+  voices: ArenaVoiceEntry[];
+  createdAt: string;
+  cardStats?: {
+    gamesPlayed: number;
+    winsCount: number;
+    winRatePercent: number;
+    nemesisCardTitle?: string | null;
+    analyticsInsight: string;
+  };
+}
+
+export interface ArenaPeriodSummary {
+  resolvedAt: string;
+  winnerThreadId: string;
+  winnerTitle: string;
+  winnerIcon: string;
+  winnerColor: ArenaAccentColor;
+  winnerSupporters: string[];
+  totalVotes: number;
+  totalVoices: number;
+  competingThreads: Array<{
+    id: string;
+    title: string;
+    icon: string;
+    votes: number;
+    sharePercent: number;
+    proposerName: string;
+    colorTheme: ArenaAccentColor;
+  }>;
+  teamSynthesis: string;
+  paradoxVerdict: string;
+  characterHighlights: Array<{
+    actorId: string;
+    actorName: string;
+    actorTitle: string;
+    actorIcon: string;
+    accentColor: ArenaAccentColor;
+    stance: string;
+  }>;
+}
+
+export interface ArenaParadoxField {
+  id: string;
+  folderPath: string;
+  title: string;
+  occasionTag: string;
+  contextStory: string;
+  paradoxQuestion: string;
+  status: 'ACTIVE_BATTLE' | 'RESOLVED';
+  periodLabel: string;
+  resolvedSummary?: ArenaPeriodSummary | null;
+}
+
+export interface NeuralTrainingSample {
+  id: string;
+  timestamp: string;
+  actorHandle: string;
+  actorName: string;
+  actorCategory: ArenaActorCategory;
+  neuronPath: string;
+  activeSessionSnapshot: string[];
+  stimulusParadox: string;
+  competingDesires: string[];
+  intent: ArenaVoiceIntent;
+  chosenThread: string | null;
+  voiceOutput: string;
+  sourceMode: ArenaVoiceSource;
+}
+
+/* ---------- Combine Mode (Поле Времени, Активная Зона (Pin) и Карточки Истории Совмещений) ---------- */
+
+export type ArenaGameSubMode = 'VERSUS' | 'COMBINE';
+export type CombineIdeaOutcome = 'PENDING' | 'HIT' | 'SO_SO' | 'BORED_REPLACED';
+
+export interface CombineActivitySuggestion {
+  id: string;
+  desireCardId?: string;
+  timeFieldId: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  colorTheme: ArenaAccentColor;
+  actorId: string;
+  actorName: string;
+  actorTitle: string;
+  actorIcon: string;
+  actorAccent: ArenaAccentColor;
+  pitchVoice: string;
+  isPinned: boolean;
+  pinnedAt?: string | null;
+  unpinnedReason?: string | null;
+  replacedByTitle?: string | null;
+  replacesTitle?: string | null;
+  outcome: CombineIdeaOutcome;
+  outcomeNote?: string;
+  createdAt: string;
+}
+
+export interface CombineTimeField {
+  id: string;
+  folderPath: string;
+  title: string;
+  baseActivity: string;
+  baseIcon: string;
+  durationLabel: string;
+  contextDescription: string;
+  status: 'ACTIVE_COMBINE' | 'SAVED_TO_HISTORY';
+}
+
+export interface CombineHistoryCard {
+  id: string;
+  timeFieldId: string;
+  timeFieldTitle: string;
+  baseActivity: string;
+  baseIcon: string;
+  durationLabel: string;
+  savedAt: string;
+  pinnedActivities: Array<{
+    id: string;
+    title: string;
+    icon: string;
+    actorName: string;
+    actorIcon: string;
+    colorTheme: ArenaAccentColor;
+    outcome: CombineIdeaOutcome;
+    note: string;
+    replacesTitle?: string | null;
+  }>;
+  replacedActivities: Array<{
+    id: string;
+    title: string;
+    icon: string;
+    actorName: string;
+    reason: string;
+    replacedByTitle: string;
+  }>;
+  mostSuccessfulActorName: string;
+  mostSuccessfulIdeaTitle: string;
+  synthesisConclusion: string;
+}
+
+
 

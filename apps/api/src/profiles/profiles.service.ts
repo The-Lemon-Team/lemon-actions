@@ -1,5 +1,9 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { FlowStatus, FlowType } from '@prisma/client';
+import { FlowStatus } from '@prisma/client';
+import { buildArenaActorFlows } from '../seeds/arena-actors-2.seed';
+import { buildArenaGameFlows } from '../seeds/arena-game.seed';
+import { CORE_FOLDERS } from '../seeds/core.seed';
+import { DACHA_HOME_FLOWS, DEFAULT_HOME_FLOWS, SEED_PROFILES } from '../seeds/home.seed';
 import { FlowsService } from '../flows/flows.service';
 import { FoldersRepository } from '../folders/folders.repository';
 import { PrismaService } from '../prisma/prisma.service';
@@ -44,8 +48,7 @@ export class ProfilesService {
 
   /**
    * Регистрирует нового пользователя и автоматически разворачивает для него
-   * изолированное дерево папок-контейнеров (`home`, `home.supplies`, `home.routines`, `workspace`)
-   * и стартовые бытовые виджеты-потоки.
+   * изолированное дерево папок-контейнеров и стартовые потоки из модульных сидов.
    */
   async register(dto: CreateProfileDto): Promise<ProfileView> {
     const handle = dto.handle.trim().toLowerCase();
@@ -62,7 +65,7 @@ export class ProfilesService {
       },
     });
 
-    await this.provisionStarterSpace(profile.id);
+    await this.provisionStarterSpace(profile.id, handle === 'dacha');
 
     return {
       id: profile.id,
@@ -74,18 +77,12 @@ export class ProfilesService {
   }
 
   private async ensureDefaultProfile() {
-    const existing = await this.prisma.profile.findUnique({ where: { handle: 'default' } });
-    if (existing) return existing;
+    const defMeta = SEED_PROFILES[0];
+    let profile = await this.prisma.profile.findUnique({ where: { handle: defMeta.handle } });
+    if (!profile) {
+      profile = await this.prisma.profile.create({ data: defMeta });
+    }
 
-    const profile = await this.prisma.profile.create({
-      data: {
-        handle: 'default',
-        displayName: 'Мой Дом (Основной)',
-        avatarIcon: 'home',
-      },
-    });
-
-    // Привязываем существующие папки и потоки без профиля к основному профилю
     await this.prisma.$executeRaw`UPDATE folders SET profile_id = ${profile.id}::uuid WHERE profile_id IS NULL`;
     await this.prisma.flow.updateMany({
       where: { profileId: null },
@@ -97,113 +94,42 @@ export class ProfilesService {
       scope: 'home',
     });
     if (homeFolders.length === 0) {
-      await this.provisionStarterSpace(profile.id);
+      await this.provisionStarterSpace(profile.id, false);
     }
 
     return profile;
   }
 
-  private async provisionStarterSpace(profileId: string): Promise<void> {
-    const home = await this.foldersRepo.insert('Home', null, 'home', profileId);
-    const supplies = await this.foldersRepo.insert('Household Supplies', home.id, 'home.supplies', profileId);
-    const routines = await this.foldersRepo.insert('Home Routines', home.id, 'home.routines', profileId);
-    const workspace = await this.foldersRepo.insert('Workspace', null, 'workspace', profileId);
-    await this.foldersRepo.insert('Core Services', workspace.id, 'workspace.core', profileId);
+  private async provisionStarterSpace(profileId: string, isDacha = false): Promise<void> {
+    const folderIdByPath = new Map<string, string>();
+    for (const f of CORE_FOLDERS) {
+      const parentPath = f.path.includes('.') ? f.path.slice(0, f.path.lastIndexOf('.')) : null;
+      const parentId = parentPath ? folderIdByPath.get(parentPath) ?? null : null;
+      const inserted = await this.foldersRepo.insert(f.name, parentId, f.path, profileId);
+      folderIdByPath.set(f.path, inserted.id);
+    }
 
-    const starterSupplies = [
-      {
-        name: 'Стиральный порошок',
-        description: 'Бытовой мьютекс наличия порошка (ACTIVE = есть дома, INACTIVE = в список покупок).',
-        status: FlowStatus.ACTIVE,
-        tags: ['home', 'supplies', 'laundry'],
-        config: {
-          widget: {
-            kind: 'supply',
-            icon: 'local_laundry_service',
-            room: 'Ванная',
-            brand: 'Tide Color Automat',
-            unitHint: '3 кг (пакет)',
-            price: '650 ₽',
-            expectedDays: 30,
-            note: 'Классический автомат',
-          },
-        },
-      },
-      {
-        name: 'Хлеб и выпечка',
-        description: 'Ежедневный ресурс кухни. Когда мьютекс выключается — попадает в список покупок.',
-        status: FlowStatus.INACTIVE,
-        tags: ['home', 'supplies', 'kitchen'],
-        config: {
-          widget: {
-            kind: 'supply',
-            icon: 'bakery_dining',
-            room: 'Кухня',
-            brand: 'Бородинский нарезной',
-            unitHint: '400 г',
-            price: '54 ₽',
-            expectedDays: 3,
-          },
-        },
-      },
-      {
-        name: 'Чай и зерновой кофе',
-        description: 'Запасы напитков на кухне.',
-        status: FlowStatus.ACTIVE,
-        tags: ['home', 'supplies', 'kitchen'],
-        config: {
-          widget: {
-            kind: 'supply',
-            icon: 'coffee',
-            room: 'Кухня',
-            brand: 'Greenfield Golden Ceylon',
-            unitHint: '100 пакетиков',
-            price: '380 ₽',
-            expectedDays: 14,
-          },
-        },
-      },
+    const seedFlows = [
+      ...(isDacha ? DACHA_HOME_FLOWS : DEFAULT_HOME_FLOWS),
+      ...buildArenaActorFlows(),
+      ...buildArenaGameFlows(),
     ];
 
-    for (const s of starterSupplies) {
+    for (const s of seedFlows) {
       const created = await this.flowsService.create({
         name: s.name,
         description: s.description,
-        type: FlowType.MUTEX,
-        isExclusive: false,
-        folderId: supplies.id,
+        type: s.type,
+        isExclusive: s.isExclusive,
+        folderId: folderIdByPath.get(s.folder),
         profileId,
         tags: s.tags,
         config: s.config,
+        orchestratorRules: s.orchestratorRules,
       });
       if (s.status === FlowStatus.ACTIVE) {
         await this.flowsService.updateStatus(created.id, FlowStatus.ACTIVE, 'provision');
       }
     }
-
-    const routine = await this.flowsService.create({
-      name: 'Субботняя уборка и полив цветов',
-      description: 'Scheduled Mutex: активирует окно домашней рутины по выходным с 10:00 до 14:00.',
-      type: FlowType.MUTEX,
-      isExclusive: false,
-      folderId: routines.id,
-      profileId,
-      tags: ['home', 'routine', 'schedule'],
-      config: {
-        widget: {
-          kind: 'routine',
-          icon: 'cleaning_services',
-          room: 'Весь дом',
-          scheduleLabel: 'Сб–Вс, 10:00–14:00',
-        },
-      },
-      orchestratorRules: {
-        schedule: {
-          enabled: true,
-          windows: [{ days: [6, 0], start: '10:00', end: '14:00' }],
-        },
-      },
-    });
-    await this.flowsService.updateStatus(routine.id, FlowStatus.ACTIVE, 'provision');
   }
 }

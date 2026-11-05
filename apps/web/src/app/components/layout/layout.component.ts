@@ -20,8 +20,21 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
             <span class="font-label-code-sm text-label-code-sm px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">{{ 'app.version' | trans }}</span>
           </div>
 
-          <!-- Mode Switcher: Lemon Home vs Lemon Code Lab vs Core Combinator Console -->
+          <!-- Mode Switcher: Neuron Arena vs Lemon Home vs Lemon Code Lab vs Core Combinator Console -->
           <div class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-low border border-outline-variant/25">
+            <button
+              type="button"
+              (click)="modeChange.emit('arena')"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold"
+              [class]="
+                appMode === 'arena'
+                  ? 'bg-primary-container text-on-primary-container shadow-xs'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              "
+            >
+              <span class="material-symbols-rounded text-base">diversity_3</span>
+              <span>Neuron Arena</span>
+            </button>
             <button
               type="button"
               (click)="modeChange.emit('home')"
