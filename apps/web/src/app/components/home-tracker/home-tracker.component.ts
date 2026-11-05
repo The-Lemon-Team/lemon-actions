@@ -203,9 +203,62 @@ import { ProfileService } from '../../core/services/profile.service';
         }
       }
 
-      <!-- Room Filter Bar + Add Widget Action -->
-      <section class="flex flex-wrap items-center justify-between gap-space-sm">
+      <!-- Stock Health Spectrum Bar (Inspired by Stitch prototype) -->
+      @if (home.healthStats$ | async; as stats) {
+        <section
+          class="bg-surface-container-lowest rounded-2xl p-space-md shadow-xs border border-outline-variant/25 flex flex-col md:flex-row md:items-center justify-between gap-space-md"
+        >
+          <div class="flex-1 flex flex-col gap-2">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-rounded text-primary text-xl">vital_signs</span>
+                <h2 class="font-headline-sm text-sm font-bold text-on-surface">Баланс запасов дома (Stock Health)</h2>
+                <span class="font-label-code-sm text-xs font-bold text-success bg-success-container/40 px-2 py-0.5 rounded-full">
+                  {{ stats.healthPercent }}% в норме
+                </span>
+              </div>
+              <div class="flex items-center gap-3 text-xs font-label-code-sm text-on-surface-variant flex-wrap">
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                  <strong>{{ stats.empty }}</strong> исчерпано
+                </span>
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                  <strong>{{ stats.low }}</strong> на исходе (&lt;20%)
+                </span>
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                  <strong>{{ stats.healthy }}</strong> в достатке (&gt;60%)
+                </span>
+              </div>
+            </div>
+
+            <!-- Segmented Health Progress Ribbon -->
+            <div class="w-full h-2.5 bg-surface-container rounded-full overflow-hidden flex shadow-inner">
+              <div [style.width.%]="(stats.healthy / (stats.total || 1)) * 100" class="bg-emerald-500 transition-all duration-500" title="В достатке"></div>
+              <div [style.width.%]="(stats.low / (stats.total || 1)) * 100" class="bg-amber-500 transition-all duration-500" title="На исходе"></div>
+              <div [style.width.%]="(stats.empty / (stats.total || 1)) * 100" class="bg-rose-500 transition-all duration-500" title="Закончилось"></div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button
+              type="button"
+              (click)="maxAll()"
+              class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface-container-high hover:bg-primary-container text-on-surface hover:text-on-primary-container font-label-ui text-xs font-bold transition-all shadow-xs active:scale-95"
+              title="Пополнить все запасы выбранной зоны до 100% (Max All)"
+            >
+              <span class="material-symbols-rounded text-sm">done_all</span>
+              <span>Пополнить всё (Max All)</span>
+            </button>
+          </div>
+        </section>
+      }
+
+      <!-- Room Filter Bar + Section Mode Selector (Зонирование комнат) -->
+      <section class="flex flex-col md:flex-row md:items-center justify-between gap-space-sm">
         <div class="flex flex-wrap items-center gap-1.5">
+          <span class="font-label-ui text-xs font-bold text-on-surface-variant uppercase tracking-wider mr-1">Зона:</span>
           @for (room of (home.rooms$ | async) ?? ['ALL']; track room) {
             <button
               type="button"
@@ -222,136 +275,344 @@ import { ProfileService } from '../../core/services/profile.service';
           }
         </div>
 
-        <button
-          type="button"
-          (click)="showWidgetModal.set(true)"
-          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary-container text-on-primary-container font-label-ui text-xs font-bold shadow-xs hover:brightness-95 transition-all"
-        >
-          <span class="material-symbols-rounded text-base">add_circle</span>
-          <span>Создать виджет ресурса / рутины</span>
-        </button>
-      </section>
-
-      <!-- Main Supply Widgets Grid (home.supplies) -->
-      <section class="flex flex-col gap-space-sm">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-rounded text-lg text-on-surface-variant">inventory_2</span>
-            <h2 class="font-headline-sm text-base font-bold text-on-surface">
-              Виджеты запасов дома
-            </h2>
-            <span class="font-label-code-sm text-xs px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">
-              home.supplies
-            </span>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
-          @for (widget of (home.supplyWidgets$ | async) ?? []; track widget.flow.id) {
-            <div
-              class="bg-surface-container-lowest rounded-2xl p-space-md shadow-xs border transition-all flex flex-col justify-between gap-space-md"
-              [class]="
-                widget.isInStock
-                  ? 'border-outline-variant/25'
-                  : 'border-warning/50 bg-warning/5'
-              "
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Section filter toggle: All / Supplies / Tasks -->
+          <div class="bg-surface-container-low p-1 rounded-xl flex items-center border border-outline-variant/20">
+            <button
+              type="button"
+              (click)="currentSection.set('all')"
+              class="px-3 py-1 rounded-lg font-label-ui text-xs font-bold transition-all"
+              [class]="currentSection() === 'all' ? 'bg-surface-container-lowest text-on-surface shadow-xs' : 'text-on-surface-variant hover:text-on-surface'"
             >
-              <div class="flex items-start justify-between gap-3">
-                <div class="flex items-start gap-3 min-w-0">
-                  <div
-                    class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-                    [class]="
-                      widget.isInStock
-                        ? 'bg-success-container text-on-success-container'
-                        : 'bg-warning/20 text-warning'
-                    "
-                  >
-                    <span class="material-symbols-rounded text-xl">{{ widget.icon }}</span>
-                  </div>
-                  <div class="min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <h3 class="font-headline-sm text-base font-bold text-on-surface">
-                        {{ widget.flow.name }}
-                      </h3>
-                      <span
-                        class="font-label-code-sm text-[10px] px-2 py-0.5 rounded-full font-bold uppercase"
-                        [class]="
-                          widget.isInStock
-                            ? 'bg-success-container text-on-success-container'
-                            : 'bg-warning text-on-warning'
-                        "
-                      >
-                        {{ widget.isInStock ? 'В наличии (Mutex ON)' : 'Закончилось (Mutex OFF)' }}
-                      </span>
-                    </div>
-                    <p class="font-body-sm text-xs text-on-surface-variant mt-1 line-clamp-2">
-                      {{ widget.flow.description }}
-                    </p>
-                  </div>
-                </div>
+              Все секции
+            </button>
+            <button
+              type="button"
+              (click)="currentSection.set('supplies')"
+              class="px-3 py-1 rounded-lg font-label-ui text-xs font-bold transition-all"
+              [class]="currentSection() === 'supplies' ? 'bg-surface-container-lowest text-on-surface shadow-xs' : 'text-on-surface-variant hover:text-on-surface'"
+            >
+              Запасы и счётчики
+            </button>
+            <button
+              type="button"
+              (click)="currentSection.set('tasks')"
+              class="px-3 py-1 rounded-lg font-label-ui text-xs font-bold transition-all"
+              [class]="currentSection() === 'tasks' ? 'bg-surface-container-lowest text-on-surface shadow-xs' : 'text-on-surface-variant hover:text-on-surface'"
+            >
+              Дела и Todo
+            </button>
+          </div>
 
-                <button
-                  type="button"
-                  (click)="home.deleteWidget(widget.flow.id)"
-                  title="Удалить виджет"
-                  class="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error-container/20 transition-colors"
-                >
-                  <span class="material-symbols-rounded text-base">delete</span>
-                </button>
-              </div>
-
-              <div class="flex items-center justify-between pt-2 border-t border-outline-variant/20 gap-2 flex-wrap">
-                <div class="flex items-center gap-3 font-label-code-sm text-xs text-on-surface-variant">
-                  <span class="inline-flex items-center gap-1">
-                    <span class="material-symbols-rounded text-sm">room</span>
-                    {{ widget.room }}
-                  </span>
-                  <span>·</span>
-                  <span>{{ widget.unitHint }}</span>
-                  <span>·</span>
-                  <span>Цикл ~{{ widget.expectedDays }} дн.</span>
-                </div>
-
-                @if (widget.isInStock) {
-                  <button
-                    type="button"
-                    (click)="home.markDepleted(widget.flow.id)"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container-high text-on-surface hover:bg-warning hover:text-on-warning font-label-ui text-xs font-bold transition-colors"
-                  >
-                    <span class="material-symbols-rounded text-sm">production_quantity_limits</span>
-                    <span>Закончилось (В покупки)</span>
-                  </button>
-                } @else {
-                  <button
-                    type="button"
-                    (click)="home.markRestocked(widget.flow.id)"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary hover:opacity-90 font-label-ui text-xs font-bold transition-opacity shadow-xs"
-                  >
-                    <span class="material-symbols-rounded text-sm">check_circle</span>
-                    <span>Купили (Включить мьютекс)</span>
-                  </button>
-                }
-              </div>
-            </div>
-          }
+          <button
+            type="button"
+            (click)="showWidgetModal.set(true)"
+            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary-container text-on-primary-container font-label-ui text-xs font-bold shadow-xs hover:brightness-95 transition-all"
+          >
+            <span class="material-symbols-rounded text-base">add_circle</span>
+            <span class="hidden sm:inline">Новый виджет</span>
+          </button>
         </div>
       </section>
 
-      <!-- Scheduled Household Routines & Live Activity Chronicle -->
-      <section class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
-        <!-- Routines (home.routines) -->
-        <div class="lg:col-span-6 flex flex-col gap-space-sm">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-rounded text-lg text-on-surface-variant">schedule</span>
-            <h2 class="font-headline-sm text-base font-bold text-on-surface">
-              Расписания и рутины дома
-            </h2>
-            <span class="font-label-code-sm text-xs px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">
-              home.routines
-            </span>
+      <!-- Main Supply Widgets Grid (home.supplies with Steppers & Color Ribbon) -->
+      @if (currentSection() === 'all' || currentSection() === 'supplies') {
+        <section class="flex flex-col gap-space-sm">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-rounded text-lg text-on-surface-variant">inventory_2</span>
+              <h2 class="font-headline-sm text-base font-bold text-on-surface">
+                Счётчики и расходники зоны «{{ (home.selectedRoom$ | async) === 'ALL' ? 'Все зоны' : (home.selectedRoom$ | async) }}»
+              </h2>
+              <span class="font-label-code-sm text-xs px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">
+                home.supplies · порционный расход
+              </span>
+            </div>
           </div>
 
-          <div class="flex flex-col gap-3">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+            @for (widget of (home.supplyWidgets$ | async) ?? []; track widget.flow.id) {
+              <div
+                class="bg-surface-container-lowest rounded-2xl p-space-md shadow-xs border transition-all flex flex-col justify-between gap-space-md"
+                [class]="
+                  widget.isInStock && widget.percentage >= 20
+                    ? 'border-outline-variant/25'
+                    : widget.isInStock && widget.percentage < 20
+                      ? 'border-rose-400 bg-rose-50/20'
+                      : 'border-warning/50 bg-warning/5'
+                "
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex items-start gap-3 min-w-0">
+                    <div
+                      class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                      [class]="
+                        widget.percentage === 0
+                          ? 'bg-warning/20 text-warning'
+                          : widget.percentage < 20
+                            ? 'bg-rose-100 text-rose-600'
+                            : widget.percentage <= 60
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-success-container text-on-success-container'
+                      "
+                    >
+                      <span class="material-symbols-rounded text-xl">{{ widget.icon }}</span>
+                    </div>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <h3 class="font-headline-sm text-base font-bold text-on-surface">
+                          {{ widget.flow.name }}
+                        </h3>
+                        <span
+                          class="font-label-code-sm text-[10px] px-2 py-0.5 rounded-full font-bold uppercase"
+                          [class]="
+                            widget.percentage === 0
+                              ? 'bg-warning text-on-warning'
+                              : widget.percentage < 20
+                                ? 'bg-rose-100 text-rose-700 border border-rose-300'
+                                : widget.percentage <= 60
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  : 'bg-success-container text-on-success-container'
+                          "
+                        >
+                          {{
+                            widget.percentage === 0
+                              ? 'Закончилось (Mutex OFF)'
+                              : widget.percentage < 20
+                                ? 'Критически мало (Mutex ON)'
+                                : widget.percentage <= 60
+                                  ? 'Средний запас (Mutex ON)'
+                                  : 'В достатке (Mutex ON)'
+                          }}
+                        </span>
+                      </div>
+
+                      @if (widget.brand) {
+                        <div class="font-label-ui text-xs text-primary font-bold mt-0.5 flex items-center gap-1">
+                          <span class="material-symbols-rounded text-xs">verified</span>
+                          <span>{{ widget.brand }}</span>
+                        </div>
+                      }
+
+                      <p class="font-body-sm text-xs text-on-surface-variant mt-1 line-clamp-1">
+                        {{ widget.flow.description }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    (click)="home.deleteWidget(widget.flow.id)"
+                    title="Удалить виджет"
+                    class="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error-container/20 transition-colors"
+                  >
+                    <span class="material-symbols-rounded text-base">delete</span>
+                  </button>
+                </div>
+
+                <!-- Stitch-inspired Color Progress Ribbon -->
+                <div class="flex flex-col gap-1.5 pt-1">
+                  <div class="w-full bg-surface-container-high h-2 rounded-full overflow-hidden relative">
+                    <div
+                      [style.width.%]="widget.percentage"
+                      class="h-full rounded-full transition-all duration-300"
+                      [class]="
+                        widget.percentage === 0
+                          ? 'bg-transparent'
+                          : widget.percentage < 20
+                            ? 'bg-rose-500 animate-pulse'
+                            : widget.percentage <= 60
+                              ? 'bg-amber-500'
+                              : 'bg-emerald-500'
+                      "
+                    ></div>
+                  </div>
+
+                  <div class="flex items-center justify-between text-[11px] font-label-code-sm text-on-surface-variant">
+                    @if (widget.percentage === 0) {
+                      <span class="text-rose-600 font-bold flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                        Исчерпано • В списке покупок!
+                      </span>
+                    } @else {
+                      <span>
+                        Запас: <strong [class]="widget.percentage < 20 ? 'text-rose-600' : widget.percentage <= 60 ? 'text-amber-600' : 'text-emerald-600'">{{ widget.percentage }}%</strong>
+                        (хватит ~{{ MathRound(widget.currentQty * widget.daysPerUnit) }} дн.)
+                      </span>
+                    }
+                    <span>Макс: {{ widget.maxQty }} {{ widget.unit }}</span>
+                  </div>
+                </div>
+
+                <!-- Interactive Stepper & Counter Action Controls -->
+                <div class="flex items-center justify-between pt-2 border-t border-outline-variant/20 gap-2 flex-wrap">
+                  <!-- Stepper (- step / current / + step) -->
+                  <div class="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      (click)="home.consumePortion(widget.flow.id)"
+                      [disabled]="widget.currentQty === 0"
+                      title="Списать порцию расхода (-{{ widget.step }} {{ widget.unit }})"
+                      class="h-8 px-2.5 rounded-xl flex items-center justify-center font-bold text-xs transition-all border"
+                      [class]="
+                        widget.currentQty === 0
+                          ? 'opacity-40 cursor-not-allowed bg-surface-container border-outline-variant/20 text-on-surface-variant'
+                          : 'bg-surface-container-lowest border-outline-variant/30 text-rose-600 hover:bg-rose-50 hover:border-rose-300 shadow-xs active:scale-90'
+                      "
+                    >
+                      -{{ widget.step }} {{ widget.unit }}
+                    </button>
+
+                    <div class="min-w-[65px] px-2 py-1 text-center font-label-code-sm text-xs font-bold rounded-lg bg-surface-container text-on-surface shadow-inner">
+                      {{ widget.currentQty }} {{ widget.unit }}
+                    </div>
+
+                    <button
+                      type="button"
+                      (click)="home.addPortion(widget.flow.id)"
+                      title="Добавить порцию (+{{ widget.step }} {{ widget.unit }})"
+                      class="h-8 px-2.5 rounded-xl flex items-center justify-center font-bold text-xs bg-surface-container-lowest border border-outline-variant/30 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 shadow-xs active:scale-90 transition-all"
+                    >
+                      +{{ widget.step }} {{ widget.unit }}
+                    </button>
+
+                    <button
+                      type="button"
+                      (click)="home.addPortion(widget.flow.id, widget.maxQty)"
+                      title="Независимое пополнение целой пачки (+{{ widget.maxQty }} {{ widget.unit }})"
+                      class="h-8 px-2 rounded-xl text-[11px] font-label-ui font-bold bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors"
+                    >
+                      + Пачка
+                    </button>
+                  </div>
+
+                  <!-- Discrete Mutex Actions -->
+                  <div class="flex items-center gap-1.5">
+                    @if (widget.isInStock) {
+                      <button
+                        type="button"
+                        (click)="home.markDepleted(widget.flow.id)"
+                        class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-surface-container-high text-on-surface hover:bg-warning hover:text-on-warning font-label-ui text-xs font-bold transition-colors"
+                        title="Сбросить остаток в 0 и выключить Mutex"
+                      >
+                        <span class="material-symbols-rounded text-sm">production_quantity_limits</span>
+                        <span>В покупки</span>
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        (click)="home.markRestocked(widget.flow.id)"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-primary text-on-primary hover:opacity-90 font-label-ui text-xs font-bold transition-opacity shadow-xs"
+                      >
+                        <span class="material-symbols-rounded text-sm">check_circle</span>
+                        <span>Купили (Включить мьютекс)</span>
+                      </button>
+                    }
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      }
+
+      <!-- Room Tasks & Routines Partition (Дела и Todo комнаты vs Регулярные рутины) -->
+      @if (currentSection() === 'all' || currentSection() === 'tasks') {
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+          <!-- Left Column: Room Tasks & Todo List -->
+          <div class="lg:col-span-6 flex flex-col gap-space-sm">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-rounded text-lg text-primary">checklist</span>
+                <h2 class="font-headline-sm text-base font-bold text-on-surface">
+                  Дела и Todo: {{ (home.selectedRoom$ | async) === 'ALL' ? 'Все зоны дома' : (home.selectedRoom$ | async) }}
+                </h2>
+              </div>
+              <span class="font-label-code-sm text-xs px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">
+                Чек-лист обслуживания
+              </span>
+            </div>
+
+            <!-- Quick Add Task Input -->
+            <div class="bg-surface-container-lowest rounded-2xl p-2.5 shadow-xs border border-outline-variant/25 flex items-center gap-2">
+              <input
+                type="text"
+                [(ngModel)]="newTaskTitle"
+                (keyup.enter)="addNewTask()"
+                placeholder="Добавить дело в эту комнату (нажмите Enter)..."
+                class="flex-1 px-3 py-1.5 rounded-xl bg-surface-container-low text-xs text-on-surface placeholder:text-outline border border-transparent focus:border-primary focus:bg-surface-container-lowest focus:outline-none"
+              />
+              <button
+                type="button"
+                (click)="addNewTask()"
+                class="px-3 py-1.5 rounded-xl bg-primary text-on-primary font-label-ui text-xs font-bold shadow-xs hover:opacity-90 flex-shrink-0"
+              >
+                + Добавить
+              </button>
+            </div>
+
+            <!-- Tasks List -->
+            <div class="bg-surface-container-lowest rounded-2xl p-space-md shadow-xs border border-outline-variant/25 flex flex-col gap-2">
+              @for (task of (home.tasksForSelectedRoom$ | async) ?? []; track task.id) {
+                <div
+                  class="flex items-center justify-between gap-3 p-2.5 rounded-xl transition-all"
+                  [class]="task.done ? 'bg-surface-container-low/40 opacity-60' : 'bg-surface-container-low hover:bg-surface-container'"
+                >
+                  <label class="flex items-center gap-2.5 min-w-0 cursor-pointer select-none flex-1">
+                    <input
+                      type="checkbox"
+                      [checked]="task.done"
+                      (change)="home.toggleRoomTask(task.id)"
+                      class="rounded accent-primary w-4 h-4 cursor-pointer"
+                    />
+                    <span class="font-body-sm text-xs text-on-surface truncate" [class.line-through]="task.done">
+                      {{ task.title }}
+                    </span>
+                  </label>
+                  <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <span
+                      class="font-label-code-sm text-[10px] px-2 py-0.5 rounded-full"
+                      [class]="
+                        task.priority === 'high'
+                          ? 'bg-rose-100 text-rose-700 font-bold'
+                          : task.priority === 'medium'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-surface-container text-on-surface-variant'
+                      "
+                    >
+                      {{ task.room }}
+                    </span>
+                    <button
+                      type="button"
+                      (click)="home.deleteRoomTask(task.id)"
+                      class="p-1 rounded text-outline hover:text-rose-600 transition-colors"
+                      title="Удалить задачу"
+                    >
+                      <span class="material-symbols-rounded text-sm">close</span>
+                    </button>
+                  </div>
+                </div>
+              } @empty {
+                <div class="text-center py-6 font-body-sm text-xs text-on-surface-variant">
+                  В этой зоне пока нет запланированных дел. Добавьте задачу выше!
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Right Column: Scheduled Household Routines (home.routines) -->
+          <div class="lg:col-span-6 flex flex-col gap-space-sm">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-rounded text-lg text-on-surface-variant">schedule</span>
+              <h2 class="font-headline-sm text-base font-bold text-on-surface">
+                Расписания и рутины дома
+              </h2>
+              <span class="font-label-code-sm text-xs px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">
+                home.routines
+              </span>
+            </div>
+
+            <div class="flex flex-col gap-3">
             @for (routine of (home.routineWidgets$ | async) ?? []; track routine.flow.id) {
               <div
                 class="bg-surface-container-lowest rounded-2xl p-space-md shadow-xs border border-outline-variant/25 flex flex-col gap-3"
@@ -398,54 +659,55 @@ import { ProfileService } from '../../core/services/profile.service';
             }
           </div>
         </div>
+      </section>
+    }
 
-        <!-- Live Chronicle of Home Events (flow_events) -->
-        <div class="lg:col-span-6 flex flex-col gap-space-sm">
-          <div class="flex items-center gap-2">
-            <span class="material-symbols-rounded text-lg text-on-surface-variant">history</span>
-            <h2 class="font-headline-sm text-base font-bold text-on-surface">
-              Хроника событий дома
-            </h2>
-            <span class="font-label-code-sm text-xs px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">
-              flow_events
-            </span>
-          </div>
+    <!-- Live Chronicle of Home Events (flow_events) -->
+      <section class="flex flex-col gap-space-sm">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-rounded text-lg text-on-surface-variant">history</span>
+          <h2 class="font-headline-sm text-base font-bold text-on-surface">
+            Хроника событий дома
+          </h2>
+          <span class="font-label-code-sm text-xs px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">
+            flow_events · порции, покупки и рутины
+          </span>
+        </div>
 
-          <div
-            class="bg-surface-container-lowest rounded-2xl p-space-md shadow-xs border border-outline-variant/25 flex flex-col gap-2.5 max-h-[340px] overflow-y-auto"
-          >
-            @for (act of (home.activities$ | async) ?? []; track act.id) {
+        <div
+          class="bg-surface-container-lowest rounded-2xl p-space-md shadow-xs border border-outline-variant/25 flex flex-col gap-2.5 max-h-[340px] overflow-y-auto"
+        >
+          @for (act of (home.activities$ | async) ?? []; track act.id) {
+            <div
+              class="flex items-start gap-3 p-2.5 rounded-xl bg-surface-container-low/60 border border-outline-variant/15"
+            >
               <div
-                class="flex items-start gap-3 p-2.5 rounded-xl bg-surface-container-low/60 border border-outline-variant/15"
+                class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                [class]="
+                  act.eventType === 'DEPLETED'
+                    ? 'bg-warning/20 text-warning'
+                    : act.eventType === 'RESTOCKED'
+                      ? 'bg-success-container text-on-success-container'
+                      : 'bg-primary-container text-on-primary-container'
+                "
               >
-                <div
-                  class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                  [class]="
-                    act.eventType === 'DEPLETED'
-                      ? 'bg-warning/20 text-warning'
-                      : act.eventType === 'RESTOCKED'
-                        ? 'bg-success-container text-on-success-container'
-                        : 'bg-primary-container text-on-primary-container'
-                  "
-                >
-                  <span class="material-symbols-rounded text-base">{{ act.icon }}</span>
-                </div>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="font-label-ui text-xs font-bold text-on-surface truncate">
-                      {{ act.flowName }}
-                    </span>
-                    <span class="font-label-code-sm text-[10px] text-outline flex-shrink-0">
-                      {{ act.eventType }}
-                    </span>
-                  </div>
-                  <p class="font-body-sm text-xs text-on-surface-variant mt-0.5">
-                    {{ act.note }}
-                  </p>
-                </div>
+                <span class="material-symbols-rounded text-base">{{ act.icon }}</span>
               </div>
-            }
-          </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-label-ui text-xs font-bold text-on-surface truncate">
+                    {{ act.flowName }}
+                  </span>
+                  <span class="font-label-code-sm text-[10px] text-outline flex-shrink-0">
+                    {{ act.eventType }}
+                  </span>
+                </div>
+                <p class="font-body-sm text-xs text-on-surface-variant mt-0.5">
+                  {{ act.note }}
+                </p>
+              </div>
+            </div>
+          }
         </div>
       </section>
     </div>
@@ -530,12 +792,28 @@ import { ProfileService } from '../../core/services/profile.service';
                   [(ngModel)]="newWidgetIcon"
                   class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-sm text-on-surface"
                 >
-                  <option value="inventory_2">Коробка (inventory_2)</option>
-                  <option value="local_laundry_service">Стирка (local_laundry_service)</option>
-                  <option value="bakery_dining">Хлеб / Еда (bakery_dining)</option>
-                  <option value="coffee">Чай / Кофе (coffee)</option>
+                  <option value="inventory_2">Коробка / Запас (inventory_2)</option>
+                  <option value="soap">Мыло (soap)</option>
+                  <option value="clean_hands">Влажные салфетки (clean_hands)</option>
+                  <option value="wash">Мытье посуды (wash)</option>
+                  <option value="layers">Губки поролоновые (layers)</option>
+                  <option value="dry">Тряпки / салфетки (dry)</option>
+                  <option value="sanitizer">Средство для плиты / Санокс (sanitizer)</option>
+                  <option value="brush">Металлические губки / щетки (brush)</option>
+                  <option value="local_laundry_service">Стирка / Порошок (local_laundry_service)</option>
+                  <option value="cleaning_services">Уборка / Клининг (cleaning_services)</option>
+                  <option value="emoji_food_beverage">Чай в пакетиках (emoji_food_beverage)</option>
+                  <option value="spa">Чай листовой / Травы (spa)</option>
+                  <option value="bakery_dining">Хлеб / Выпечка (bakery_dining)</option>
+                  <option value="soup_kitchen">Кетчуп / Соус (soup_kitchen)</option>
+                  <option value="dinner_dining">Утка / Мясо / Птица (dinner_dining)</option>
+                  <option value="lunch_dining">Сало / Закуски (lunch_dining)</option>
+                  <option value="nutrition">Лимон / Цитрусовые (nutrition)</option>
+                  <option value="local_drink">Молоко / Напитки (local_drink)</option>
+                  <option value="grain">Мука / Зерно (grain)</option>
+                  <option value="scatter_plot">Сахар / Сыпучие (scatter_plot)</option>
+                  <option value="rice_bowl">Гречка / Рис / Крупы (rice_bowl)</option>
                   <option value="water_drop">Вода (water_drop)</option>
-                  <option value="cleaning_services">Уборка (cleaning_services)</option>
                   <option value="yard">Растения / Сад (yard)</option>
                   <option value="pets">Питомцы (pets)</option>
                 </select>
@@ -543,18 +821,60 @@ import { ProfileService } from '../../core/services/profile.service';
             </div>
 
             @if (newWidgetKind === 'supply') {
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <label class="flex flex-col gap-1">
-                  <span class="font-label-ui text-xs font-semibold text-on-surface">Единица / Упаковка</span>
+                  <span class="font-label-ui text-xs font-semibold text-on-surface">Ед. изм. (кратко)</span>
+                  <input
+                    type="text"
+                    [(ngModel)]="newWidgetUnitShort"
+                    placeholder="шт / пак / кг / л / г"
+                    class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-sm text-on-surface"
+                  />
+                </label>
+                <label class="flex flex-col gap-1 sm:col-span-2">
+                  <span class="font-label-ui text-xs font-semibold text-on-surface">Фасовка / Описание</span>
                   <input
                     type="text"
                     [(ngModel)]="newWidgetUnit"
-                    placeholder="Напр.: 1 пачка / 2 л"
+                    placeholder="Напр.: 100 пакетиков / Пакет 2 кг"
                     class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-sm text-on-surface"
                   />
                 </label>
                 <label class="flex flex-col gap-1">
-                  <span class="font-label-ui text-xs font-semibold text-on-surface">На сколько дней хватает</span>
+                  <span class="font-label-ui text-xs font-semibold text-on-surface">Остаток</span>
+                  <input
+                    type="number"
+                    [(ngModel)]="newWidgetCurrentQty"
+                    min="0"
+                    step="any"
+                    class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-sm text-on-surface"
+                  />
+                </label>
+                <label class="flex flex-col gap-1">
+                  <span class="font-label-ui text-xs font-semibold text-on-surface">Макс. ёмкость</span>
+                  <input
+                    type="number"
+                    [(ngModel)]="newWidgetMaxQty"
+                    min="0.1"
+                    step="any"
+                    class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-sm text-on-surface"
+                  />
+                </label>
+                <label class="flex flex-col gap-1">
+                  <span class="font-label-ui text-xs font-semibold text-on-surface">Шаг порции</span>
+                  <input
+                    type="number"
+                    [(ngModel)]="newWidgetStep"
+                    min="0.01"
+                    step="any"
+                    class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-sm text-on-surface"
+                  />
+                </label>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <label class="flex flex-col gap-1">
+                  <span class="font-label-ui text-xs font-semibold text-on-surface">Срок расхода (дней)</span>
                   <input
                     type="number"
                     [(ngModel)]="newWidgetDays"
@@ -682,6 +1002,10 @@ export class HomeTrackerComponent {
   protected readonly home = inject(HomeTrackerService);
   protected readonly profileService = inject(ProfileService);
 
+  readonly currentSection = signal<'all' | 'supplies' | 'tasks'>('all');
+  newTaskTitle = '';
+  newTaskPriority: 'low' | 'medium' | 'high' = 'medium';
+
   readonly showWidgetModal = signal(false);
   readonly showProfileModal = signal(false);
 
@@ -690,12 +1014,31 @@ export class HomeTrackerComponent {
   newWidgetRoom = 'Кухня';
   newWidgetIcon = 'inventory_2';
   newWidgetUnit = '1 уп.';
+  newWidgetUnitShort = 'шт';
+  newWidgetCurrentQty = 1;
+  newWidgetMaxQty = 1;
+  newWidgetStep = 1;
   newWidgetDays = 14;
   newScheduleStart = '10:00';
   newScheduleEnd = '12:00';
 
   newProfileName = '';
   newProfileHandle = '';
+
+  maxAll(): void {
+    this.home.maxAllInRoom(this.home.currentRoom);
+  }
+
+  addNewTask(): void {
+    if (!this.newTaskTitle.trim()) return;
+    const room = this.home.currentRoom === 'ALL' ? 'Кухня' : this.home.currentRoom;
+    this.home.addRoomTask(room, this.newTaskTitle, this.newTaskPriority);
+    this.newTaskTitle = '';
+  }
+
+  MathRound(val: number): number {
+    return Math.round(val);
+  }
 
   submitNewWidget(): void {
     if (!this.newWidgetName.trim()) return;
@@ -705,6 +1048,10 @@ export class HomeTrackerComponent {
       room: this.newWidgetRoom,
       icon: this.newWidgetIcon,
       unitHint: this.newWidgetUnit,
+      unit: this.newWidgetUnitShort,
+      currentQty: this.newWidgetCurrentQty,
+      maxQty: this.newWidgetMaxQty,
+      step: this.newWidgetStep,
       expectedDays: this.newWidgetDays,
       scheduleStart: this.newScheduleStart,
       scheduleEnd: this.newScheduleEnd,

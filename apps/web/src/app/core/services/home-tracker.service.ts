@@ -16,6 +16,7 @@ import {
   Folder,
   HomeWidgetMeta,
   HomeWidgetView,
+  RoomTask,
 } from '../models/flow.models';
 import { ApiService } from './api.service';
 import { FlowOrchestratorService } from './flow-orchestrator.service';
@@ -25,7 +26,7 @@ export interface HomeActivityItem {
   id: string;
   flowId: string;
   flowName: string;
-  eventType: 'RESTOCKED' | 'DEPLETED' | 'ROUTINE_DONE' | 'WIDGET_CREATED';
+  eventType: 'RESTOCKED' | 'DEPLETED' | 'ROUTINE_DONE' | 'WIDGET_CREATED' | 'SPEC_CHANGED';
   note: string;
   createdAt: string;
   icon: string;
@@ -37,17 +38,54 @@ export interface CreateHomeWidgetInput {
   kind: 'supply' | 'routine';
   room: string;
   icon: string;
+  brand?: string;
+  price?: string;
+  note?: string;
   expectedDays?: number;
   unitHint?: string;
+  currentQty?: number;
+  maxQty?: number;
+  unit?: string;
+  step?: number;
+  daysPerUnit?: number;
   scheduleDays?: number[];
   scheduleStart?: string;
   scheduleEnd?: string;
+}
+
+export interface RestockWithSpecInput {
+  flowId: string;
+  brand?: string;
+  unitHint?: string;
+  price?: string;
+  expectedDays?: number;
+  currentQty?: number;
+  maxQty?: number;
+  unit?: string;
+  step?: number;
+  note?: string;
+}
+
+export interface UpdateWidgetSpecInput {
+  flowId: string;
+  name?: string;
+  brand?: string;
+  unitHint?: string;
+  price?: string;
+  expectedDays?: number;
+  currentQty?: number;
+  maxQty?: number;
+  unit?: string;
+  step?: number;
+  room?: string;
+  note?: string;
 }
 
 interface ProfileLocalStore {
   folders: Folder[];
   flows: Flow[];
   activities: HomeActivityItem[];
+  tasks?: RoomTask[];
 }
 
 function buildStarterProfileStore(profileId: string, isDacha = false): ProfileLocalStore {
@@ -98,8 +136,10 @@ function buildStarterProfileStore(profileId: string, isDacha = false): ProfileLo
               kind: 'supply',
               icon: 'fireplace',
               room: 'Терраса',
+              brand: 'Березовые колотые',
               expectedDays: 14,
               unitHint: '2 сетки березовых дров',
+              price: '400 ₽',
             },
           },
           createdAt: now,
@@ -123,8 +163,10 @@ function buildStarterProfileStore(profileId: string, isDacha = false): ProfileLo
               kind: 'supply',
               icon: 'water_drop',
               room: 'Кухня',
+              brand: 'Архыз Горная',
               expectedDays: 7,
               unitHint: '2 бутыли по 19 л',
+              price: '700 ₽',
             },
           },
           createdAt: now,
@@ -165,7 +207,7 @@ function buildStarterProfileStore(profileId: string, isDacha = false): ProfileLo
         {
           id: `${profileId.slice(0, 24)}-000000000201`,
           name: 'Стиральный порошок',
-          description: 'Бытовой мьютекс наличия порошка (ACTIVE = есть дома, INACTIVE = пора купить).',
+          description: 'Стиральный автомат-порошок. Счётчик в килограммах.',
           type: FlowType.MUTEX,
           status: FlowStatus.ACTIVE,
           isExclusive: false,
@@ -173,49 +215,33 @@ function buildStarterProfileStore(profileId: string, isDacha = false): ProfileLo
           profileId,
           tags: [
             { id: 't-home', name: 'home' },
-            { id: 't-supplies', name: 'supplies' },
+            { id: 't-bath', name: 'bath' },
+            { id: 't-counter', name: 'counter' },
           ],
           config: {
             widget: {
               kind: 'supply',
               icon: 'local_laundry_service',
               room: 'Ванная',
+              brand: 'Tide Color Automat',
+              unitHint: '3 кг (пакет)',
+              price: '650 ₽',
               expectedDays: 30,
-              unitHint: 'Упаковка 3 кг',
+              currentQty: 3,
+              maxQty: 4.5,
+              unit: 'кг',
+              step: 0.5,
+              daysPerUnit: 10,
+              note: 'Счётчик стирального порошка в килограммах',
             },
           },
           createdAt: now,
           updatedAt: now,
         },
         {
-          id: `${profileId.slice(0, 24)}-000000000202`,
-          name: 'Хлеб и выпечка',
-          description: 'Ежедневный ресурс кухни. Когда мьютекс выключается — автоматически попадает в список покупок.',
-          type: FlowType.MUTEX,
-          status: FlowStatus.INACTIVE,
-          isExclusive: false,
-          folderId: suppliesId,
-          profileId,
-          tags: [
-            { id: 't-home', name: 'home' },
-            { id: 't-kitchen', name: 'kitchen' },
-          ],
-          config: {
-            widget: {
-              kind: 'supply',
-              icon: 'bakery_dining',
-              room: 'Кухня',
-              expectedDays: 3,
-              unitHint: 'Свежая буханка',
-            },
-          },
-          createdAt: now,
-          updatedAt: now,
-        },
-        {
-          id: `${profileId.slice(0, 24)}-000000000203`,
-          name: 'Запасы кухни: Чай и Кофе',
-          description: 'Мьютекс наличия базовых запасов напитков на кухне.',
+          id: `${profileId.slice(0, 24)}-000000000210`,
+          name: 'Чай в пакетиках',
+          description: 'Порционный чай в пакетиках. Счётчик поштучного расхода.',
           type: FlowType.MUTEX,
           status: FlowStatus.ACTIVE,
           isExclusive: false,
@@ -224,39 +250,765 @@ function buildStarterProfileStore(profileId: string, isDacha = false): ProfileLo
           tags: [
             { id: 't-home', name: 'home' },
             { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-counter', name: 'counter' },
           ],
           config: {
             widget: {
               kind: 'supply',
-              icon: 'coffee',
+              icon: 'emoji_food_beverage',
               room: 'Кухня',
-              expectedDays: 14,
-              unitHint: 'Пачка 250 г',
+              brand: 'Greenfield Golden Ceylon',
+              unitHint: '100 пакетиков',
+              price: '380 ₽',
+              expectedDays: 30,
+              currentQty: 85,
+              maxQty: 100,
+              unit: 'пак',
+              step: 1,
+              daysPerUnit: 0.3,
+              note: 'Поштучный расход чайных пакетиков',
             },
           },
           createdAt: now,
           updatedAt: now,
         },
         {
-          id: `${profileId.slice(0, 24)}-000000000204`,
-          name: 'Губки и средство для посуды',
-          description: 'Расходники для раковины и посудомоечной машины.',
+          id: `${profileId.slice(0, 24)}-000000000211`,
+          name: 'Чай листовой',
+          description: 'Крупнолистовой чай для заварочного чайника. Счётчик граммовки.',
           type: FlowType.MUTEX,
-          status: FlowStatus.INACTIVE,
+          status: FlowStatus.ACTIVE,
           isExclusive: false,
           folderId: suppliesId,
           profileId,
           tags: [
             { id: 't-home', name: 'home' },
             { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'spa',
+              room: 'Кухня',
+              brand: 'Ассам Mokalbari TGFOP',
+              unitHint: '200 г (пачка)',
+              price: '450 ₽',
+              expectedDays: 20,
+              currentQty: 160,
+              maxQty: 200,
+              unit: 'г',
+              step: 10,
+              daysPerUnit: 0.5,
+              note: 'Расход граммовки: порция заварки 10 г',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000212`,
+          name: 'Буханка хлеба',
+          description: 'Свежий хлеб на кухне. Поштучный учёт буханок.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'bakery_dining',
+              room: 'Кухня',
+              brand: 'Бородинский подовый',
+              unitHint: '1 буханка (400 г)',
+              price: '58 ₽',
+              expectedDays: 3,
+              currentQty: 1,
+              maxQty: 2,
+              unit: 'бух',
+              step: 1,
+              daysPerUnit: 2,
+              note: 'Свежая выпечка к столу',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000213`,
+          name: 'Кетчуп',
+          description: 'Томатный кетчуп в дой-паке. Учёт пачками.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'soup_kitchen',
+              room: 'Кухня',
+              brand: 'Heinz Томатный',
+              unitHint: '350 г (пачка)',
+              price: '120 ₽',
+              expectedDays: 14,
+              currentQty: 1,
+              maxQty: 2,
+              unit: 'пач',
+              step: 1,
+              daysPerUnit: 14,
+              note: 'Учёт целыми пачками / дой-паками',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000214`,
+          name: 'Утка',
+          description: 'Простой мьютекс наличия: включён (ACTIVE) = есть дома, выключен (INACTIVE) = съедена/закончилась. Записывает историю сессий и событий до полного окончания.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-mutex', name: 'mutex' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'dinner_dining',
+              room: 'Кухня',
+              brand: 'Фермерская утка с яблоками',
+              unitHint: '1 тушка',
+              price: '1200 ₽',
+              expectedDays: 3,
+              currentQty: 1,
+              maxQty: 1,
+              unit: 'шт',
+              step: 1,
+              daysPerUnit: 3,
+              note: 'Простой мьютекс наличия. Фиксирует сессии и события от появления до полного окончания.',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000215`,
+          name: 'Сало',
+          description: 'Запас домашнего сала в морозилке. Штучный учёт брикетов.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'lunch_dining',
+              room: 'Кухня',
+              brand: 'Белорусское с чесноком',
+              unitHint: 'Брикеты по 300 г',
+              price: '320 ₽',
+              expectedDays: 30,
+              currentQty: 3,
+              maxQty: 4,
+              unit: 'брик',
+              step: 1,
+              daysPerUnit: 10,
+              note: 'Штучный учёт брикетов в морозильной камере',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000216`,
+          name: 'Лимон',
+          description: 'Свежие лимоны. Поштучный счётчик плодов.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'nutrition',
+              room: 'Кухня',
+              brand: 'Узбекские сочные',
+              unitHint: 'Штучно (4-6 шт)',
+              price: '140 ₽',
+              expectedDays: 12,
+              currentQty: 4,
+              maxQty: 6,
+              unit: 'шт',
+              step: 1,
+              daysPerUnit: 3,
+              note: 'Поштучный расход к чаю и блюдам',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000217`,
+          name: 'Молоко',
+          description: 'Пастеризованное молоко. Счётчик в литрах с шагом 0.5 л.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'local_drink',
+              room: 'Кухня',
+              brand: 'Простоквашино 3.2%',
+              unitHint: 'Бутылки по 1 л',
+              price: '89 ₽',
+              expectedDays: 4,
+              currentQty: 2,
+              maxQty: 3,
+              unit: 'л',
+              step: 0.5,
+              daysPerUnit: 2,
+              note: 'Порционный расход по 0.5 л',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000218`,
+          name: 'Мука',
+          description: 'Пшеничная мука высшего сорта. Учёт запаса в килограммах.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'grain',
+              room: 'Кухня',
+              brand: 'Макфа пшеничная высший сорт',
+              unitHint: 'Пакеты по 2 кг',
+              price: '110 ₽',
+              expectedDays: 30,
+              currentQty: 2.5,
+              maxQty: 4,
+              unit: 'кг',
+              step: 0.5,
+              daysPerUnit: 7,
+              note: 'Списание по 0.5 кг на выпечку',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000219`,
+          name: 'Сахар',
+          description: 'Сахар-песок. Счётчик запаса в килограммах.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'scatter_plot',
+              room: 'Кухня',
+              brand: 'Сахар белый свекловичный',
+              unitHint: 'Пакеты по 1 кг',
+              price: '65 ₽',
+              expectedDays: 30,
+              currentQty: 2,
+              maxQty: 3,
+              unit: 'кг',
+              step: 0.5,
+              daysPerUnit: 10,
+              note: 'Счётчик в килограммах (шаг 0.5 кг)',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000220`,
+          name: 'Гречка',
+          description: 'Гречневая крупа ядрица отборная. Счётчик расхода в килограммах.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'rice_bowl',
+              room: 'Кухня',
+              brand: 'Мистраль Ядрица Отборная',
+              unitHint: 'Пакеты по 900 г / 1 кг',
+              price: '95 ₽',
+              expectedDays: 24,
+              currentQty: 1.5,
+              maxQty: 3,
+              unit: 'кг',
+              step: 0.5,
+              daysPerUnit: 8,
+              note: 'Списание порциями по 0.5 кг',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000221`,
+          name: 'Рис',
+          description: 'Рис шлифованный круглозерный/длиннозерный. Счётчик запаса в килограммах.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-kitchen', name: 'kitchen' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'rice_bowl',
+              room: 'Кухня',
+              brand: 'Мистраль Кубань',
+              unitHint: 'Пакеты по 900 г / 1 кг',
+              price: '115 ₽',
+              expectedDays: 24,
+              currentQty: 2,
+              maxQty: 3,
+              unit: 'кг',
+              step: 0.5,
+              daysPerUnit: 8,
+              note: 'Списание порциями по 0.5 кг на гарниры и плов',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000222`,
+          name: 'Мыло',
+          description: 'Туалетное мыло для рук и тела. Поштучный счётчик брусков.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-bath', name: 'bath' },
+            { id: 't-counter', name: 'counter' },
           ],
           config: {
             widget: {
               kind: 'supply',
               icon: 'soap',
-              room: 'Кухня',
-              expectedDays: 21,
-              unitHint: 'Флакон 500 мл + таблетки',
+              room: 'Ванная',
+              brand: 'Dove Красота и уход',
+              unitHint: 'Бруски (штучно)',
+              price: '90 ₽',
+              expectedDays: 30,
+              currentQty: 4,
+              maxQty: 6,
+              unit: 'шт',
+              step: 1,
+              daysPerUnit: 10,
+              note: 'Поштучный расход брусков мыла',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000223`,
+          name: 'Влажные салфетки',
+          description: 'Влажные гигиенические и очищающие салфетки. Простой мьютекс наличия (ON/OFF).',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-bath', name: 'bath' },
+            { id: 't-mutex', name: 'mutex' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'clean_hands',
+              room: 'Ванная',
+              brand: 'Aura Family с алоэ',
+              unitHint: '1 пачка (наличие)',
+              price: '110 ₽',
+              expectedDays: 14,
+              currentQty: 1,
+              maxQty: 1,
+              unit: 'шт',
+              step: 1,
+              daysPerUnit: 14,
+              note: 'Простой мьютекс наличия (ON/OFF). При выключении закрывается сессия и пишется история в flow_events/flow_sessions.',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000224`,
+          name: 'Санокс',
+          description: 'Чистящий гель Санокс для сантехники и ванны. Простой мьютекс наличия (ON/OFF).',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-bath', name: 'bath' },
+            { id: 't-mutex', name: 'mutex' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'cleaning_services',
+              room: 'Ванная',
+              brand: 'Санокс Ультра Гель',
+              unitHint: '1 флакон 750 мл',
+              price: '160 ₽',
+              expectedDays: 30,
+              currentQty: 1,
+              maxQty: 1,
+              unit: 'шт',
+              step: 1,
+              daysPerUnit: 30,
+              note: 'Простой мьютекс наличия (ON/OFF). Фиксирует историю сессий от покупки до исчерпания.',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000225`,
+          name: 'Гель для мытья посуды',
+          description: 'Концентрированное средство для мытья посуды. Счётчик в литрах.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-bath', name: 'bath' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'wash',
+              room: 'Ванная',
+              brand: 'Fairy Сочный лимон',
+              unitHint: 'Флакон 1.5 л',
+              price: '230 ₽',
+              expectedDays: 30,
+              currentQty: 1.5,
+              maxQty: 2,
+              unit: 'л',
+              step: 0.5,
+              daysPerUnit: 20,
+              note: 'Счётчик расхода в литрах (шаг 0.5 л)',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000226`,
+          name: 'Губки',
+          description: 'Поролоновые губки с абразивным слоем для мытья и уборки. Поштучный счётчик.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-bath', name: 'bath' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'layers',
+              room: 'Ванная',
+              brand: 'Фрекен БОК',
+              unitHint: 'Упаковка 10 шт',
+              price: '120 ₽',
+              expectedDays: 30,
+              currentQty: 6,
+              maxQty: 10,
+              unit: 'шт',
+              step: 1,
+              daysPerUnit: 5,
+              note: 'Поштучный расход губок для уборки',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000227`,
+          name: 'Тряпки',
+          description: 'Салфетки и тряпки из микрофибры/вискозы для сухой и влажной уборки. Поштучный счётчик.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-bath', name: 'bath' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'dry',
+              room: 'Ванная',
+              brand: 'Микрофибра универсальная',
+              unitHint: 'Салфетки (штучно)',
+              price: '180 ₽',
+              expectedDays: 30,
+              currentQty: 4,
+              maxQty: 6,
+              unit: 'шт',
+              step: 1,
+              daysPerUnit: 10,
+              note: 'Поштучный учёт салфеток и тряпок для уборки',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000228`,
+          name: 'Средство для мытья плиты',
+          description: 'Антижир для очистки кухонных плит, духовок и решёток. Простой мьютекс наличия (ON/OFF).',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-bath', name: 'bath' },
+            { id: 't-mutex', name: 'mutex' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'sanitizer',
+              room: 'Ванная',
+              brand: 'Azelit Антижир гель',
+              unitHint: '1 флакон 600 мл',
+              price: '210 ₽',
+              expectedDays: 45,
+              currentQty: 1,
+              maxQty: 1,
+              unit: 'шт',
+              step: 1,
+              daysPerUnit: 45,
+              note: 'Простой мьютекс наличия (ON/OFF). При выключении закрывается сессия и добавляется в список покупок.',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000229`,
+          name: 'Железные губки',
+          description: 'Металлические мочалки/скребки из нержавеющей стали для сложных загрязнений. Поштучный счётчик.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-bath', name: 'bath' },
+            { id: 't-counter', name: 'counter' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'brush',
+              room: 'Ванная',
+              brand: 'Чистюля металлические',
+              unitHint: 'Скребки металлические (штучно)',
+              price: '95 ₽',
+              expectedDays: 30,
+              currentQty: 3,
+              maxQty: 4,
+              unit: 'шт',
+              step: 1,
+              daysPerUnit: 15,
+              note: 'Поштучный расход металлических мочалок',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000206`,
+          name: 'Шампунь и гель для душа',
+          description: 'Флаконы в душевой. Остаток отслеживается в миллилитрах с цветовой шкалой запаса.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-bath', name: 'bathroom' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'shower',
+              room: 'Ванная',
+              brand: 'Head & Shoulders Classic',
+              unitHint: '400 мл (флакон)',
+              price: '420 ₽',
+              expectedDays: 20,
+              currentQty: 120,
+              maxQty: 400,
+              unit: 'мл',
+              step: 15,
+              daysPerUnit: 0.25,
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000207`,
+          name: 'Туалетная бумага (Zewa Deluxe)',
+          description: 'Мягкая 3-слойная бумага. При критическом остатке < 20% загорается красным.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-bath', name: 'bathroom' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'dry',
+              room: 'Ванная',
+              brand: 'Zewa Deluxe 3 слоя',
+              unitHint: '8 рулонов',
+              price: '280 ₽',
+              expectedDays: 16,
+              currentQty: 1,
+              maxQty: 8,
+              unit: 'рул',
+              step: 1,
+              daysPerUnit: 2,
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: `${profileId.slice(0, 24)}-000000000208`,
+          name: 'Батарейки AA (пульты и датчики)',
+          description: 'Комплект алкалиновых батареек для ТВ-пульта и климатической панели.',
+          type: FlowType.MUTEX,
+          status: FlowStatus.ACTIVE,
+          isExclusive: false,
+          folderId: suppliesId,
+          profileId,
+          tags: [
+            { id: 't-home', name: 'home' },
+            { id: 't-living', name: 'living' },
+          ],
+          config: {
+            widget: {
+              kind: 'supply',
+              icon: 'battery_charging_full',
+              room: 'Гостиная',
+              brand: 'Duracell Ultra',
+              unitHint: '12 шт (упаковка)',
+              price: '540 ₽',
+              expectedDays: 60,
+              currentQty: 8,
+              maxQty: 12,
+              unit: 'шт',
+              step: 2,
+              daysPerUnit: 10,
             },
           },
           createdAt: now,
@@ -294,6 +1046,15 @@ function buildStarterProfileStore(profileId: string, isDacha = false): ProfileLo
         },
       ];
 
+  const tasks: RoomTask[] = [
+    { id: `task-${profileId}-1`, room: 'Кухня', title: 'Почистить фильтр вытяжки и решётку плиты', done: false, createdAt: now, priority: 'medium' },
+    { id: `task-${profileId}-2`, room: 'Кухня', title: 'Протереть фасады кухонного гарнитура', done: true, createdAt: now, priority: 'low' },
+    { id: `task-${profileId}-3`, room: 'Ванная', title: 'Запустить цикл самоочистки барабана стиральной машины', done: false, createdAt: now, priority: 'high' },
+    { id: `task-${profileId}-4`, room: 'Ванная', title: 'Заменить диффузор аромата и повесить свежие полотенца', done: true, createdAt: now, priority: 'low' },
+    { id: `task-${profileId}-5`, room: 'Гостиная', title: 'Пропылесосить мягкую мебель и ковер', done: false, createdAt: now, priority: 'medium' },
+    { id: `task-${profileId}-6`, room: 'Гостиная', title: 'Полить монстеру и фикус', done: true, createdAt: now, priority: 'low' },
+  ];
+
   const activities: HomeActivityItem[] = [
     {
       id: `act-${profileId}-1`,
@@ -315,7 +1076,7 @@ function buildStarterProfileStore(profileId: string, isDacha = false): ProfileLo
     },
   ];
 
-  return { folders, flows, activities };
+  return { folders, flows, activities, tasks };
 }
 
 /**
@@ -341,6 +1102,9 @@ export class HomeTrackerService {
   readonly homeFlows$: Observable<Flow[]> = this.homeFlowsSubject.asObservable();
   readonly activities$: Observable<HomeActivityItem[]> = this.activitiesSubject.asObservable();
   readonly selectedRoom$: Observable<string> = this.selectedRoomSubject.asObservable();
+  get currentRoom(): string {
+    return this.selectedRoomSubject.value;
+  }
 
   /** Все домашние виджеты, обогащенные доменной мета-информацией. */
   readonly widgets$: Observable<HomeWidgetView[]> = combineLatest([
@@ -360,17 +1124,36 @@ export class HomeTrackerService {
         const updatedMs = new Date(flow.updatedAt || flow.createdAt).getTime();
         const daysSinceUpdate = Math.max(0, Math.floor((Date.now() - updatedMs) / (1000 * 60 * 60 * 24)));
 
+        const currentQty =
+          meta.currentQty !== undefined
+            ? meta.currentQty
+            : (flow.status === FlowStatus.ACTIVE ? (meta.maxQty ?? 1) : 0);
+        const maxQty = meta.maxQty && meta.maxQty > 0 ? meta.maxQty : Math.max(currentQty, 1);
+        const unit = meta.unit || (meta.unitHint ? meta.unitHint.split(' ')[1] || 'шт' : 'шт');
+        const step = meta.step && meta.step > 0 ? meta.step : 1;
+        const daysPerUnit = meta.daysPerUnit || 1;
+        const percentage = maxQty > 0 ? Math.min(100, Math.round((currentQty / maxQty) * 100)) : 0;
+
         return {
           flow,
           kind: isRoutine ? 'routine' : 'supply',
           icon: meta.icon || (isRoutine ? 'schedule' : 'inventory_2'),
           room: meta.room || (isRoutine ? 'Весь дом' : 'Дом'),
           expectedDays: meta.expectedDays || 14,
-          unitHint: meta.unitHint || '1 уп.',
+          unitHint: meta.unitHint || `${maxQty} ${unit}`,
+          brand: meta.brand,
+          price: meta.price,
+          note: meta.note,
           scheduleLabel: meta.scheduleLabel || this.formatScheduleLabel(flow),
           isInStock: flow.status === FlowStatus.ACTIVE || flow.status === FlowStatus.PROCESSING,
           daysSinceUpdate,
           folderPath,
+          currentQty,
+          maxQty,
+          unit,
+          step,
+          daysPerUnit,
+          percentage,
         } satisfies HomeWidgetView;
       }),
     ),
@@ -416,6 +1199,41 @@ export class HomeTrackerService {
     ),
   );
 
+  /** Сводная статистика здоровья запасов (Stitch Stock Health Spectrum). */
+  readonly healthStats$ = this.widgets$.pipe(
+    map((widgets) => {
+      const supplies = widgets.filter((w) => w.kind === 'supply');
+      const total = supplies.length;
+      let empty = 0;
+      let low = 0;
+      let healthy = 0;
+
+      supplies.forEach((s) => {
+        if (!s.isInStock || s.currentQty === 0) {
+          empty++;
+        } else if (s.percentage < 20) {
+          low++;
+        } else {
+          healthy++;
+        }
+      });
+
+      const healthPercent = total > 0 ? Math.round((healthy / total) * 100) : 100;
+      return { total, empty, low, healthy, healthPercent };
+    }),
+  );
+
+  private readonly tasksSubject = new BehaviorSubject<RoomTask[]>([]);
+  readonly tasks$: Observable<RoomTask[]> = this.tasksSubject.asObservable();
+
+  /** Задачи и todo-лист, отфильтрованные по текущей выбранной комнате */
+  readonly tasksForSelectedRoom$: Observable<RoomTask[]> = combineLatest([
+    this.tasks$,
+    this.selectedRoom$,
+  ]).pipe(
+    map(([tasks, room]) => (room === 'ALL' ? tasks : tasks.filter((t) => t.room === room))),
+  );
+
   constructor() {
     this.profileService.activeProfile$.subscribe((profile) => {
       this.selectedRoomSubject.next('ALL');
@@ -428,6 +1246,232 @@ export class HomeTrackerService {
   }
 
   /**
+   * Списание порции ресурса (например -50 г стирального порошка, -1 рулон или -15 мл шампуня).
+   * Если остаток падает до 0, мьютекс переводится в INACTIVE (автоматически попадает в список покупок).
+   */
+  consumePortion(flowId: string, customAmount?: number): void {
+    const flow = this.homeFlowsSubject.value.find((f) => f.id === flowId);
+    if (!flow) return;
+
+    const oldWidget = (((flow.config as any) ?? {}).widget ?? {}) as HomeWidgetMeta;
+    const currentQty =
+      oldWidget.currentQty !== undefined
+        ? oldWidget.currentQty
+        : flow.status === FlowStatus.ACTIVE
+          ? (oldWidget.maxQty ?? 1)
+          : 0;
+    const maxQty = oldWidget.maxQty ?? Math.max(currentQty, 1);
+    const step = customAmount ?? oldWidget.step ?? 1;
+    const unit = oldWidget.unit || 'ед.';
+
+    const newQty = Math.round(Math.max(0, currentQty - step) * 1000) / 1000;
+    const willBeDepleted = newQty === 0;
+    const nextStatus = willBeDepleted ? FlowStatus.INACTIVE : FlowStatus.ACTIVE;
+
+    const nextWidget: HomeWidgetMeta = {
+      ...oldWidget,
+      currentQty: newQty,
+      maxQty,
+    };
+
+    const nextConfig = {
+      ...((flow.config as any) ?? {}),
+      widget: nextWidget,
+    };
+
+    const profileId = this.profileService.currentProfileId;
+    const now = new Date().toISOString();
+    const updated = this.homeFlowsSubject.value.map((f) =>
+      f.id === flowId ? { ...f, status: nextStatus, config: nextConfig, updatedAt: now } : f,
+    );
+    this.homeFlowsSubject.next(updated);
+    this.saveToLocalStore(profileId, this.homeFoldersSubject.value, updated);
+
+    if (willBeDepleted) {
+      this.pushActivity({
+        flowId,
+        flowName: flow.name,
+        eventType: 'DEPLETED',
+        note: `Списано ${step} ${unit}. Остаток 0 -> запас исчерпан (мьютекс выключен, добавлено в покупки)`,
+        icon: 'remove_shopping_cart',
+      });
+    } else {
+      this.pushActivity({
+        flowId,
+        flowName: flow.name,
+        eventType: 'SPEC_CHANGED',
+        note: `Расход -${step} ${unit}. Текущий остаток: ${newQty} ${unit} из ${maxQty} (${Math.round((newQty / maxQty) * 100)}%)`,
+        icon: 'remove_circle_outline',
+      });
+    }
+
+    this.api
+      .updateFlow(flowId, { config: nextConfig })
+      .pipe(catchError(() => of(null)))
+      .subscribe(() => {
+        if (willBeDepleted || flow.status !== nextStatus) {
+          this.api
+            .updateFlowStatus(flowId, nextStatus)
+            .pipe(catchError(() => of(null)))
+            .subscribe(() => {
+              this.api
+                .appendFlowEvent(flowId, {
+                  source: 'lemon-home-app',
+                  eventType: willBeDepleted ? 'DEPLETED' : 'CONSUMED',
+                  payload: { consumed: step, remaining: newQty, unit },
+                })
+                .pipe(catchError(() => of(null)))
+                .subscribe(() => this.coreOrchestrator.refresh());
+            });
+        } else {
+          this.api
+            .appendFlowEvent(flowId, {
+              source: 'lemon-home-app',
+              eventType: 'CONSUMED',
+              payload: { consumed: step, remaining: newQty, unit },
+            })
+            .pipe(catchError(() => of(null)))
+            .subscribe(() => this.coreOrchestrator.refresh());
+        }
+      });
+  }
+
+  /**
+   * Пополнение запаса порцией или пачкой (например +50 г или +3000 г пачка).
+   * Независимое пополнение: может выполняться даже если ресурс еще в наличии (Mutex уже ACTIVE).
+   * Если ресурс был в состоянии INACTIVE (в покупках), он автоматически переходит в ACTIVE (мьютекс включается).
+   */
+  addPortion(flowId: string, customAmount?: number): void {
+    const flow = this.homeFlowsSubject.value.find((f) => f.id === flowId);
+    if (!flow) return;
+
+    const oldWidget = (((flow.config as any) ?? {}).widget ?? {}) as HomeWidgetMeta;
+    const currentQty =
+      oldWidget.currentQty !== undefined
+        ? oldWidget.currentQty
+        : flow.status === FlowStatus.ACTIVE
+          ? (oldWidget.maxQty ?? 1)
+          : 0;
+    const maxQty = oldWidget.maxQty ?? Math.max(currentQty, 1);
+    const step = customAmount ?? oldWidget.step ?? 1;
+    const unit = oldWidget.unit || 'ед.';
+
+    const newQty = Math.round((currentQty + step) * 1000) / 1000;
+    const adjustedMax = Math.max(maxQty, newQty);
+    const wasInactive = flow.status === FlowStatus.INACTIVE || currentQty === 0;
+
+    const nextWidget: HomeWidgetMeta = {
+      ...oldWidget,
+      currentQty: newQty,
+      maxQty: adjustedMax,
+    };
+
+    const nextConfig = {
+      ...((flow.config as any) ?? {}),
+      widget: nextWidget,
+    };
+
+    const profileId = this.profileService.currentProfileId;
+    const now = new Date().toISOString();
+    const updated = this.homeFlowsSubject.value.map((f) =>
+      f.id === flowId ? { ...f, status: FlowStatus.ACTIVE, config: nextConfig, updatedAt: now } : f,
+    );
+    this.homeFlowsSubject.next(updated);
+    this.saveToLocalStore(profileId, this.homeFoldersSubject.value, updated);
+
+    this.pushActivity({
+      flowId,
+      flowName: flow.name,
+      eventType: 'RESTOCKED',
+      note: wasInactive
+        ? `Пополнено +${step} ${unit} -> мьютекс включен в ACTIVE (убрано из списка покупок)`
+        : `Независимое пополнение запаса: +${step} ${unit}. Всего: ${newQty} ${unit}`,
+      icon: 'add_circle',
+    });
+
+    this.api
+      .updateFlow(flowId, { config: nextConfig })
+      .pipe(catchError(() => of(null)))
+      .subscribe(() => {
+        this.api
+          .updateFlowStatus(flowId, FlowStatus.ACTIVE)
+          .pipe(catchError(() => of(null)))
+          .subscribe(() => {
+            this.api
+              .appendFlowEvent(flowId, {
+                source: 'lemon-home-app',
+                eventType: 'RESTOCKED',
+                payload: { added: step, total: newQty, unit, wasInactive },
+              })
+              .pipe(catchError(() => of(null)))
+              .subscribe(() => this.coreOrchestrator.refresh());
+          });
+      });
+  }
+
+  /**
+   * Заполнить все ресурсы выбранной комнаты до 100% максимального объема (аналог "Max All" из Stitch).
+   */
+  maxAllInRoom(roomName: string): void {
+    const flows = this.homeFlowsSubject.value;
+    const profileId = this.profileService.currentProfileId;
+    const now = new Date().toISOString();
+
+    const updated = flows.map((f) => {
+      const widget = (((f.config as any) ?? {}).widget ?? {}) as HomeWidgetMeta;
+      if (widget.kind !== 'routine' && (roomName === 'ALL' || widget.room === roomName)) {
+        const maxQty = widget.maxQty ?? (widget.currentQty || 1);
+        return {
+          ...f,
+          status: FlowStatus.ACTIVE,
+          config: {
+            ...((f.config as any) ?? {}),
+            widget: {
+              ...widget,
+              currentQty: maxQty,
+            },
+          },
+          updatedAt: now,
+        };
+      }
+      return f;
+    });
+
+    this.homeFlowsSubject.next(updated);
+    this.saveToLocalStore(profileId, this.homeFoldersSubject.value, updated);
+
+    this.pushActivity({
+      flowId: `room-${roomName}`,
+      flowName: roomName === 'ALL' ? 'Все зоны дома' : roomName,
+      eventType: 'RESTOCKED',
+      note: `Все ресурсы зоны «${roomName === 'ALL' ? 'Все зоны' : roomName}» пополнены до максимума (Max All)`,
+      icon: 'done_all',
+    });
+  }
+
+  toggleRoomTask(taskId: string): void {
+    const next = this.tasksSubject.value.map((t) => (t.id === taskId ? { ...t, done: !t.done } : t));
+    this.tasksSubject.next(next);
+  }
+
+  addRoomTask(room: string, title: string, priority: 'low' | 'medium' | 'high' = 'medium'): void {
+    if (!title.trim()) return;
+    const newTask: RoomTask = {
+      id: `task-${Date.now()}`,
+      room: room === 'ALL' ? 'Кухня' : room,
+      title: title.trim(),
+      done: false,
+      createdAt: new Date().toISOString(),
+      priority,
+    };
+    this.tasksSubject.next([newTask, ...this.tasksSubject.value]);
+  }
+
+  deleteRoomTask(taskId: string): void {
+    this.tasksSubject.next(this.tasksSubject.value.filter((t) => t.id !== taskId));
+  }
+
+  /**
    * Императивное действие: «Закончилось дома (В список покупок)».
    * Переводит мьютекс ресурса в INACTIVE (закрывая сессию наличия) и пишет событие DEPLETED в хронику.
    */
@@ -435,7 +1479,18 @@ export class HomeTrackerService {
     const flow = this.homeFlowsSubject.value.find((f) => f.id === flowId);
     if (!flow) return;
 
-    this.applyLocalFlowStatus(flowId, FlowStatus.INACTIVE);
+    const oldWidget = (((flow.config as any) ?? {}).widget ?? {}) as HomeWidgetMeta;
+    const nextWidget: HomeWidgetMeta = { ...oldWidget, currentQty: 0 };
+    const nextConfig = { ...((flow.config as any) ?? {}), widget: nextWidget };
+
+    const profileId = this.profileService.currentProfileId;
+    const now = new Date().toISOString();
+    const updated = this.homeFlowsSubject.value.map((f) =>
+      f.id === flowId ? { ...f, status: FlowStatus.INACTIVE, config: nextConfig, updatedAt: now } : f,
+    );
+    this.homeFlowsSubject.next(updated);
+    this.saveToLocalStore(profileId, this.homeFoldersSubject.value, updated);
+
     this.pushActivity({
       flowId,
       flowName: flow.name,
@@ -445,18 +1500,203 @@ export class HomeTrackerService {
     });
 
     this.api
-      .updateFlowStatus(flowId, FlowStatus.INACTIVE)
+      .updateFlow(flowId, { config: nextConfig })
       .pipe(catchError(() => of(null)))
       .subscribe(() => {
         this.api
-          .appendFlowEvent(flowId, {
+          .updateFlowStatus(flowId, FlowStatus.INACTIVE)
+          .pipe(catchError(() => of(null)))
+          .subscribe(() => {
+            this.api
+              .appendFlowEvent(flowId, {
+                source: 'lemon-home-app',
+                eventType: 'DEPLETED',
+                payload: { action: 'moved_to_shopping_list', currentQty: 0 },
+              })
+              .pipe(catchError(() => of(null)))
+              .subscribe(() => this.coreOrchestrator.refresh());
+          });
+      });
+  }
+
+  /**
+   * Императивное действие: «Купили / Пополнили запас» с фиксацией или изменением условий карточки
+   * (смена бренда, веса/килограммов, цены чека, срока расхода).
+   * Сохраняет новую спецификацию в config.widget, переводит Mutex в ACTIVE и пишет подробный лог в flow_events.
+   */
+  restockWithSpec(input: RestockWithSpecInput): void {
+    const flow = this.homeFlowsSubject.value.find((f) => f.id === input.flowId);
+    if (!flow) return;
+
+    const oldWidget = (((flow.config as any) ?? {}).widget ?? {}) as HomeWidgetMeta;
+    const changes: string[] = [];
+
+    if (input.brand !== undefined && input.brand.trim() !== (oldWidget.brand ?? '')) {
+      changes.push(`Марка: ${oldWidget.brand || 'не указана'} → ${input.brand.trim()}`);
+    }
+    if (input.unitHint !== undefined && input.unitHint.trim() !== (oldWidget.unitHint ?? '')) {
+      changes.push(`Фасовка: ${oldWidget.unitHint || 'не указана'} → ${input.unitHint.trim()}`);
+    }
+    if (input.price !== undefined && input.price.trim() !== (oldWidget.price ?? '')) {
+      changes.push(`Цена/чек: ${input.price.trim()}`);
+    }
+    if (input.expectedDays !== undefined && input.expectedDays !== oldWidget.expectedDays) {
+      changes.push(`Срок: ${oldWidget.expectedDays || 14} дн. → ${input.expectedDays} дн.`);
+    }
+
+    const changesSummary = changes.length > 0 ? changes.join('; ') : 'Условия подтверждены без изменений';
+
+    const nextWidget: HomeWidgetMeta = {
+      ...oldWidget,
+      brand: input.brand !== undefined ? input.brand.trim() : oldWidget.brand,
+      unitHint: input.unitHint !== undefined ? input.unitHint.trim() : oldWidget.unitHint,
+      price: input.price !== undefined ? input.price.trim() : oldWidget.price,
+      expectedDays: input.expectedDays !== undefined ? input.expectedDays : oldWidget.expectedDays,
+      note: input.note !== undefined ? input.note.trim() : oldWidget.note,
+    };
+
+    const nextConfig = {
+      ...((flow.config as any) ?? {}),
+      widget: nextWidget,
+    };
+
+    const profileId = this.profileService.currentProfileId;
+    const now = new Date().toISOString();
+    const updated = this.homeFlowsSubject.value.map((f) =>
+      f.id === input.flowId ? { ...f, status: FlowStatus.ACTIVE, config: nextConfig, updatedAt: now } : f,
+    );
+    this.homeFlowsSubject.next(updated);
+    this.saveToLocalStore(profileId, this.homeFoldersSubject.value, updated);
+
+    this.pushActivity({
+      flowId: flow.id,
+      flowName: flow.name,
+      eventType: 'RESTOCKED',
+      note: `Пополнено с обновлением условий: ${changesSummary}`,
+      icon: 'inventory',
+    });
+
+    this.api
+      .updateFlow(flow.id, { config: nextConfig })
+      .pipe(catchError(() => of(null)))
+      .subscribe(() => {
+        this.api
+          .updateFlowStatus(flow.id, FlowStatus.ACTIVE)
+          .pipe(catchError(() => of(null)))
+          .subscribe(() => {
+            this.api
+              .appendFlowEvent(flow.id, {
+                source: 'lemon-home-app',
+                eventType: 'RESTOCKED',
+                payload: {
+                  action: 'restocked_with_spec_change',
+                  brand: nextWidget.brand,
+                  unitHint: nextWidget.unitHint,
+                  price: nextWidget.price,
+                  expectedDays: nextWidget.expectedDays,
+                  note: nextWidget.note,
+                  previousSpec: {
+                    brand: oldWidget.brand,
+                    unitHint: oldWidget.unitHint,
+                    price: oldWidget.price,
+                    expectedDays: oldWidget.expectedDays,
+                  },
+                  changesSummary,
+                },
+              })
+              .pipe(catchError(() => of(null)))
+              .subscribe(() => this.coreOrchestrator.refresh());
+          });
+      });
+  }
+
+  /**
+   * Корректировка условий карточки без изменения статуса Mutex
+   * (например, изменился используемый вес или бренд до истощения запаса).
+   */
+  updateWidgetSpec(input: UpdateWidgetSpecInput): void {
+    const flow = this.homeFlowsSubject.value.find((f) => f.id === input.flowId);
+    if (!flow) return;
+
+    const oldWidget = (((flow.config as any) ?? {}).widget ?? {}) as HomeWidgetMeta;
+    const changes: string[] = [];
+
+    if (input.name && input.name.trim() !== flow.name) {
+      changes.push(`Название: ${flow.name} → ${input.name.trim()}`);
+    }
+    if (input.brand !== undefined && input.brand.trim() !== (oldWidget.brand ?? '')) {
+      changes.push(`Марка: ${oldWidget.brand || 'не указана'} → ${input.brand.trim()}`);
+    }
+    if (input.unitHint !== undefined && input.unitHint.trim() !== (oldWidget.unitHint ?? '')) {
+      changes.push(`Фасовка: ${oldWidget.unitHint || 'не указана'} → ${input.unitHint.trim()}`);
+    }
+    if (input.price !== undefined && input.price.trim() !== (oldWidget.price ?? '')) {
+      changes.push(`Цена/чек: ${input.price.trim()}`);
+    }
+    if (input.expectedDays !== undefined && input.expectedDays !== oldWidget.expectedDays) {
+      changes.push(`Срок: ${oldWidget.expectedDays || 14} дн. → ${input.expectedDays} дн.`);
+    }
+
+    const changesSummary = changes.length > 0 ? changes.join('; ') : 'Условия сохранены';
+
+    const nextWidget: HomeWidgetMeta = {
+      ...oldWidget,
+      brand: input.brand !== undefined ? input.brand.trim() : oldWidget.brand,
+      unitHint: input.unitHint !== undefined ? input.unitHint.trim() : oldWidget.unitHint,
+      price: input.price !== undefined ? input.price.trim() : oldWidget.price,
+      expectedDays: input.expectedDays !== undefined ? input.expectedDays : oldWidget.expectedDays,
+      room: input.room !== undefined ? input.room.trim() : oldWidget.room,
+      note: input.note !== undefined ? input.note.trim() : oldWidget.note,
+    };
+
+    const nextConfig = {
+      ...((flow.config as any) ?? {}),
+      widget: nextWidget,
+    };
+
+    const nextName = input.name?.trim() || flow.name;
+    const profileId = this.profileService.currentProfileId;
+    const now = new Date().toISOString();
+    const updated = this.homeFlowsSubject.value.map((f) =>
+      f.id === input.flowId ? { ...f, name: nextName, config: nextConfig, updatedAt: now } : f,
+    );
+    this.homeFlowsSubject.next(updated);
+    this.saveToLocalStore(profileId, this.homeFoldersSubject.value, updated);
+
+    this.pushActivity({
+      flowId: flow.id,
+      flowName: nextName,
+      eventType: 'SPEC_CHANGED',
+      note: `Изменены условия карточки: ${changesSummary}`,
+      icon: 'tune',
+    });
+
+    this.api
+      .updateFlow(flow.id, { name: nextName, config: nextConfig })
+      .pipe(catchError(() => of(null)))
+      .subscribe(() => {
+        this.api
+          .appendFlowEvent(flow.id, {
             source: 'lemon-home-app',
-            eventType: 'DEPLETED',
-            payload: { action: 'moved_to_shopping_list' },
+            eventType: 'SPEC_CHANGED',
+            payload: {
+              action: 'spec_updated',
+              brand: nextWidget.brand,
+              unitHint: nextWidget.unitHint,
+              price: nextWidget.price,
+              expectedDays: nextWidget.expectedDays,
+              note: nextWidget.note,
+              changesSummary,
+            },
           })
           .pipe(catchError(() => of(null)))
           .subscribe(() => this.coreOrchestrator.refresh());
       });
+  }
+
+  /** Получает полную историю событий и изменений для конкретной карточки */
+  getWidgetEvents(flowId: string) {
+    return this.api.getFlowEvents(flowId);
   }
 
   /**
@@ -467,27 +1707,44 @@ export class HomeTrackerService {
     const flow = this.homeFlowsSubject.value.find((f) => f.id === flowId);
     if (!flow) return;
 
-    this.applyLocalFlowStatus(flowId, FlowStatus.ACTIVE);
+    const oldWidget = (((flow.config as any) ?? {}).widget ?? {}) as HomeWidgetMeta;
+    const restoredQty = oldWidget.maxQty && oldWidget.maxQty > 0 ? oldWidget.maxQty : 1;
+    const nextWidget: HomeWidgetMeta = { ...oldWidget, currentQty: restoredQty };
+    const nextConfig = { ...((flow.config as any) ?? {}), widget: nextWidget };
+
+    const profileId = this.profileService.currentProfileId;
+    const now = new Date().toISOString();
+    const updated = this.homeFlowsSubject.value.map((f) =>
+      f.id === flowId ? { ...f, status: FlowStatus.ACTIVE, config: nextConfig, updatedAt: now } : f,
+    );
+    this.homeFlowsSubject.next(updated);
+    this.saveToLocalStore(profileId, this.homeFoldersSubject.value, updated);
+
     this.pushActivity({
       flowId,
       flowName: flow.name,
       eventType: 'RESTOCKED',
-      note: 'Запас пополнен -> мьютекс наличия активен',
+      note: `Запас пополнен (+${restoredQty} ${oldWidget.unit || 'ед.'}) -> мьютекс наличия активен`,
       icon: 'inventory',
     });
 
     this.api
-      .updateFlowStatus(flowId, FlowStatus.ACTIVE)
+      .updateFlow(flowId, { config: nextConfig })
       .pipe(catchError(() => of(null)))
       .subscribe(() => {
         this.api
-          .appendFlowEvent(flowId, {
-            source: 'lemon-home-app',
-            eventType: 'RESTOCKED',
-            payload: { action: 'restocked_at_home' },
-          })
+          .updateFlowStatus(flowId, FlowStatus.ACTIVE)
           .pipe(catchError(() => of(null)))
-          .subscribe(() => this.coreOrchestrator.refresh());
+          .subscribe(() => {
+            this.api
+              .appendFlowEvent(flowId, {
+                source: 'lemon-home-app',
+                eventType: 'RESTOCKED',
+                payload: { action: 'restocked_at_home', currentQty: restoredQty },
+              })
+              .pipe(catchError(() => of(null)))
+              .subscribe(() => this.coreOrchestrator.refresh());
+          });
       });
   }
 
@@ -551,9 +1808,17 @@ export class HomeTrackerService {
           kind: input.kind,
           icon: input.icon || (input.kind === 'routine' ? 'cleaning_services' : 'inventory_2'),
           room: input.room.trim() || 'Дом',
-          expectedDays: input.expectedDays || 14,
+          brand: input.brand?.trim() || undefined,
           unitHint: input.unitHint?.trim() || '1 шт.',
+          price: input.price?.trim() || undefined,
+          expectedDays: input.expectedDays || 14,
+          note: input.note?.trim() || undefined,
           scheduleLabel: input.kind === 'routine' ? `${start}–${end}` : undefined,
+          currentQty: input.currentQty !== undefined ? input.currentQty : (input.maxQty || 1),
+          maxQty: input.maxQty !== undefined ? input.maxQty : 1,
+          unit: input.unit || 'шт',
+          step: input.step !== undefined ? input.step : 1,
+          daysPerUnit: input.daysPerUnit || 1,
         } satisfies HomeWidgetMeta,
       },
       orchestratorRules:
@@ -644,6 +1909,7 @@ export class HomeTrackerService {
       });
 
     this.activitiesSubject.next(fallbackStore.activities);
+    this.tasksSubject.next(fallbackStore.tasks ?? []);
   }
 
   private getOrInitLocalStore(profileId: string, isDacha = false): ProfileLocalStore {
@@ -661,6 +1927,7 @@ export class HomeTrackerService {
       ...existing,
       folders,
       flows,
+      tasks: this.tasksSubject.value,
     });
   }
 

@@ -161,6 +161,16 @@ export interface FlowEventRecord {
 
 /* ---------- Imperative App «Lemon Home» View Models ---------- */
 
+export interface RoomTask {
+  id: string;
+  title: string;
+  room: string;
+  done: boolean;
+  createdAt: string;
+  dueDate?: string;
+  priority?: 'low' | 'medium' | 'high';
+}
+
 export interface HomeWidgetMeta {
   kind?: 'supply' | 'routine';
   icon?: string;
@@ -168,6 +178,14 @@ export interface HomeWidgetMeta {
   expectedDays?: number;
   unitHint?: string;
   scheduleLabel?: string;
+  brand?: string;
+  price?: string;
+  note?: string;
+  currentQty?: number;
+  maxQty?: number;
+  unit?: string;
+  step?: number;
+  daysPerUnit?: number;
 }
 
 export interface HomeWidgetView {
@@ -178,7 +196,16 @@ export interface HomeWidgetView {
   expectedDays: number;
   unitHint: string;
   scheduleLabel?: string;
+  brand?: string;
+  price?: string;
+  note?: string;
   isInStock: boolean;
   daysSinceUpdate: number;
   folderPath: string;
+  currentQty: number;
+  maxQty: number;
+  unit: string;
+  step: number;
+  daysPerUnit: number;
+  percentage: number;
 }
