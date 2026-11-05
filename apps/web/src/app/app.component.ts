@@ -1,6 +1,7 @@
 import { AsyncPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { map, switchMap, take, timer } from 'rxjs';
+import { CodeLabComponent } from './components/code-lab/code-lab.component';
 import { FlowDashboardComponent } from './components/flow-dashboard/flow-dashboard.component';
 import { HomeTrackerComponent } from './components/home-tracker/home-tracker.component';
 import { LayoutComponent } from './components/layout/layout.component';
@@ -12,7 +13,14 @@ import { ThemeService } from './core/services/theme.service';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [AsyncPipe, LayoutComponent, SidebarComponent, FlowDashboardComponent, HomeTrackerComponent],
+  imports: [
+    AsyncPipe,
+    LayoutComponent,
+    SidebarComponent,
+    FlowDashboardComponent,
+    HomeTrackerComponent,
+    CodeLabComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-layout
@@ -33,6 +41,8 @@ import { ThemeService } from './core/services/theme.service';
       />
       @if (((profileService.appMode$ | async) ?? 'home') === 'home') {
         <app-home-tracker />
+      } @else if (((profileService.appMode$ | async) ?? 'home') === 'code') {
+        <app-code-lab />
       } @else {
         <app-flow-dashboard />
       }

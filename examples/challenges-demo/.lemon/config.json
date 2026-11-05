@@ -1,0 +1,10 @@
+{
+  "$schema": "https://lemon.actions/schemas/repo-config.v1.json",
+  "id": "starter-challenges",
+  "name": "Fullstack Coding Challenges",
+  "defaultTags": ["#js", "#tauri", "#vite", "#rest"],
+  "watch": {
+    "tasksFile": ".lemon/tasks.json",
+    "resultsFile": ".lemon/results.json"
+  }
+}

@@ -1,4 +1,7 @@
 import { FlowStatus, FlowType } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
+import { CodeTasksService } from '../code-tasks/code-tasks.service';
 import { FoldersService } from '../folders/folders.service';
 import { ProfilesService } from '../profiles/profiles.service';
 import { FlowSchedulerService } from './flow-scheduler.service';
@@ -62,6 +65,9 @@ async function runCoreCombinatorTests() {
     transaction: async (fn: any) => fn(mockFlowsRepo),
     findMany: async (q: any = {}) => {
       let list = Array.from(db.flows.values());
+      if (q.folderId) {
+        list = list.filter((f) => f.folderId === q.folderId);
+      }
       if (q.profileId) {
         list = list.filter((f) => f.profileId === q.profileId);
       }
@@ -98,6 +104,18 @@ async function runCoreCombinatorTests() {
         updatedAt: new Date(),
       };
       db.flows.set(id, f);
+      return f;
+    },
+    update: async (id: string, data: any, tagNames?: string[]) => {
+      const f = db.flows.get(id);
+      if (!f) throw new Error(`Flow ${id} not found in mock repo`);
+      if (data.name !== undefined) f.name = data.name;
+      if (data.description !== undefined) f.description = data.description;
+      if (data.config !== undefined) f.config = data.config;
+      if (tagNames) {
+        f.tags = tagNames.map((n: string, i: number) => ({ tag: { id: `t-${i}`, name: n, colorHex: null } }));
+      }
+      f.updatedAt = new Date();
       return f;
     },
     setStatus: async (id: string, status: FlowStatus) => {
@@ -281,7 +299,95 @@ async function runCoreCombinatorTests() {
     `  ✓ Профили "${alexProfile.displayName}" и "${dachaProfile.displayName}" изолированы; scope="home" отдает строго 4 бытовых виджета без серверных потоков workspace!`,
   );
 
+  // 6. Проверка императивного приложения «Lemon Code Lab» (Спецификация задач, тесты и хроника сессий)
+  console.log('\nTest 6: Lemon Code Lab - Task Contract, Watcher Sync & Session Tracking');
+  const codeTasksService = new CodeTasksService(mockPrisma, mockFoldersRepo, flowsService);
+
+  let demoPath = path.resolve(process.cwd(), 'examples', 'challenges-demo');
+  if (!fs.existsSync(demoPath)) {
+    demoPath = path.resolve(__dirname, '..', '..', '..', '..', 'examples', 'challenges-demo');
+  }
+  const resultsFilePath = path.join(demoPath, '.lemon', 'results.json');
+  const originalResultsContent = fs.existsSync(resultsFilePath) ? fs.readFileSync(resultsFilePath, 'utf-8') : null;
+
+  try {
+    const repo = await codeTasksService.registerRepo({
+      localPath: demoPath,
+      name: 'Starter Challenges (JS/Tauri/Vite/REST)',
+      defaultTags: ['#js', '#tauri', '#vite', '#rest'],
+      profileId: alexProfile.id,
+    });
+
+    const codeFlows = await flowsService.list({ folderId: repo.folderId });
+    if (codeFlows.length !== 4) {
+      throw new Error(`Expected 4 tasks imported from .lemon/tasks.json, got ${codeFlows.length}`);
+    }
+
+    // Проверяем теги и статусы
+    const debounceTask = codeFlows.find((f) => f.name.includes('Debounce'));
+    const tauriTask = codeFlows.find((f) => f.name.includes('Tauri'));
+    const viteTask = codeFlows.find((f) => f.name.includes('Vite'));
+
+    if (!debounceTask || !tauriTask || !viteTask) {
+      throw new Error('Expected Debounce, Tauri, and Vite tasks to be present in Core Combinator');
+    }
+
+    const tauriMeta = (tauriTask.config as any)?.codeTask;
+    if (tauriMeta.status !== 'FAILED' || tauriMeta.testsFailed !== 4) {
+      throw new Error(`Expected Tauri task to be FAILED with 4 failed tests, got ${tauriMeta.status}`);
+    }
+
+    const debounceMeta = (debounceTask.config as any)?.codeTask;
+    if (debounceMeta.status !== 'PASSED' || debounceMeta.testsPassed !== 6) {
+      throw new Error(`Expected Debounce task to be PASSED with 6 passed tests, got ${debounceMeta.status}`);
+    }
+
+    // Разработчик берет Tauri-задачу в фокус (Mutex -> ACTIVE)
+    console.log('  -> Разработчик берет задачу "Tauri Secure IPC" в работу...');
+    await flowsService.updateStatus(tauriTask.id, FlowStatus.ACTIVE);
+    const tauriSessions = await flowsService.listSessions(tauriTask.id);
+    if (tauriSessions.length !== 1 || tauriSessions[0].endedAt !== null) {
+      throw new Error('Expected active session to be opened for Tauri task');
+    }
+
+    // Разработчик исправил код: раннер тестов пишет PASSED в results.json
+    console.log('  -> Раннер тестов фиксирует исправление: все 6 тестов пройдены...');
+    await codeTasksService.pushResults(repo.id, {
+      results: [
+        {
+          taskId: tauriMeta.id,
+          status: 'PASSED',
+          tests: { total: 6, passed: 6, failed: 0, skipped: 0 },
+          durationMs: 78,
+        },
+      ],
+    });
+
+    // Проверяем, что задача перешла в PASSED, сессия закрыта, а событие залогировано
+    const updatedTauri = await flowsService.findOne(tauriTask.id);
+    const updatedTauriMeta = (updatedTauri.config as any)?.codeTask;
+    if (updatedTauriMeta.status !== 'PASSED' || updatedTauri.status !== FlowStatus.INACTIVE) {
+      throw new Error('Expected Tauri task to be completed and closed after all tests passed');
+    }
+
+    const tauriEvents = await flowsService.listEvents(tauriTask.id);
+    if (!tauriEvents.some((e) => e.eventType === 'TESTS_PASSED')) {
+      throw new Error('Expected TESTS_PASSED event in Flow Chronicle');
+    }
+
+    console.log(
+      `  ✓ Задачи репозитория (${codeFlows.length} шт.) успешно синхронизированы в скоупе "${repo.folderPath}"; сессия решения и событие TESTS_PASSED зафиксированы!`,
+    );
+
+    await codeTasksService.unregisterRepo(repo.id);
+  } finally {
+    if (originalResultsContent && fs.existsSync(resultsFilePath)) {
+      fs.writeFileSync(resultsFilePath, originalResultsContent, 'utf-8');
+    }
+  }
+
   console.log('\n=== All Clean Core Combinator Tests Passed! ===');
+  process.exit(0);
 }
 
 runCoreCombinatorTests().catch((err) => {

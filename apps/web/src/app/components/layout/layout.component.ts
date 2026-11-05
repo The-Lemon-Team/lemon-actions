@@ -20,7 +20,7 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
             <span class="font-label-code-sm text-label-code-sm px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">{{ 'app.version' | trans }}</span>
           </div>
 
-          <!-- Mode Switcher: Imperative App («Lemon Home») vs Core Combinator Console -->
+          <!-- Mode Switcher: Lemon Home vs Lemon Code Lab vs Core Combinator Console -->
           <div class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-low border border-outline-variant/25">
             <button
               type="button"
@@ -33,7 +33,20 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
               "
             >
               <span class="material-symbols-rounded text-base">home</span>
-              <span>Lemon Home (Трекер дома)</span>
+              <span>Lemon Home</span>
+            </button>
+            <button
+              type="button"
+              (click)="modeChange.emit('code')"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold"
+              [class]="
+                appMode === 'code'
+                  ? 'bg-primary-container text-on-primary-container shadow-xs'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              "
+            >
+              <span class="material-symbols-rounded text-base">terminal</span>
+              <span>Lemon Code</span>
             </button>
             <button
               type="button"
@@ -46,7 +59,7 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
               "
             >
               <span class="material-symbols-rounded text-base">hub</span>
-              <span>Core Console (Шина потоков)</span>
+              <span>Core Console</span>
             </button>
           </div>
         </div>

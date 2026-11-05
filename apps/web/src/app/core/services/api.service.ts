@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  CodeRepoView,
   CreateFlowPayload,
   Flow,
   FlowEventRecord,
@@ -80,5 +81,36 @@ export class ApiService {
 
   createFolder(dto: { name: string; parentId?: string | null; profileId?: string | null }): Observable<Folder> {
     return this.http.post<Folder>(`${this.base}/folders`, dto);
+  }
+
+  /* Code Tasks Endpoints */
+  getCodeRepos(profileId?: string | null): Observable<CodeRepoView[]> {
+    let params = new HttpParams();
+    if (profileId) params = params.set('profileId', profileId);
+    return this.http.get<CodeRepoView[]>(`${this.base}/code-tasks/repos`, { params });
+  }
+
+  registerCodeRepo(dto: {
+    localPath: string;
+    name?: string;
+    defaultTags?: string[];
+    profileId?: string | null;
+  }): Observable<CodeRepoView> {
+    return this.http.post<CodeRepoView>(`${this.base}/code-tasks/repos`, dto);
+  }
+
+  unregisterCodeRepo(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/code-tasks/repos/${id}`);
+  }
+
+  syncCodeRepo(id: string): Observable<{ syncedTasks: number; updatedResults: number }> {
+    return this.http.post<{ syncedTasks: number; updatedResults: number }>(
+      `${this.base}/code-tasks/repos/${id}/sync`,
+      {},
+    );
+  }
+
+  pushCodeResults(id: string, payload: any): Observable<{ processed: number }> {
+    return this.http.post<{ processed: number }>(`${this.base}/code-tasks/repos/${id}/results`, payload);
   }
 }

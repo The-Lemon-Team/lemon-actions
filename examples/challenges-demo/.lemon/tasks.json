@@ -1,0 +1,46 @@
+{
+  "$schema": "https://lemon.actions/schemas/tasks.v1.json",
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "task-debounce-01",
+      "slug": "debounce-throttle",
+      "title": "Debounce & Throttle с поддержкой immediate флага",
+      "description": "Реализовать функции debounce и throttle с отменой вызова, сбросом таймера и немедленным исполнением первой итерации.",
+      "tags": ["#js", "#async", "#utility"],
+      "difficulty": "medium",
+      "testSuite": "tasks/01-debounce/solution.spec.ts",
+      "createdAt": "2026-11-05T06:00:00Z"
+    },
+    {
+      "id": "task-tauri-ipc-02",
+      "slug": "tauri-secure-ipc",
+      "title": "Tauri IPC Command Router & Event Bridge",
+      "description": "Типизированный мост IPC-команд между окном webview и нативным рантаймом с валидацией payload и очередью событий.",
+      "tags": ["#tauri", "#vite", "#rust", "#architecture"],
+      "difficulty": "hard",
+      "testSuite": "tasks/02-tauri-ipc/tests.rs",
+      "createdAt": "2026-11-05T06:30:00Z"
+    },
+    {
+      "id": "task-rest-client-03",
+      "slug": "resilient-rest-client",
+      "title": "Resilient REST Client с Retry и Circuit Breaker",
+      "description": "HTTP-клиент на базе fetch с экспоненциальной задержкой повторных попыток, таймаутами и защитой Circuit Breaker.",
+      "tags": ["#rest", "#js", "#http", "#network"],
+      "difficulty": "medium",
+      "testSuite": "tasks/03-rest/client.spec.ts",
+      "createdAt": "2026-11-05T07:00:00Z"
+    },
+    {
+      "id": "task-vite-inline-04",
+      "slug": "vite-asset-inliner",
+      "title": "Custom Vite Asset Inliner Plugin",
+      "description": "Плагин сборщика Vite для инлайнинга SVG и маленьких бинарных ассетов в бандл с генерацией TypeScript-деклараций.",
+      "tags": ["#vite", "#js", "#bundler", "#plugin"],
+      "difficulty": "easy",
+      "testSuite": "tasks/04-vite-plugin/plugin.spec.ts",
+      "createdAt": "2026-11-05T07:15:00Z"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-11-05T06:00:00.000Z",
+  "runner": "vitest",
+  "results": [
+    {
+      "taskId": "task-debounce-01",
+      "status": "PASSED",
+      "tests": {
+        "total": 6,
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      "durationMs": 42
+    },
+    {
+      "taskId": "task-tauri-ipc-02",
+      "status": "FAILED",
+      "tests": {
+        "total": 6,
+        "passed": 2,
+        "failed": 4,
+        "skipped": 0
+      },
+      "durationMs": 115,
+      "logs": [
+        {
+          "test": "ipc_router::test_command_authorization",
+          "error": "AccessDenied: role 'guest' cannot dispatch cmd 'sys_exec'",
+          "stack": "at tests/ipc_tests.rs:48\nat src/router.rs:112"
+        }
+      ]
+    }
+  ]
+}

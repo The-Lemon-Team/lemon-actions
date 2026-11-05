@@ -1,6 +1,6 @@
 import { Observable } from 'rxjs';
 
-export type AppMode = 'home' | 'core';
+export type AppMode = 'home' | 'code' | 'core';
 
 export interface Profile {
   id: string;
@@ -209,3 +209,55 @@ export interface HomeWidgetView {
   daysPerUnit: number;
   percentage: number;
 }
+
+/* ---------- Imperative App «Lemon Code Lab» View Models ---------- */
+
+export interface CodeTaskTestLog {
+  test: string;
+  error?: string;
+  stack?: string;
+}
+
+export interface CodeTaskMeta {
+  id: string;
+  slug: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  testSuite?: string;
+  repoId?: string;
+  repoPath?: string;
+  status?: 'PASSED' | 'FAILED' | 'STUB' | 'IN_PROGRESS' | 'NEW';
+  testsTotal?: number;
+  testsPassed?: number;
+  testsFailed?: number;
+  testsSkipped?: number;
+  durationMs?: number;
+  lastLogs?: CodeTaskTestLog[];
+  lastRunAt?: string;
+}
+
+export interface CodeTaskView {
+  flow: Flow;
+  meta: CodeTaskMeta;
+  tags: string[];
+  isActive: boolean;
+  isPassed: boolean;
+  isFailed: boolean;
+  isStub: boolean;
+  repoName?: string;
+}
+
+export interface CodeRepoView {
+  id: string;
+  name: string;
+  localPath: string;
+  folderId: string;
+  folderPath: string;
+  profileId: string | null;
+  defaultTags: string[];
+  tasksCount: number;
+  passedCount: number;
+  failedCount: number;
+  lastSyncAt: string | null;
+  isWatching: boolean;
+}
+
