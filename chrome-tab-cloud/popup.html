@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tab Cloud — Умное Облако Табов</title>
+  <link rel="stylesheet" href="popup.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Атмосферный фон с парящими легкими облачными сферами -->
+  <div class="sky-backdrop">
+    <div class="ambient-cloud cloud-1"></div>
+    <div class="ambient-cloud cloud-2"></div>
+    <div class="ambient-cloud cloud-3"></div>
+  </div>
+
+  <div class="app-container">
+    <!-- Верхняя панель заголовка -->
+    <header class="cloud-header">
+      <div class="header-branding">
+        <div class="cloud-icon-badge">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+          </svg>
+        </div>
+        <div class="header-titles">
+          <h1 class="app-title">Tab Cloud</h1>
+          <span class="tab-counter-pill" id="tabCounterBadge">0 вкладок</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btnOpenDashboard" class="icon-btn" title="Развернуть на весь экран">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <polyline points="9 21 3 21 3 15"></polyline>
+            <line x1="21" y1="3" x2="14" y2="10"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Поисковая строка -->
+    <div class="search-box">
+      <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="text" id="searchInput" placeholder="Поиск по заголовку или URL..." autocomplete="off">
+      <button id="clearSearchBtn" class="clear-search hidden">&times;</button>
+    </div>
+
+    <!-- Вкладки навигации -->
+    <nav class="cloud-nav">
+      <button class="nav-tab active" data-tab="active">
+        <span>Активные</span>
+        <span class="count-tag" id="activeCountTag">0</span>
+      </button>
+      <button class="nav-tab" data-tab="history">
+        <span>История</span>
+        <span class="count-tag" id="historyCountTag">0</span>
+      </button>
+      <button class="nav-tab" data-tab="stats">
+        <span>Инфо</span>
+      </button>
+    </nav>
+
+    <!-- ОСНОВНОЙ ПЛАВАЮЩИЙ ОБЛАЧНЫЙ СПИСОК -->
+    <main class="cloud-stage">
+      <!-- Секция: Активные табы (светящееся парящее облако + Drag & Drop) -->
+      <section id="viewActive" class="tab-view active">
+        <div class="floating-cloud-wrapper">
+          <div class="cloud-hint">
+            <span class="dnd-icon">⠿</span> Перетаскивайте вкладки для расстановки приоритетов
+          </div>
+          <ul id="activeTabsList" class="floating-list" aria-label="Список открытых вкладок">
+            <!-- Динамически заполняется карточками табов -->
+          </ul>
+        </div>
+      </section>
+
+      <!-- Секция: История закрытых вкладок -->
+      <section id="viewHistory" class="tab-view">
+        <div class="floating-cloud-wrapper">
+          <div class="history-controls">
+            <span class="section-subtitle">Недавно закрытые табы и их жизненный цикл</span>
+            <button id="btnClearHistory" class="text-btn danger">Очистить историю</button>
+          </div>
+          <ul id="closedTabsList" class="floating-list history-style" aria-label="История закрытых вкладок">
+            <!-- Динамически заполняется -->
+          </ul>
+        </div>
+      </section>
+
+      <!-- Секция: Статистика и аналитика вкладок -->
+      <section id="viewStats" class="tab-view">
+        <div class="floating-cloud-wrapper stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Открыто сейчас</div>
+            <div class="stat-val" id="statActiveCount">0</div>
+            <div class="stat-sub">активных вкладок</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">В архиве истории</div>
+            <div class="stat-val" id="statClosedCount">0</div>
+            <div class="stat-sub">закрытых вкладок</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Среднее время жизни</div>
+            <div class="stat-val" id="statAvgLifespan">—</div>
+            <div class="stat-sub">до закрытия</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Старейшая вкладка</div>
+            <div class="stat-val" id="statOldestTab">—</div>
+            <div class="stat-sub" id="statOldestTabTitle">нет данных</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Нижняя статусная панель -->
+    <footer class="cloud-footer">
+      <span id="storageInfo">Локальное хранилище синхронизировано</span>
+      <button id="btnSyncNow" class="refresh-link" title="Синхронизировать сейчас">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        Обновить
+      </button>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
