@@ -1,33 +1,39 @@
 import { AsyncPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ModalOverlayDirective } from '../../core/directives/modal-overlay.directive';
 import { ArenaActorCategory } from '../../core/models/flow.models';
 import { NeuronArenaService } from '../../core/services/neuron-arena.service';
+import { IconCatalogItem } from '../icon-picker/icon-catalog';
+import { IconPickerComponent } from '../icon-picker/icon-picker.component';
 
 @Component({
   selector: 'app-arena-modals',
   standalone: true,
-  imports: [AsyncPipe, FormsModule],
+  imports: [AsyncPipe, FormsModule, ModalOverlayDirective, IconPickerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- MODAL 1: СОЗДАТЬ НОВУЮ КАРТОЧКУ ЖЕЛАНИЯ В КОЛОДЕ -->
     @if (showNewDesireCardModal) {
       <div
+        appModalOverlay
+        (overlayClose)="onCloseDesireCardModal()"
         class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
-        (click)="closeNewDesireCardModal.emit()"
+        aria-labelledby="new-desire-card-title"
       >
         <div
           class="bg-surface-container-lowest rounded-2xl max-w-lg w-full p-space-lg shadow-xl border border-outline-variant/30 flex flex-col gap-space-md"
           (click)="$event.stopPropagation()"
         >
           <div class="flex items-center justify-between">
-            <h3 class="font-headline-sm text-lg font-bold text-on-surface">
+            <h3 id="new-desire-card-title" class="font-headline-sm text-lg font-bold text-on-surface">
               Новая Карточка Желания в Колоду
             </h3>
             <button
               type="button"
-              (click)="closeNewDesireCardModal.emit()"
+              (click)="onCloseDesireCardModal()"
               class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface"
+              aria-label="Закрыть"
             >
               <span class="material-symbols-rounded">close</span>
             </button>
@@ -44,7 +50,7 @@ import { NeuronArenaService } from '../../core/services/neuron-arena.service';
               />
             </label>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
               <label class="flex flex-col gap-1">
                 <span class="font-label-ui text-xs font-semibold text-on-surface">Категория</span>
                 <input
@@ -53,23 +59,17 @@ import { NeuronArenaService } from '../../core/services/neuron-arena.service';
                   placeholder="Настолки & Азарт / Бар / Спорт"
                   class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-sm text-on-surface"
                 />
+                @if (suggestedCategoryNotice) {
+                  <span class="text-[10px] text-primary font-medium animate-in fade-in duration-200">
+                    {{ suggestedCategoryNotice }}
+                  </span>
+                }
               </label>
-              <label class="flex flex-col gap-1">
-                <span class="font-label-ui text-xs font-semibold text-on-surface">Иконка (Material)</span>
-                <select
-                  [(ngModel)]="newCardIcon"
-                  class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-sm text-on-surface"
-                >
-                  <option value="casino">casino (Настольная игра)</option>
-                  <option value="sports_bar">sports_bar (Пиво / Бар)</option>
-                  <option value="theaters">theaters (Кино)</option>
-                  <option value="terminal">terminal (Кодинг-сессия)</option>
-                  <option value="local_pizza">local_pizza (Пицца / Гастро)</option>
-                  <option value="sports_esports">sports_esports (Киберспорт)</option>
-                  <option value="hiking">hiking (Выезд на природу)</option>
-                  <option value="music_note">music_note (Караоке / Концерт)</option>
-                </select>
-              </label>
+
+              <app-icon-picker
+                [(value)]="newCardIcon"
+                (iconSelected)="onCardIconSelected($event)"
+              />
             </div>
 
             <label class="flex flex-col gap-1">
@@ -91,7 +91,7 @@ import { NeuronArenaService } from '../../core/services/neuron-arena.service';
           <div class="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
-              (click)="closeNewDesireCardModal.emit()"
+              (click)="onCloseDesireCardModal()"
               class="px-4 py-2 rounded-xl bg-surface-container-high text-on-surface font-label-ui text-xs font-bold"
             >
               Отмена
@@ -111,21 +111,24 @@ import { NeuronArenaService } from '../../core/services/neuron-arena.service';
     <!-- MODAL 2: СОЗДАТЬ НОВОГО ПЕРСОНАЖА -->
     @if (showNewActorModal) {
       <div
+        appModalOverlay
+        (overlayClose)="onCloseActorModal()"
         class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
-        (click)="closeNewActorModal.emit()"
+        aria-labelledby="new-actor-title"
       >
         <div
           class="bg-surface-container-lowest rounded-2xl max-w-lg w-full p-space-lg shadow-xl border border-outline-variant/30 flex flex-col gap-space-md"
           (click)="$event.stopPropagation()"
         >
           <div class="flex items-center justify-between">
-            <h3 class="font-headline-sm text-lg font-bold text-on-surface">
+            <h3 id="new-actor-title" class="font-headline-sm text-lg font-bold text-on-surface">
               Новая Карточка Персонажа
             </h3>
             <button
               type="button"
-              (click)="closeNewActorModal.emit()"
+              (click)="onCloseActorModal()"
               class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface"
+              aria-label="Закрыть"
             >
               <span class="material-symbols-rounded">close</span>
             </button>
@@ -200,7 +203,7 @@ import { NeuronArenaService } from '../../core/services/neuron-arena.service';
           <div class="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
-              (click)="closeNewActorModal.emit()"
+              (click)="onCloseActorModal()"
               class="px-4 py-2 rounded-xl bg-surface-container-high text-on-surface font-label-ui text-xs font-bold"
             >
               Отмена
@@ -220,21 +223,24 @@ import { NeuronArenaService } from '../../core/services/neuron-arena.service';
     <!-- MODAL 3: СОЗДАТЬ НОВЫЙ СПОР / ПОЛЕ ПАРАДОКСА -->
     @if (showNewParadoxModal) {
       <div
+        appModalOverlay
+        (overlayClose)="onCloseParadoxModal()"
         class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
-        (click)="closeNewParadoxModal.emit()"
+        aria-labelledby="new-paradox-title"
       >
         <div
           class="bg-surface-container-lowest rounded-2xl max-w-lg w-full p-space-lg shadow-xl border border-outline-variant/30 flex flex-col gap-space-md"
           (click)="$event.stopPropagation()"
         >
           <div class="flex items-center justify-between">
-            <h3 class="font-headline-sm text-lg font-bold text-on-surface">
+            <h3 id="new-paradox-title" class="font-headline-sm text-lg font-bold text-on-surface">
               Запустить Новый Спор / Игру Карточек Желаний
             </h3>
             <button
               type="button"
-              (click)="closeNewParadoxModal.emit()"
+              (click)="onCloseParadoxModal()"
               class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface"
+              aria-label="Закрыть"
             >
               <span class="material-symbols-rounded">close</span>
             </button>
@@ -279,7 +285,7 @@ import { NeuronArenaService } from '../../core/services/neuron-arena.service';
           <div class="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
-              (click)="closeNewParadoxModal.emit()"
+              (click)="onCloseParadoxModal()"
               class="px-4 py-2 rounded-xl bg-surface-container-high text-on-surface font-label-ui text-xs font-bold"
             >
               Отмена
@@ -313,6 +319,21 @@ export class ArenaModalsComponent {
   newCardIcon = 'casino';
   newCardDescription = '';
   newCardPlayImmediately = true;
+  suggestedCategoryNotice = '';
+
+  onCardIconSelected(item: IconCatalogItem): void {
+    // If the category hasn't been heavily customized by user or matches the previous default,
+    // smartly adapt the category to match the chosen icon!
+    if (!this.newCardCategory.trim() || this.newCardCategory === 'Настолки & Азарт') {
+      if (item.suggestedCategory) {
+        this.newCardCategory = item.suggestedCategory;
+        this.suggestedCategoryNotice = `✨ Категория: «${item.suggestedCategory}»`;
+        setTimeout(() => {
+          this.suggestedCategoryNotice = '';
+        }, 3500);
+      }
+    }
+  }
 
   newActorName = '';
   newActorTitle = '';
@@ -324,6 +345,29 @@ export class ArenaModalsComponent {
   newParadoxTitle = '';
   newParadoxStarterCardId = 'card-drink-beer';
   newParadoxQuestion = '';
+
+  onCloseDesireCardModal(): void {
+    this.newCardTitle = '';
+    this.newCardDescription = '';
+    this.newCardCategory = 'Настолки & Азарт';
+    this.newCardIcon = 'casino';
+    this.suggestedCategoryNotice = '';
+    this.closeNewDesireCardModal.emit();
+  }
+
+  onCloseActorModal(): void {
+    this.newActorName = '';
+    this.newActorTitle = '';
+    this.newActorQuote = '';
+    this.newActorPhilosophy = '';
+    this.closeNewActorModal.emit();
+  }
+
+  onCloseParadoxModal(): void {
+    this.newParadoxTitle = '';
+    this.newParadoxQuestion = '';
+    this.closeNewParadoxModal.emit();
+  }
 
   submitNewDesireCard(): void {
     if (!this.newCardTitle.trim()) return;
@@ -337,6 +381,9 @@ export class ArenaModalsComponent {
     });
     this.newCardTitle = '';
     this.newCardDescription = '';
+    this.newCardCategory = 'Настолки & Азарт';
+    this.newCardIcon = 'casino';
+    this.suggestedCategoryNotice = '';
     this.closeNewDesireCardModal.emit();
   }
 

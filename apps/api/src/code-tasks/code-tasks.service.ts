@@ -85,6 +85,24 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(`[CodeTasks] Could not auto-register demo repo: ${err.message}`);
       }
     }
+
+    // Автоматически регистрируем JS Async & Promises Lab, если он существует на диске
+    let asyncPath = path.resolve(process.cwd(), 'examples', 'async-challenges');
+    if (!fs.existsSync(asyncPath)) {
+      asyncPath = path.resolve(__dirname, '..', '..', '..', '..', 'examples', 'async-challenges');
+    }
+    if (fs.existsSync(asyncPath)) {
+      try {
+        await this.registerRepo({
+          localPath: asyncPath,
+          name: 'JavaScript Async & Promises Lab',
+          defaultTags: ['#js', '#async', '#promises', '#fsm'],
+        });
+        this.logger.log(`[CodeTasks] Auto-registered async challenges from: ${asyncPath}`);
+      } catch (err: any) {
+        this.logger.warn(`[CodeTasks] Could not auto-register async repo: ${err.message}`);
+      }
+    }
   }
 
   onModuleDestroy() {
@@ -249,11 +267,13 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
     const resultsFile = path.join(lemonDir, 'results.json');
 
     let tasks: RawTaskSpec[] = [];
+    let defaultFsm: any = null;
     if (fs.existsSync(tasksFile)) {
       try {
         const content = fs.readFileSync(tasksFile, 'utf-8');
         const parsed = JSON.parse(content);
         tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+        if (parsed.defaultFsm) defaultFsm = parsed.defaultFsm;
       } catch (err: any) {
         this.logger.warn(`[CodeTasks] Failed to parse tasks.json for ${repo.name}: ${err.message}`);
       }
@@ -312,6 +332,16 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
         lastRunAt: testResult ? new Date().toISOString() : undefined,
       };
 
+      const taskFsm = (task as any).fsm || defaultFsm || null;
+      const currentFsmState = isPassed ? 'passed' : isFailed ? 'debugging' : isStub ? 'stub' : 'in_progress';
+      const fsmMeta = taskFsm
+        ? {
+            initial: taskFsm.initial || 'stub',
+            currentState: currentFsmState,
+            states: taskFsm.states,
+          }
+        : null;
+
       if (!flow) {
         // Создаем новый Flow
         flow = await this.flowsService.create({
@@ -321,7 +351,10 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
           folderId: repo.folderId,
           profileId: repo.profileId ?? undefined,
           tags: taskTags,
-          config: { codeTask: codeTaskMeta },
+          config: {
+            codeTask: codeTaskMeta,
+            ...(fsmMeta ? { fsm: fsmMeta } : {}),
+          },
         });
 
         // Записываем событие обнаружения задачи
@@ -333,6 +366,7 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
             slug: task.slug,
             difficulty: task.difficulty,
             tags: taskTags,
+            fsmState: currentFsmState,
           },
         });
       } else {
@@ -343,6 +377,7 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
         const nextConfig = {
           ...((flow.config as any) ?? {}),
           codeTask: codeTaskMeta,
+          ...(fsmMeta ? { fsm: fsmMeta } : {}),
         };
 
         await this.flowsService.update(flow.id, {

@@ -1,22 +1,31 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ModalOverlayDirective } from '../../core/directives/modal-overlay.directive';
 import { CodeTaskView, FlowEventRecord } from '../../core/models/flow.models';
 import { CodeLabService } from '../../core/services/code-lab.service';
 
 @Component({
   selector: 'app-code-lab-modals',
   standalone: true,
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, ModalOverlayDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Modal: Подключить репозиторий задач -->
     @if (showAddRepoModal) {
-      <div class="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-xs flex items-center justify-center p-4">
-        <div class="bg-surface-container-lowest rounded-2xl p-space-lg w-full max-w-lg shadow-xl border border-outline-variant/30 flex flex-col gap-4">
+      <div
+        appModalOverlay
+        (overlayClose)="onCloseAddRepo()"
+        class="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-xs flex items-center justify-center p-4"
+        aria-labelledby="add-repo-modal-title"
+      >
+        <div
+          (click)="$event.stopPropagation()"
+          class="bg-surface-container-lowest rounded-2xl p-space-lg w-full max-w-lg shadow-xl border border-outline-variant/30 flex flex-col gap-4"
+        >
           <div class="flex items-center justify-between">
-            <h3 class="font-headline-sm text-lg font-bold text-on-surface">Подключить папку с задачами</h3>
-            <button type="button" (click)="closeAddRepoModal.emit()" class="p-1 rounded-lg hover:bg-surface-container">
+            <h3 id="add-repo-modal-title" class="font-headline-sm text-lg font-bold text-on-surface">Подключить папку с задачами</h3>
+            <button type="button" (click)="onCloseAddRepo()" class="p-1 rounded-lg hover:bg-surface-container" aria-label="Закрыть">
               <span class="material-symbols-rounded">close</span>
             </button>
           </div>
@@ -75,7 +84,7 @@ import { CodeLabService } from '../../core/services/code-lab.service';
           <div class="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/20">
             <button
               type="button"
-              (click)="closeAddRepoModal.emit()"
+              (click)="onCloseAddRepo()"
               class="px-4 py-2 rounded-xl font-label-ui text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
             >
               Отмена
@@ -95,18 +104,26 @@ import { CodeLabService } from '../../core/services/code-lab.service';
 
     <!-- Modal: Логи выполнения тестов -->
     @if (showLogsModal) {
-      <div class="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-xs flex items-center justify-center p-4">
-        <div class="bg-surface-container-lowest rounded-2xl p-space-lg w-full max-w-2xl max-h-[85vh] shadow-xl border border-outline-variant/30 flex flex-col gap-4 overflow-hidden">
+      <div
+        appModalOverlay
+        (overlayClose)="closeLogsModal.emit()"
+        class="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-xs flex items-center justify-center p-4"
+        aria-labelledby="logs-modal-title"
+      >
+        <div
+          (click)="$event.stopPropagation()"
+          class="bg-surface-container-lowest rounded-2xl p-space-lg w-full max-w-2xl max-h-[85vh] shadow-xl border border-outline-variant/30 flex flex-col gap-4 overflow-hidden"
+        >
           <div class="flex items-center justify-between flex-shrink-0">
             <div>
-              <h3 class="font-headline-sm text-base font-bold text-on-surface">
+              <h3 id="logs-modal-title" class="font-headline-sm text-base font-bold text-on-surface">
                 Логи тестов: {{ selectedTask?.flow?.name }}
               </h3>
               <span class="font-label-code-sm text-[11px] text-on-surface-variant">
                 {{ selectedTask?.meta?.testSuite || 'Спецификация тестов' }}
               </span>
             </div>
-            <button type="button" (click)="closeLogsModal.emit()" class="p-1 rounded-lg hover:bg-surface-container">
+            <button type="button" (click)="closeLogsModal.emit()" class="p-1 rounded-lg hover:bg-surface-container" aria-label="Закрыть">
               <span class="material-symbols-rounded">close</span>
             </button>
           </div>
@@ -178,18 +195,26 @@ import { CodeLabService } from '../../core/services/code-lab.service';
 
     <!-- Modal: Хроника задачи -->
     @if (showHistoryModal) {
-      <div class="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-xs flex items-center justify-center p-4">
-        <div class="bg-surface-container-lowest rounded-2xl p-space-lg w-full max-w-xl max-h-[85vh] shadow-xl border border-outline-variant/30 flex flex-col gap-4 overflow-hidden">
+      <div
+        appModalOverlay
+        (overlayClose)="closeHistoryModal.emit()"
+        class="fixed inset-0 z-50 bg-inverse-surface/40 backdrop-blur-xs flex items-center justify-center p-4"
+        aria-labelledby="history-modal-title"
+      >
+        <div
+          (click)="$event.stopPropagation()"
+          class="bg-surface-container-lowest rounded-2xl p-space-lg w-full max-w-xl max-h-[85vh] shadow-xl border border-outline-variant/30 flex flex-col gap-4 overflow-hidden"
+        >
           <div class="flex items-center justify-between flex-shrink-0">
             <div>
-              <h3 class="font-headline-sm text-base font-bold text-on-surface">
+              <h3 id="history-modal-title" class="font-headline-sm text-base font-bold text-on-surface">
                 Хроника: {{ selectedTask?.flow?.name }}
               </h3>
               <span class="font-label-code-sm text-[11px] text-on-surface-variant">
                 Непрерывная летопись сессий и событий в шине Core Combinator
               </span>
             </div>
-            <button type="button" (click)="closeHistoryModal.emit()" class="p-1 rounded-lg hover:bg-surface-container">
+            <button type="button" (click)="closeHistoryModal.emit()" class="p-1 rounded-lg hover:bg-surface-container" aria-label="Закрыть">
               <span class="material-symbols-rounded">close</span>
             </button>
           </div>
@@ -258,6 +283,12 @@ export class CodeLabModalsComponent {
   newRepoPath = '';
   newRepoName = '';
   newRepoTags = '#js, #tauri, #vite, #rest';
+
+  onCloseAddRepo(): void {
+    this.newRepoPath = '';
+    this.newRepoName = '';
+    this.closeAddRepoModal.emit();
+  }
 
   setDemoRepoPath(): void {
     this.newRepoPath = './examples/challenges-demo';

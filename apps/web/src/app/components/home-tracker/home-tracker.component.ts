@@ -233,11 +233,11 @@ import { HomeTasksAndRoutinesComponent } from './home-tasks-and-routines.compone
             <button
               type="button"
               (click)="home.setRoomFilter(room)"
-              class="px-3 py-1.5 rounded-xl font-label-ui text-xs font-semibold transition-colors"
+              class="px-3 py-1.5 rounded-xl font-label-ui text-xs font-semibold border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               [class]="
                 (home.selectedRoom$ | async) === room
-                  ? 'bg-inverse-surface text-inverse-on-surface shadow-xs'
-                  : 'bg-surface-container-lowest text-on-surface-variant hover:text-on-surface border border-outline-variant/25'
+                  ? 'bg-inverse-surface text-inverse-on-surface border-inverse-surface shadow-xs'
+                  : 'bg-surface-container-lowest text-on-surface-variant hover:text-on-surface border-outline-variant/25'
               "
             >
               {{ room === 'ALL' ? 'Все зоны дома' : room }}
@@ -250,7 +250,7 @@ import { HomeTasksAndRoutinesComponent } from './home-tasks-and-routines.compone
             <button
               type="button"
               (click)="currentSection.set('all')"
-              class="px-3 py-1 rounded-lg font-label-ui text-xs font-bold transition-all"
+              class="px-3 py-1 rounded-lg font-label-ui text-xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               [class]="currentSection() === 'all' ? 'bg-surface-container-lowest text-on-surface shadow-xs' : 'text-on-surface-variant hover:text-on-surface'"
             >
               Все секции
@@ -258,7 +258,7 @@ import { HomeTasksAndRoutinesComponent } from './home-tasks-and-routines.compone
             <button
               type="button"
               (click)="currentSection.set('supplies')"
-              class="px-3 py-1 rounded-lg font-label-ui text-xs font-bold transition-all"
+              class="px-3 py-1 rounded-lg font-label-ui text-xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               [class]="currentSection() === 'supplies' ? 'bg-surface-container-lowest text-on-surface shadow-xs' : 'text-on-surface-variant hover:text-on-surface'"
             >
               Запасы и счётчики
@@ -266,7 +266,7 @@ import { HomeTasksAndRoutinesComponent } from './home-tasks-and-routines.compone
             <button
               type="button"
               (click)="currentSection.set('tasks')"
-              class="px-3 py-1 rounded-lg font-label-ui text-xs font-bold transition-all"
+              class="px-3 py-1 rounded-lg font-label-ui text-xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               [class]="currentSection() === 'tasks' ? 'bg-surface-container-lowest text-on-surface shadow-xs' : 'text-on-surface-variant hover:text-on-surface'"
             >
               Дела и Todo

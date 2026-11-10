@@ -1,6 +1,6 @@
 import { Observable } from 'rxjs';
 
-export type AppMode = 'home' | 'code' | 'arena' | 'core';
+export type AppMode = 'party' | 'arena' | 'home' | 'code' | 'core';
 
 export interface Profile {
   id: string;
@@ -458,7 +458,7 @@ export interface NeuralTrainingSample {
 
 /* ---------- Combine Mode (Поле Времени, Активная Зона (Pin) и Карточки Истории Совмещений) ---------- */
 
-export type ArenaGameSubMode = 'VERSUS' | 'COMBINE';
+export type ArenaGameSubMode = 'VERSUS' | 'COMBINE' | 'CLOUD';
 export type CombineIdeaOutcome = 'PENDING' | 'HIT' | 'SO_SO' | 'BORED_REPLACED';
 
 export interface CombineActivitySuggestion {
@@ -527,6 +527,49 @@ export interface CombineHistoryCard {
   mostSuccessfulIdeaTitle: string;
   synthesisConclusion: string;
 }
+
+/* ---------- Imperative App «Chrono Cloud · Daily Character Notes & Timeline» View Models ---------- */
+
+export type CloudItemType = 'thought' | 'proposal' | 'action';
+export type NoteVisibility = 'PUBLIC' | 'PRIVATE' | 'GM_ONLY';
+
+export interface CloudDayNote {
+  id: string;
+  dateKey: string;
+  time: string;
+  timeMinutes: number;
+  type: CloudItemType;
+  actorId: string;
+  actorName: string;
+  actorAvatar: string;
+  actorAccent: ArenaAccentColor;
+  actorTitle?: string;
+  title?: string;
+  text: string;
+  tags?: string[];
+  supporters: string[];
+  votesCount: number;
+  moodEmoji?: string;
+  createdAt: string;
+
+  /* Hybrid Model fields: Player ownership, pins & cloud syncing */
+  authorProfileId?: string;
+  authorProfileName?: string;
+  visibility?: NoteVisibility;
+  isPinnedToHero?: boolean;
+  isPinnedToCloud?: boolean;
+  forkedFromNoteId?: string;
+  forkedFromAuthorName?: string;
+}
+
+export interface CloudDateTab {
+  dateKey: string;
+  label: string;
+  subLabel: string;
+  isToday: boolean;
+  notesCount: number;
+}
+
 
 
 

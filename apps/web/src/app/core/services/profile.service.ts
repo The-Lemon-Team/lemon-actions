@@ -7,9 +7,17 @@ import { ApiService } from './api.service';
 export class ProfileService {
   private readonly api = inject(ApiService);
 
-  private readonly profilesSubject = new BehaviorSubject<Profile[]>([]);
-  private readonly activeProfileIdSubject = new BehaviorSubject<string>('');
-  private readonly appModeSubject = new BehaviorSubject<AppMode>('arena');
+  private readonly defaultProfile: Profile = {
+    id: '1f3e6a64-721c-4d1d-8d52-6c3f4e30d30b',
+    handle: 'default',
+    displayName: 'Мой Дом',
+    avatarIcon: 'home',
+    createdAt: new Date().toISOString(),
+  };
+
+  private readonly profilesSubject = new BehaviorSubject<Profile[]>([this.defaultProfile]);
+  private readonly activeProfileIdSubject = new BehaviorSubject<string>(this.defaultProfile.id);
+  private readonly appModeSubject = new BehaviorSubject<AppMode>('party');
 
   readonly profiles$: Observable<Profile[]> = this.profilesSubject.asObservable();
   readonly activeProfileId$: Observable<string> = this.activeProfileIdSubject.pipe(

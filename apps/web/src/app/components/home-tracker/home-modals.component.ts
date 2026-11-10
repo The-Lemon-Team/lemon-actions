@@ -1,32 +1,37 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ModalOverlayDirective } from '../../core/directives/modal-overlay.directive';
 import { HomeTrackerService } from '../../core/services/home-tracker.service';
 import { ProfileService } from '../../core/services/profile.service';
+import { IconPickerComponent } from '../icon-picker/icon-picker.component';
 
 @Component({
   selector: 'app-home-modals',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, ModalOverlayDirective, IconPickerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Modal: Create New Home Widget -->
     @if (showWidgetModal) {
       <div
+        appModalOverlay
+        (overlayClose)="closeWidgetModal.emit()"
         class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
-        (click)="closeWidgetModal.emit()"
+        aria-labelledby="home-widget-modal-title"
       >
         <div
           class="bg-surface-container-lowest rounded-2xl max-w-lg w-full p-space-lg shadow-xl border border-outline-variant/30 flex flex-col gap-space-md"
           (click)="$event.stopPropagation()"
         >
           <div class="flex items-center justify-between">
-            <h3 class="font-headline-sm text-lg font-bold text-on-surface">
+            <h3 id="home-widget-modal-title" class="font-headline-sm text-lg font-bold text-on-surface">
               Новый виджет дома (Поток в home.*)
             </h3>
             <button
               type="button"
               (click)="closeWidgetModal.emit()"
               class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface"
+              aria-label="Закрыть"
             >
               <span class="material-symbols-rounded">close</span>
             </button>
@@ -72,7 +77,7 @@ import { ProfileService } from '../../core/services/profile.service';
               />
             </label>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
               <label class="flex flex-col gap-1">
                 <span class="font-label-ui text-xs font-semibold text-on-surface">Комната / Зона</span>
                 <input
@@ -83,17 +88,9 @@ import { ProfileService } from '../../core/services/profile.service';
                 />
               </label>
 
-              <label class="flex flex-col gap-1">
-                <span class="font-label-ui text-xs font-semibold text-on-surface">Иконка (Material)</span>
-                <select
-                  [(ngModel)]="newWidgetIcon"
-                  class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-sm text-on-surface"
-                >
-                  @for (opt of iconOptions; track opt.value) {
-                    <option [value]="opt.value">{{ opt.label }}</option>
-                  }
-                </select>
-              </label>
+              <app-icon-picker
+                [(value)]="newWidgetIcon"
+              />
             </div>
 
             @if (newWidgetKind === 'supply') {
@@ -186,7 +183,7 @@ import { ProfileService } from '../../core/services/profile.service';
           <div class="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
-              (click)="closeWidgetModal.emit()"
+              (click)="onCloseWidgetModal()"
               class="px-4 py-2 rounded-xl font-label-ui text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
             >
               Отмена
@@ -206,21 +203,24 @@ import { ProfileService } from '../../core/services/profile.service';
     <!-- Modal: Register New User Profile -->
     @if (showProfileModal) {
       <div
+        appModalOverlay
+        (overlayClose)="onCloseProfileModal()"
         class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
-        (click)="closeProfileModal.emit()"
+        aria-labelledby="home-profile-modal-title"
       >
         <div
           class="bg-surface-container-lowest rounded-2xl max-w-md w-full p-space-lg shadow-xl border border-outline-variant/30 flex flex-col gap-space-md"
           (click)="$event.stopPropagation()"
         >
           <div class="flex items-center justify-between">
-            <h3 class="font-headline-sm text-lg font-bold text-on-surface">
+            <h3 id="home-profile-modal-title" class="font-headline-sm text-lg font-bold text-on-surface">
               Регистрация профиля в Lemon Home
             </h3>
             <button
               type="button"
-              (click)="closeProfileModal.emit()"
+              (click)="onCloseProfileModal()"
               class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface"
+              aria-label="Закрыть"
             >
               <span class="material-symbols-rounded">close</span>
             </button>
@@ -256,7 +256,7 @@ import { ProfileService } from '../../core/services/profile.service';
           <div class="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
-              (click)="closeProfileModal.emit()"
+              (click)="onCloseProfileModal()"
               class="px-4 py-2 rounded-xl font-label-ui text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
             >
               Отмена
@@ -299,6 +299,17 @@ export class HomeModalsComponent {
 
   newProfileName = '';
   newProfileHandle = '';
+
+  onCloseWidgetModal(): void {
+    this.newWidgetName = '';
+    this.closeWidgetModal.emit();
+  }
+
+  onCloseProfileModal(): void {
+    this.newProfileName = '';
+    this.newProfileHandle = '';
+    this.closeProfileModal.emit();
+  }
 
   readonly iconOptions = [
     { value: 'inventory_2', label: 'Коробка / Запас (inventory_2)' },

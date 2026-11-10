@@ -91,6 +91,14 @@ export interface Translations {
     legendRunning: string;
     legendPaused: string;
     legendStandby: string;
+    pageSize: string;
+    all: string;
+    firstPageAria: string;
+    prevPageAria: string;
+    nextPageAria: string;
+    lastPageAria: string;
+    pageOf: string;
+    selectedCount: string;
   };
   row: {
     selectFlow: string;

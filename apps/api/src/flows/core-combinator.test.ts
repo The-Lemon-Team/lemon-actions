@@ -289,8 +289,8 @@ async function runCoreCombinatorTests() {
     scope: 'home',
   });
 
-  if (alexHomeFlows.length !== 4 || alexHomeFlows.some((f) => f.name === 'CI/CD Pipeline Mutex')) {
-    throw new Error(`Expected 4 starter home flows in scope="home" for Alex, got ${alexHomeFlows.length}`);
+  if (alexHomeFlows.length !== 31 || alexHomeFlows.some((f) => f.name === 'CI/CD Pipeline Mutex')) {
+    throw new Error(`Expected 31 starter home flows in scope="home" for Alex, got ${alexHomeFlows.length}`);
   }
   if (dachaHomeFlows.length !== 4 || dachaHomeFlows.some((f) => f.profileId !== dachaProfile.id)) {
     throw new Error('Expected strict profile isolation between alex_home and dacha');

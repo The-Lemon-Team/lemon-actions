@@ -22,7 +22,7 @@ import { getAccentAvatarClasses, getAccentPillClasses, getBarBgClass } from './a
               <button
                 type="button"
                 (click)="arena.selectParadoxField(p.id)"
-                class="px-3 py-1.5 rounded-xl font-label-ui text-xs font-bold transition-all border"
+                class="px-3 py-1.5 rounded-xl font-label-ui text-xs font-bold border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 [class]="
                   p.id === paradox.id
                     ? 'bg-inverse-surface text-inverse-on-surface border-inverse-surface shadow-xs'
@@ -359,6 +359,25 @@ import { getAccentAvatarClasses, getAccentPillClasses, getBarBgClass } from './a
           }
         </div>
       </section>
+    } @else {
+      <div class="p-8 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 text-center flex flex-col items-center justify-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface-variant">
+          <span class="material-symbols-rounded text-2xl animate-spin">progress_activity</span>
+        </div>
+        <div class="font-headline-sm text-sm font-bold text-on-surface">
+          Инициализация Versus-поединка...
+        </div>
+        <p class="font-body-sm text-xs text-on-surface-variant max-w-md">
+          Загружаются активные споры и карточки поединка.
+        </p>
+        <button
+          type="button"
+          (click)="arena.resetDemoArena()"
+          class="mt-2 px-4 py-2 rounded-xl bg-primary text-on-primary font-label-ui text-xs font-bold hover:opacity-90 transition-all shadow-xs"
+        >
+          Перезагрузить демо-состояние
+        </button>
+      </div>
     }
   `,
 })

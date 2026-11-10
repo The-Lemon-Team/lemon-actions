@@ -1,3 +1,5 @@
+@import './fonts.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -150,6 +152,11 @@
   white-space: nowrap;
   word-wrap: normal;
   direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  font-feature-settings: 'liga';
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   font-variation-settings: 'FILL' 0, 'wght' 400;
+  user-select: none;
+  vertical-align: middle;
 }

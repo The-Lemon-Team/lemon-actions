@@ -7,6 +7,7 @@ import { ArenaCombineViewComponent } from './arena-combine-view.component';
 import { ArenaDesireDeckComponent } from './arena-desire-deck.component';
 import { ArenaModalsComponent } from './arena-modals.component';
 import { ArenaVersusViewComponent } from './arena-versus-view.component';
+import { PartyCloudComponent } from './party-cloud.component';
 
 @Component({
   selector: 'app-neuron-arena',
@@ -18,6 +19,7 @@ import { ArenaVersusViewComponent } from './arena-versus-view.component';
     ArenaVersusViewComponent,
     ArenaDesireDeckComponent,
     ArenaModalsComponent,
+    PartyCloudComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -142,12 +144,12 @@ import { ArenaVersusViewComponent } from './arena-versus-view.component';
               Режим работы Реактивного Поля:
             </div>
             <div class="font-body-sm text-xs text-on-surface-variant">
-              Переключайтесь между совмещением занятий в одном слоте времени (<strong>Combine Mode</strong>) и битвой альтернатив (<strong>Versus Mode</strong>)
+              Переключайтесь между совмещением занятий (<strong>Combine Mode</strong>), битвой альтернатив (<strong>Versus Mode</strong>) и парящими облачками мыслей (<strong>Chrono Cloud</strong>)
             </div>
           </div>
         </div>
 
-        <div class="flex items-center gap-1.5 bg-surface-container-low p-1.5 rounded-xl border border-outline-variant/30">
+        <div class="flex items-center gap-1.5 bg-surface-container-low p-1.5 rounded-xl border border-outline-variant/30 flex-wrap">
           <button
             type="button"
             (click)="gameSubMode.set('COMBINE')"
@@ -159,7 +161,7 @@ import { ArenaVersusViewComponent } from './arena-versus-view.component';
             "
           >
             <span class="material-symbols-rounded text-base">push_pin</span>
-            <span>🧩 Combine Mode (Поле Времени + Активная Зона Pin)</span>
+            <span>🧩 Combine Mode (Поле Времени + Pin)</span>
           </button>
 
           <button
@@ -173,16 +175,32 @@ import { ArenaVersusViewComponent } from './arena-versus-view.component';
             "
           >
             <span class="material-symbols-rounded text-base">swords</span>
-            <span>⚔️ Versus Mode (Спор Карточек Желаний)</span>
+            <span>⚔️ Versus Mode (Спор Желаний)</span>
+          </button>
+
+          <button
+            type="button"
+            (click)="gameSubMode.set('CLOUD')"
+            class="px-3.5 py-2 rounded-lg font-label-ui text-xs font-bold transition-all inline-flex items-center gap-1.5"
+            [class]="
+              gameSubMode() === 'CLOUD'
+                ? 'bg-primary text-on-primary shadow-xs'
+                : 'text-on-surface-variant hover:text-on-surface'
+            "
+          >
+            <span class="material-symbols-rounded text-base">cloud</span>
+            <span>☁️ Chrono Cloud (Летающие облачка)</span>
           </button>
         </div>
       </section>
 
-      <!-- 4A / 4B. COMBINE OR VERSUS MODE VIEW -->
+      <!-- 4A / 4B / 4C. COMBINE, VERSUS OR CLOUD MODE VIEW -->
       @if (gameSubMode() === 'COMBINE') {
         <app-arena-combine-view />
-      } @else {
+      } @else if (gameSubMode() === 'VERSUS') {
         <app-arena-versus-view (inspectCardHistory)="openCardHistory($event)" />
+      } @else if (gameSubMode() === 'CLOUD') {
+        <app-party-cloud />
       }
 
       <!-- 5 & 6. DESIRE CARDS DECK & BOTTOM CHRONICLE -->

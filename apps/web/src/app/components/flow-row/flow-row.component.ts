@@ -35,6 +35,8 @@ export interface FsmTransitionEvent {
         <div class="flex items-center gap-2">
           <input
             type="checkbox"
+            [checked]="isSelected"
+            (change)="selectRow.emit($any($event.target).checked)"
             class="rounded accent-primary-container cursor-pointer w-4 h-4"
             [attr.aria-label]="i18n.t('row.selectFlow', { name: display.name })"
           />
@@ -264,9 +266,11 @@ export class FlowRowComponent {
   readonly FlowType = FlowType;
 
   @Input({ required: true }) state!: FlowRowState;
+  @Input() isSelected = false;
   @Output() toggle = new EventEmitter<string>();
   @Output() manage = new EventEmitter<string>();
   @Output() fsmTransition = new EventEmitter<FsmTransitionEvent>();
+  @Output() selectRow = new EventEmitter<boolean>();
 
   typeUi(type: FlowType) {
     return getFlowTypeUi(type, this.i18n);

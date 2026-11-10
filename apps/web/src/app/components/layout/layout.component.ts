@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { AppMode } from '../../core/models/flow.models';
 import { LanguageSwitcherComponent } from '../language-switcher/language-switcher.component';
@@ -6,7 +7,7 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
 @Component({
   selector: 'app-layout',
   standalone: true,
-  imports: [TranslatePipe, LanguageSwitcherComponent],
+  imports: [TranslatePipe, LanguageSwitcherComponent, RouterLink, RouterLinkActive],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="fixed top-0 w-full z-50 bg-surface/90 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
@@ -20,25 +21,14 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
             <span class="font-label-code-sm text-label-code-sm px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">{{ 'app.version' | trans }}</span>
           </div>
 
-          <!-- Mode Switcher: Neuron Arena vs Lemon Home vs Lemon Code Lab vs Core Combinator Console -->
-          <div class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-low border border-outline-variant/25">
-            <button
-              type="button"
-              (click)="modeChange.emit('arena')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold"
-              [class]="
-                appMode === 'arena'
-                  ? 'bg-primary-container text-on-primary-container shadow-xs'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              "
-            >
-              <span class="material-symbols-rounded text-base">diversity_3</span>
-              <span>Neuron Arena</span>
-            </button>
-            <button
-              type="button"
+          <!-- Mode Navigation: /home, /code, /core, /arena -->
+          <nav aria-label="Apps Navigation" class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-low border border-outline-variant/25">
+            <a
+              routerLink="/home"
+              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
+              [routerLinkActiveOptions]="{ exact: false }"
               (click)="modeChange.emit('home')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               [class]="
                 appMode === 'home'
                   ? 'bg-primary-container text-on-primary-container shadow-xs'
@@ -47,11 +37,13 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
             >
               <span class="material-symbols-rounded text-base">home</span>
               <span>Lemon Home</span>
-            </button>
-            <button
-              type="button"
+            </a>
+            <a
+              routerLink="/code"
+              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
+              [routerLinkActiveOptions]="{ exact: false }"
               (click)="modeChange.emit('code')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               [class]="
                 appMode === 'code'
                   ? 'bg-primary-container text-on-primary-container shadow-xs'
@@ -60,11 +52,13 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
             >
               <span class="material-symbols-rounded text-base">terminal</span>
               <span>Lemon Code</span>
-            </button>
-            <button
-              type="button"
+            </a>
+            <a
+              routerLink="/core"
+              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
+              [routerLinkActiveOptions]="{ exact: false }"
               (click)="modeChange.emit('core')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               [class]="
                 appMode === 'core'
                   ? 'bg-primary-container text-on-primary-container shadow-xs'
@@ -73,8 +67,23 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
             >
               <span class="material-symbols-rounded text-base">hub</span>
               <span>Core Console</span>
-            </button>
-          </div>
+            </a>
+            <a
+              routerLink="/arena"
+              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
+              [routerLinkActiveOptions]="{ exact: false }"
+              (click)="modeChange.emit('arena')"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              [class]="
+                appMode === 'arena'
+                  ? 'bg-primary-container text-on-primary-container shadow-xs'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              "
+            >
+              <span class="material-symbols-rounded text-base">diversity_3</span>
+              <span>Neuron Arena</span>
+            </a>
+          </nav>
         </div>
 
         <div class="flex items-center gap-space-md flex-shrink-0">
@@ -107,10 +116,33 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
     </header>
 
     <main class="w-full pt-16 bg-surface min-h-screen">
-      <div class="w-full max-w-[1440px] mx-auto px-margin py-space-md">
-        <div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter items-start">
-          <div class="xl:col-span-3"><ng-content select="[slot=sidebar]" /></div>
-          <div class="xl:col-span-9 min-w-0"><ng-content /></div>
+      <div
+        class="w-full mx-auto py-space-md"
+        [class]="
+          appMode === 'arena'
+            ? 'px-3 sm:px-6 max-w-[1800px]'
+            : 'max-w-[1440px] px-margin'
+        "
+      >
+        <div
+          [class]="
+            appMode !== 'arena'
+              ? 'grid grid-cols-1 xl:grid-cols-12 gap-gutter items-start'
+              : 'w-full'
+          "
+        >
+          @if (appMode !== 'arena') {
+            <div class="xl:col-span-3"><ng-content select="[slot=sidebar]" /></div>
+          }
+          <div
+            [class]="
+              appMode !== 'arena'
+                ? 'xl:col-span-9 min-w-0'
+                : 'w-full min-w-0'
+            "
+          >
+            <ng-content />
+          </div>
         </div>
       </div>
     </main>

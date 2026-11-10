@@ -4,13 +4,20 @@ import { FormsModule } from '@angular/forms';
 import { ArenaActorCard, ArenaActorCategory } from '../../core/models/flow.models';
 import { NeuronArenaService } from '../../core/services/neuron-arena.service';
 import { ActorAvatarComponent } from './actor-avatar.component';
+import { ArenaHeroNotesModalComponent } from './arena-hero-notes-modal.component';
 import { getAccentPillClasses } from './arena-ui.utils';
 import { ArenaVoiceStudioComponent } from './arena-voice-studio.component';
 
 @Component({
   selector: 'app-arena-actor-deck',
   standalone: true,
-  imports: [AsyncPipe, FormsModule, ActorAvatarComponent, ArenaVoiceStudioComponent],
+  imports: [
+    AsyncPipe,
+    FormsModule,
+    ActorAvatarComponent,
+    ArenaVoiceStudioComponent,
+    ArenaHeroNotesModalComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex flex-col gap-space-lg">
@@ -51,11 +58,11 @@ import { ArenaVoiceStudioComponent } from './arena-voice-studio.component';
             <button
               type="button"
               (click)="selectedActorCategory.set(cat.id)"
-              class="px-3 py-1 rounded-xl font-label-ui text-xs font-bold transition-all"
+              class="px-3 py-1 rounded-xl font-label-ui text-xs font-bold border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               [class]="
                 selectedActorCategory() === cat.id
-                  ? 'bg-primary text-on-primary shadow-xs'
-                  : 'bg-surface-container-lowest text-on-surface-variant border border-outline-variant/30 hover:text-on-surface'
+                  ? 'bg-primary text-on-primary border-primary shadow-xs'
+                  : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/30 hover:text-on-surface'
               "
             >
               {{ cat.label }}
@@ -142,6 +149,27 @@ import { ArenaVoiceStudioComponent } from './arena-voice-studio.component';
                     {{ actor.favoriteDesire }}
                   </span>
                 </div>
+
+                <!-- PINNED NOTES PREVIEW (HERO PINS & PERSONAL PERSPECTIVE) -->
+                @if ((arena.getPinnedHeroNotes(actor.id) | async); as pinnedNotes) {
+                  @if (pinnedNotes.length > 0) {
+                    <div class="p-2 rounded-xl bg-primary-container/20 border border-primary/25 flex flex-col gap-1 text-[11px]">
+                      <div class="flex items-center justify-between text-primary font-label-code-sm font-bold text-[10px]">
+                        <span class="flex items-center gap-1">
+                          <span class="material-symbols-rounded text-xs">push_pin</span>
+                          <span>Заметки героя ({{ pinnedNotes.length }}):</span>
+                        </span>
+                        <span class="text-[9px] uppercase tracking-wider opacity-75">Закреплено</span>
+                      </div>
+                      @for (pn of pinnedNotes.slice(0, 2); track pn.id) {
+                        <div class="truncate text-on-surface flex items-center gap-1 font-body-sm">
+                          <span>{{ pn.visibility === 'PRIVATE' ? '🔒' : '🌐' }}</span>
+                          <span class="truncate">{{ pn.text }}</span>
+                        </div>
+                      }
+                    </div>
+                  }
+                }
               </div>
 
               <div class="pt-2 border-t border-outline-variant/20 flex flex-col gap-2">
@@ -188,6 +216,36 @@ import { ArenaVoiceStudioComponent } from './arena-voice-studio.component';
                     {{ actor.voicesCount }} войсов
                   </span>
                 </div>
+
+                <!-- HERO NOTES ACTION BAR -->
+                <div class="flex items-center justify-between gap-1.5 pt-2 border-t border-outline-variant/15">
+                  <button
+                    type="button"
+                    (click)="openHeroNotes(actor, $event)"
+                    class="px-2.5 py-1 rounded-xl bg-surface-container-high hover:bg-primary-container text-on-surface hover:text-on-primary-container font-label-ui text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-2xs"
+                    title="Открыть блокнот заметок и личные связи"
+                  >
+                    <span class="material-symbols-rounded text-sm text-primary">edit_note</span>
+                    <span>Заметки</span>
+                    @if ((arena.getHeroNotes(actor.id) | async); as heroNotes) {
+                      @if (heroNotes.length > 0) {
+                        <span class="px-1.5 py-0.2 rounded-full bg-primary/20 text-primary text-[10px] font-mono">
+                          {{ heroNotes.length }}
+                        </span>
+                      }
+                    }
+                  </button>
+
+                  <button
+                    type="button"
+                    (click)="openHeroNotes(actor, $event)"
+                    class="px-2 py-1 rounded-xl bg-primary/10 hover:bg-primary hover:text-on-primary text-primary font-label-ui text-xs font-semibold transition-all inline-flex items-center gap-1"
+                    title="Прикрепить заметку к персонажу"
+                  >
+                    <span class="material-symbols-rounded text-sm">add</span>
+                    <span>Note</span>
+                  </button>
+                </div>
               </div>
             </div>
           }
@@ -195,6 +253,13 @@ import { ArenaVoiceStudioComponent } from './arena-voice-studio.component';
       </section>
 
       <app-arena-voice-studio />
+
+      <!-- HERO NOTES & HYBRID RELATIONSHIP MODAL -->
+      <app-arena-hero-notes-modal
+        [actor]="selectedActorForNotes()"
+        [isOpen]="selectedActorForNotes() !== null"
+        (close)="selectedActorForNotes.set(null)"
+      />
     </div>
   `,
 })
@@ -203,6 +268,7 @@ export class ArenaActorDeckComponent {
   protected readonly getAccentPillClasses = getAccentPillClasses;
 
   readonly selectedActorCategory = signal<'ALL' | ArenaActorCategory>('ALL');
+  readonly selectedActorForNotes = signal<ArenaActorCard | null>(null);
   actorSearchQuery = '';
 
   readonly categoryFilters: { id: 'ALL' | ArenaActorCategory; label: string }[] = [
@@ -215,6 +281,13 @@ export class ArenaActorDeckComponent {
 
   selectMainActor(actor: ArenaActorCard): void {
     this.arena.selectLeadActor(actor.id);
+  }
+
+  openHeroNotes(actor: ArenaActorCard, event?: MouseEvent): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.selectedActorForNotes.set(actor);
   }
 
   filterActors(actors: ArenaActorCard[]): ArenaActorCard[] {

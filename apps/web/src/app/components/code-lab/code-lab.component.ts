@@ -225,8 +225,8 @@ import { CodeTaskCardComponent } from './code-task-card.component';
             <button
               type="button"
               (click)="codeLab.setStatusFilter(tab.id)"
-              class="px-3 py-1.5 rounded-lg font-label-ui text-xs font-semibold transition-all"
-              [class]="(codeLab.statusFilter$ | async) === tab.id ? 'bg-primary-container text-on-primary-container shadow-xs font-bold' : 'text-on-surface-variant hover:text-on-surface'"
+              class="px-3 py-1.5 rounded-lg font-label-ui text-xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              [class]="(codeLab.statusFilter$ | async) === tab.id ? 'bg-primary-container text-on-primary-container shadow-xs' : 'text-on-surface-variant hover:text-on-surface'"
             >
               {{ tab.label }}
             </button>

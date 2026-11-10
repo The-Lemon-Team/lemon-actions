@@ -1,6 +1,7 @@
 import { AsyncPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { CombineActivitySuggestion } from '../../core/models/flow.models';
 import { NeuronArenaService } from '../../core/services/neuron-arena.service';
 import { ActorAvatarComponent } from './actor-avatar.component';
@@ -10,7 +11,7 @@ import { getAccentAvatarClasses, getAccentPillClasses } from './arena-ui.utils';
 @Component({
   selector: 'app-arena-combine-view',
   standalone: true,
-  imports: [AsyncPipe, FormsModule, ActorAvatarComponent, ArenaCombineHistoryComponent],
+  imports: [AsyncPipe, FormsModule, RouterLink, ActorAvatarComponent, ArenaCombineHistoryComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (arena.activeCombineField$ | async; as timeField) {
@@ -25,7 +26,7 @@ import { getAccentAvatarClasses, getAccentPillClasses } from './arena-ui.utils';
               <button
                 type="button"
                 (click)="arena.selectCombineTimeField(tf.id)"
-                class="px-3 py-1.5 rounded-xl font-label-ui text-xs font-bold transition-all border inline-flex items-center gap-1.5"
+                class="px-3 py-1.5 rounded-xl font-label-ui text-xs font-bold border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 inline-flex items-center gap-1.5"
                 [class]="
                   tf.id === timeField.id
                     ? 'bg-inverse-surface text-inverse-on-surface border-inverse-surface shadow-xs'
@@ -38,7 +39,14 @@ import { getAccentAvatarClasses, getAccentPillClasses } from './arena-ui.utils';
             }
           </div>
 
-          <div class="flex items-center gap-2 flex-shrink-0">
+          <div class="flex items-center gap-2 flex-shrink-0 flex-wrap">
+            <a
+              routerLink="/party/cloud"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary-container text-on-primary-container font-label-ui text-xs font-bold shadow-xs hover:opacity-95 transition-all"
+            >
+              <span class="material-symbols-rounded text-base">cloud</span>
+              <span>🌌 В Хроно-Облако & Lemon Core →</span>
+            </a>
             <button
               type="button"
               (click)="arena.saveActiveCombineFieldToHistory()"
@@ -354,6 +362,25 @@ import { getAccentAvatarClasses, getAccentPillClasses } from './arena-ui.utils';
         <!-- КАРТОЧКИ ИСТОРИИ СОВМЕЩЕНИЙ -->
         <app-arena-combine-history />
       </section>
+    } @else {
+      <div class="p-8 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 text-center flex flex-col items-center justify-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface-variant">
+          <span class="material-symbols-rounded text-2xl animate-spin">progress_activity</span>
+        </div>
+        <div class="font-headline-sm text-sm font-bold text-on-surface">
+          Инициализация Поля Времени...
+        </div>
+        <p class="font-body-sm text-xs text-on-surface-variant max-w-md">
+          Слоты времени и совмещения загружаются. Вы также можете сбросить демо-сессию арены:
+        </p>
+        <button
+          type="button"
+          (click)="arena.resetDemoArena()"
+          class="mt-2 px-4 py-2 rounded-xl bg-primary text-on-primary font-label-ui text-xs font-bold hover:opacity-90 transition-all shadow-xs"
+        >
+          Перезагрузить демо-состояние
+        </button>
+      </div>
     }
   `,
 })

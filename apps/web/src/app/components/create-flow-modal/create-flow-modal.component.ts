@@ -2,15 +2,14 @@ import { CommonModule } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
-  ElementRef,
   EventEmitter,
-  HostListener,
   Input,
   OnInit,
   Output,
   inject,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ModalOverlayDirective } from '../../core/directives/modal-overlay.directive';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { CreateFlowPayload, FlowType, Folder } from '../../core/models/flow.models';
@@ -117,17 +116,18 @@ const FSM_TEMPLATES: Record<string, { label: string; config: unknown }> = {
 @Component({
   selector: 'app-create-flow-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslatePipe],
+  imports: [CommonModule, FormsModule, TranslatePipe, ModalOverlayDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
+      appModalOverlay
+      [appModalOverlayDismissable]="!isSubmitting"
+      (overlayClose)="onCancel()"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-xs overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
       aria-labelledby="create-flow-title"
     >
       <div
-        #dialogContent
+        (click)="$event.stopPropagation()"
         class="bg-surface-container-lowest rounded-2xl shadow-xl border border-outline-variant/30 w-full max-w-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150 flex flex-col"
       >
         <!-- Modal Header -->
@@ -147,7 +147,7 @@ const FSM_TEMPLATES: Record<string, { label: string; config: unknown }> = {
           </div>
           <button
             type="button"
-            (click)="close.emit()"
+            (click)="onCancel()"
             class="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
             [attr.aria-label]="'createModal.closeAria' | trans"
           >
@@ -385,7 +385,7 @@ const FSM_TEMPLATES: Record<string, { label: string; config: unknown }> = {
         <div class="px-6 py-4 border-t border-outline-variant/20 flex items-center justify-end gap-3 bg-surface-container-low/40">
           <button
             type="button"
-            (click)="close.emit()"
+            (click)="onCancel()"
             class="px-4 py-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high font-label-ui text-xs font-medium transition-colors"
           >
             {{ 'createModal.cancel' | trans }}
@@ -410,7 +410,6 @@ const FSM_TEMPLATES: Record<string, { label: string; config: unknown }> = {
   `,
 })
 export class CreateFlowModalComponent implements OnInit {
-  private readonly hostRef = inject(ElementRef);
   protected readonly i18n = inject(I18nService);
 
   readonly FlowType = FlowType;
@@ -441,6 +440,15 @@ export class CreateFlowModalComponent implements OnInit {
     if (this.initialFolderId) {
       this.folderId = this.initialFolderId;
     }
+  }
+
+  onEscape(): void {
+    this.onCancel();
+  }
+
+  onCancel(): void {
+    if (this.isSubmitting) return;
+    this.close.emit();
   }
 
   getTypeLabel(type: FlowType): string {
@@ -491,19 +499,6 @@ export class CreateFlowModalComponent implements OnInit {
       .split(/[,;\s]+/)
       .map((t) => t.replace(/^#/, '').trim())
       .filter(Boolean);
-  }
-
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
-    this.close.emit();
-  }
-
-  @HostListener('click', ['$event'])
-  onBackdropClick(event: MouseEvent): void {
-    const dialog = this.hostRef.nativeElement.querySelector('#dialogContent') || this.hostRef.nativeElement.firstElementChild?.firstElementChild;
-    if (dialog && !dialog.contains(event.target as Node)) {
-      this.close.emit();
-    }
   }
 
   submit(): void {

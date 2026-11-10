@@ -52,9 +52,9 @@ describe('CreateFlowModalComponent', () => {
     );
   });
 
-  it('should emit close on onEscape', () => {
+  it('should emit close on onCancel', () => {
     spyOn(component.close, 'emit');
-    component.onEscape();
+    component.onCancel();
     expect(component.close.emit).toHaveBeenCalled();
   });
 });

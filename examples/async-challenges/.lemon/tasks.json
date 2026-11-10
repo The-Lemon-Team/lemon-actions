@@ -1,0 +1,105 @@
+{
+  "$schema": "https://lemon.actions/schemas/tasks.v1.json",
+  "version": "1.0",
+  "defaultFsm": {
+    "initial": "stub",
+    "states": {
+      "stub": {
+        "label": "Заготовка / Stub",
+        "badgeColor": "#9ca3af",
+        "transitions": [
+          { "event": "START_FOCUS", "target": "in_progress", "ui": { "buttonLabel": "Взять в работу", "icon": "play_arrow", "intent": "primary" } }
+        ]
+      },
+      "in_progress": {
+        "label": "В работе",
+        "badgeColor": "#3b82f6",
+        "transitions": [
+          { "event": "RUN_TESTS", "target": "evaluating", "ui": { "buttonLabel": "Запустить тесты", "icon": "terminal", "intent": "primary" } },
+          { "event": "PAUSE", "target": "paused", "ui": { "buttonLabel": "Пауза", "icon": "pause", "intent": "secondary" } }
+        ]
+      },
+      "evaluating": {
+        "label": "Проверка тестов",
+        "badgeColor": "#a855f7",
+        "transitions": [
+          { "event": "TESTS_FAILED", "target": "debugging", "ui": { "buttonLabel": "Тесты не прошли", "icon": "error", "intent": "danger" } },
+          { "event": "TESTS_PASSED", "target": "passed", "ui": { "buttonLabel": "Тесты пройдены", "icon": "check_circle", "intent": "success" } }
+        ]
+      },
+      "debugging": {
+        "label": "Отладка ошибок",
+        "badgeColor": "#ef4444",
+        "transitions": [
+          { "event": "RETRY", "target": "evaluating", "ui": { "buttonLabel": "Повторить тест", "icon": "refresh", "intent": "primary" } },
+          { "event": "NOTE_HYPOTHESIS", "target": "in_progress", "ui": { "buttonLabel": "Записать гипотезу в Notes", "icon": "edit_note", "intent": "secondary" } },
+          { "event": "PAUSE", "target": "paused", "ui": { "buttonLabel": "Отложить", "icon": "pause", "intent": "secondary" } }
+        ]
+      },
+      "passed": {
+        "label": "Тесты пройдены",
+        "badgeColor": "#10b981",
+        "transitions": [
+          { "event": "SAVE_TO_NOTES", "target": "completed", "ui": { "buttonLabel": "Зафиксировать в Notes", "icon": "bookmark_add", "intent": "success" } },
+          { "event": "REFACTOR", "target": "in_progress", "ui": { "buttonLabel": "Продолжить рефакторинг", "icon": "code", "intent": "secondary" } }
+        ]
+      },
+      "completed": {
+        "label": "Завершено (в Notes)",
+        "badgeColor": "#059669",
+        "transitions": [
+          { "event": "REOPEN", "target": "in_progress", "ui": { "buttonLabel": "Открыть заново", "icon": "restart_alt", "intent": "secondary" } }
+        ]
+      },
+      "paused": {
+        "label": "Приостановлено",
+        "badgeColor": "#6b7280",
+        "transitions": [
+          { "event": "RESUME", "target": "in_progress", "ui": { "buttonLabel": "Возобновить", "icon": "play_arrow", "intent": "primary" } }
+        ]
+      }
+    }
+  },
+  "tasks": [
+    {
+      "id": "task-async-series-01",
+      "slug": "async-series-pipeline",
+      "title": "Последовательный пайплайн промисов (Async Series & Waterfall)",
+      "description": "Реализовать функцию asyncSeries(tasks, initialValue, options) для строго последовательного вызова асинхронных шагов с передачей результата и поддержкой AbortSignal.",
+      "tags": ["#js", "#async", "#pipeline", "#promises"],
+      "difficulty": "medium",
+      "testSuite": "tasks/01-async-series/solution.test.js",
+      "createdAt": "2026-11-07T10:00:00Z"
+    },
+    {
+      "id": "task-promise-pool-02",
+      "slug": "promise-pool-concurrency",
+      "title": "Пул параллельных промисов (Promise Pool & Concurrency Limiter)",
+      "description": "Реализовать функцию promisePool(factories, concurrency) для параллельного исполнения массива асинхронных задач с ограничением одновременного числа воркеров и сохранением порядка результатов.",
+      "tags": ["#js", "#async", "#concurrency", "#pool"],
+      "difficulty": "hard",
+      "testSuite": "tasks/02-promise-pool/solution.test.js",
+      "createdAt": "2026-11-07T10:30:00Z"
+    },
+    {
+      "id": "task-retry-backoff-03",
+      "slug": "retry-exponential-backoff",
+      "title": "Экспоненциальный повтор запросов (Retry with Exponential Backoff)",
+      "description": "Реализовать retryWithBackoff(fn, options) для надежного повтора асинхронных операций с экспоненциальной задержкой, предикатом shouldRetry и защитой от бесконечных падений.",
+      "tags": ["#js", "#async", "#resilience", "#retry"],
+      "difficulty": "medium",
+      "testSuite": "tasks/03-retry-backoff/solution.test.js",
+      "createdAt": "2026-11-07T11:00:00Z"
+    },
+    {
+      "id": "task-deferred-promise-04",
+      "slug": "deferred-promise-controller",
+      "title": "Отложенный промис с внешним управлением (Deferred Promise)",
+      "description": "Реализовать паттерн Deferred через createDeferred(): внешний доступ к resolve/reject, синхронные геттеры status и isSettled, строгая идемпотентность завершения.",
+      "tags": ["#js", "#async", "#patterns", "#deferred"],
+      "difficulty": "easy",
+      "testSuite": "tasks/04-deferred-promise/solution.test.js",
+      "createdAt": "2026-11-07T11:30:00Z"
+    }
+  ]
+}

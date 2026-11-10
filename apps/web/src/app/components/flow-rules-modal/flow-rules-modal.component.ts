@@ -1,17 +1,20 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ModalOverlayDirective } from '../../core/directives/modal-overlay.directive';
 import { Flow, FlowEventRecord, FlowSessionRecord } from '../../core/models/flow.models';
 import { FlowOrchestratorService } from '../../core/services/flow-orchestrator.service';
 
 @Component({
   selector: 'app-flow-rules-modal',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, ModalOverlayDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
+      appModalOverlay
+      (overlayClose)="close.emit()"
       class="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/50 backdrop-blur-xs p-4"
-      (click)="close.emit()"
+      aria-labelledby="flow-rules-modal-title"
     >
       <div
         class="bg-surface-container-lowest border border-outline-variant/40 rounded-2xl shadow-xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden"
@@ -24,7 +27,7 @@ import { FlowOrchestratorService } from '../../core/services/flow-orchestrator.s
               <span class="material-symbols-rounded text-xl">tune</span>
             </div>
             <div>
-              <h2 class="font-headline-sm text-base font-bold text-on-surface">
+              <h2 id="flow-rules-modal-title" class="font-headline-sm text-base font-bold text-on-surface">
                 {{ flow.name }}
               </h2>
               <p class="font-body-sm text-xs text-on-surface-variant">
@@ -37,6 +40,7 @@ import { FlowOrchestratorService } from '../../core/services/flow-orchestrator.s
             type="button"
             (click)="close.emit()"
             class="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
+            aria-label="Закрыть"
           >
             <span class="material-symbols-rounded text-lg">close</span>
           </button>

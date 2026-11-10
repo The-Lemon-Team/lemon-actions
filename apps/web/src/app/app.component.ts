@@ -1,12 +1,11 @@
 import { AsyncPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { map, switchMap, take, timer } from 'rxjs';
-import { CodeLabComponent } from './components/code-lab/code-lab.component';
-import { FlowDashboardComponent } from './components/flow-dashboard/flow-dashboard.component';
-import { HomeTrackerComponent } from './components/home-tracker/home-tracker.component';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { filter, map, switchMap, take, timer } from 'rxjs';
 import { LayoutComponent } from './components/layout/layout.component';
-import { NeuronArenaComponent } from './components/neuron-arena/neuron-arena.component';
 import { SidebarComponent } from './components/sidebar/sidebar.component';
+import { AppMode } from './core/models/flow.models';
 import { FlowOrchestratorService } from './core/services/flow-orchestrator.service';
 import { ProfileService } from './core/services/profile.service';
 import { ThemeService } from './core/services/theme.service';
@@ -14,23 +13,15 @@ import { ThemeService } from './core/services/theme.service';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [
-    AsyncPipe,
-    LayoutComponent,
-    SidebarComponent,
-    FlowDashboardComponent,
-    HomeTrackerComponent,
-    CodeLabComponent,
-    NeuronArenaComponent,
-  ],
+  imports: [AsyncPipe, RouterOutlet, LayoutComponent, SidebarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-layout
       [isDark]="(theme.theme$ | async) === 'dark'"
-      [appMode]="(profileService.appMode$ | async) ?? 'arena'"
+      [appMode]="(profileService.appMode$ | async) ?? 'core'"
       [profileName]="(profileService.activeProfile$ | async)?.displayName ?? 'Мой Дом'"
       (themeToggle)="theme.toggle()"
-      (modeChange)="profileService.setAppMode($event)"
+      (modeChange)="onModeChange($event)"
     >
       <app-sidebar
         slot="sidebar"
@@ -41,16 +32,9 @@ import { ThemeService } from './core/services/theme.service';
         [activeLocks]="(activeLocks$ | async) ?? []"
         (tagSelect)="orchestrator.selectTag($event)"
       />
-      @if (((profileService.appMode$ | async) ?? 'arena') === 'arena') {
-        <app-neuron-arena />
-      } @else if (((profileService.appMode$ | async) ?? 'arena') === 'home') {
-        <app-home-tracker />
-      } @else if (((profileService.appMode$ | async) ?? 'arena') === 'code') {
-        <app-code-lab />
-      } @else {
-        <app-flow-dashboard />
-      }
+      <router-outlet />
     </app-layout>
+
     @if (toast$ | async; as message) {
       <div
         role="alert"
@@ -62,10 +46,12 @@ import { ThemeService } from './core/services/theme.service';
     }
   `,
 })
-export class AppComponent {
+export class AppComponent implements OnInit {
   protected readonly orchestrator = inject(FlowOrchestratorService);
   protected readonly profileService = inject(ProfileService);
   protected readonly theme = inject(ThemeService);
+  private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly tags$ = this.orchestrator.tags$;
   readonly activeFlows$ = this.orchestrator.activeFlowsCount$;
@@ -76,4 +62,34 @@ export class AppComponent {
   readonly toast$ = this.orchestrator.errors$.pipe(
     switchMap((msg) => timer(0, 5000).pipe(take(2), map((i) => (i === 0 ? msg : null)))),
   );
+
+  ngOnInit(): void {
+    this.syncModeFromUrl(this.router.url);
+
+    this.router.events
+      .pipe(
+        filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((event) => {
+        this.syncModeFromUrl(event.urlAfterRedirects || event.url);
+      });
+  }
+
+  onModeChange(mode: AppMode): void {
+    this.profileService.setAppMode(mode);
+    this.router.navigate(['/' + mode]);
+  }
+
+  private syncModeFromUrl(url: string): void {
+    if (url.startsWith('/home')) {
+      this.profileService.setAppMode('home');
+    } else if (url.startsWith('/code')) {
+      this.profileService.setAppMode('code');
+    } else if (url.startsWith('/arena')) {
+      this.profileService.setAppMode('arena');
+    } else {
+      this.profileService.setAppMode('core');
+    }
+  }
 }

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://lemon.actions/schemas/test-results.v1.json",
+  "version": "1.0",
+  "timestamp": "2026-11-07T11:01:36.702Z",
+  "summary": {
+    "totalTasks": 4,
+    "passedTasks": 4,
+    "failedTasks": 0
+  },
+  "results": [
+    {
+      "taskId": "task-async-series-01",
+      "status": "PASSED",
+      "tests": {
+        "total": 6,
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      "durationMs": 296,
+      "logs": []
+    },
+    {
+      "taskId": "task-promise-pool-02",
+      "status": "PASSED",
+      "tests": {
+        "total": 6,
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      "durationMs": 417,
+      "logs": []
+    },
+    {
+      "taskId": "task-retry-backoff-03",
+      "status": "PASSED",
+      "tests": {
+        "total": 6,
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      "durationMs": 531,
+      "logs": []
+    },
+    {
+      "taskId": "task-deferred-promise-04",
+      "status": "PASSED",
+      "tests": {
+        "total": 5,
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      "durationMs": 198,
+      "logs": []
+    }
+  ]
+}
