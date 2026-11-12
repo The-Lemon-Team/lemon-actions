@@ -22,11 +22,11 @@ describe('I18nService', () => {
   it('should translate keys correctly in Russian and English', () => {
     service.setLocale('ru');
     expect(service.t('nav.flows')).toBe('Потоки');
-    expect(service.t('commandRibbon.title')).toBe('Командная лента · Домены и папки');
+    expect(service.t('commandRibbon.title')).toBe('Командная лента · Нейроны');
 
     service.setLocale('en');
     expect(service.t('nav.flows')).toBe('Flows');
-    expect(service.t('commandRibbon.title')).toBe('Command Ribbon · Domains & Folders');
+    expect(service.t('commandRibbon.title')).toBe('Command Ribbon · Neurons');
   });
 
   it('should interpolate parameters', () => {

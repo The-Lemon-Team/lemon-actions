@@ -1,3 +1,4 @@
+import { ChangeDetectorRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { I18nService } from './i18n.service';
 import { TranslatePipe } from './translate.pipe';
@@ -8,7 +9,11 @@ describe('TranslatePipe', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [TranslatePipe, I18nService],
+      providers: [
+        TranslatePipe,
+        I18nService,
+        { provide: ChangeDetectorRef, useValue: { markForCheck: () => {} } },
+      ],
     });
     pipe = TestBed.inject(TranslatePipe);
     service = TestBed.inject(I18nService);
