@@ -88,6 +88,25 @@ export interface CreateFlowPayload {
   orchestratorRules?: unknown;
 }
 
+export interface ProjectInfo {
+  id: string;
+  name: string;
+  path: string;
+  icon: string;
+  badgeClass: string;
+  flowCount: number;
+  hasActiveFlow: boolean;
+  isSelected: boolean;
+}
+
+export interface FlowRowProject {
+  id: string;
+  name: string;
+  path: string;
+  icon: string;
+  badgeClass: string;
+}
+
 export interface FlowRowState {
   flow: Flow;
   /** Frontend-only addition: isolated per-row flow stream (for reactive config/state updates). */
@@ -96,6 +115,9 @@ export interface FlowRowState {
   status$: Observable<FlowStatus>;
   isActive$: Observable<boolean>;
   currentDuration$: Observable<number>;
+  project?: FlowRowProject | null;
+  neuronName?: string;
+  neuronId?: string | null;
 }
 
 /* ---------- Frontend view models (not part of the backend contract) ---------- */

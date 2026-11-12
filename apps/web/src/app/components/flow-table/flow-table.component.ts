@@ -25,6 +25,8 @@ import { FlowRowComponent, FsmTransitionEvent } from '../flow-row/flow-row.compo
                 />
               </th>
               <th class="py-3 px-3">{{ 'table.colFlow' | trans }}</th>
+              <th class="py-3 px-3">{{ 'table.colProject' | trans }}</th>
+              <th class="py-3 px-3">{{ 'table.colNeuron' | trans }}</th>
               <th class="py-3 px-3">{{ 'table.colArchitecture' | trans }}</th>
               <th class="py-3 px-3">{{ 'table.colTelemetry' | trans }}</th>
               <th class="py-3 px-3">{{ 'table.colTaxonomy' | trans }}</th>
@@ -42,10 +44,12 @@ import { FlowRowComponent, FsmTransitionEvent } from '../flow-row/flow-row.compo
                 (manage)="manage.emit($event)"
                 (fsmTransition)="fsmTransition.emit($event)"
                 (selectRow)="toggleSelectRow(row.flow.id, $event)"
+                (selectProject)="selectProject.emit($event)"
+                (selectNeuron)="selectNeuron.emit($event)"
               ></tr>
             } @empty {
               <tr>
-                <td colspan="6" class="py-12 text-center text-on-surface-variant font-body-md">
+                <td colspan="8" class="py-12 text-center text-on-surface-variant font-body-md">
                   <div class="flex flex-col items-center gap-2">
                     <span class="material-symbols-rounded text-3xl opacity-40">filter_alt_off</span>
                     <span>{{ 'table.emptyMessage' | trans }}</span>
@@ -221,6 +225,8 @@ export class FlowTableComponent {
   @Output() manage = new EventEmitter<string>();
   @Output() fsmTransition = new EventEmitter<FsmTransitionEvent>();
   @Output() createChannel = new EventEmitter<void>();
+  @Output() selectProject = new EventEmitter<string>();
+  @Output() selectNeuron = new EventEmitter<string>();
 
   readonly totalPages = computed(() => {
     const len = this.rawRows().length;

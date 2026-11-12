@@ -79,9 +79,16 @@ export interface Translations {
     standby: string;
     idleCount: string;
   };
+  projects: {
+    allProjects: string;
+    title: string;
+    filterBy: string;
+  };
   table: {
     selectAllAria: string;
     colFlow: string;
+    colProject: string;
+    colNeuron: string;
     colArchitecture: string;
     colTelemetry: string;
     colTaxonomy: string;
@@ -102,6 +109,8 @@ export interface Translations {
   };
   row: {
     selectFlow: string;
+    neuronBadge: string;
+    projectBadge: string;
     exclusiveMutexTooltip: string;
     exclusiveLockBadge: string;
     lockEngaged: string;

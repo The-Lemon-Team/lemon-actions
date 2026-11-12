@@ -65,6 +65,41 @@ export interface FsmTransitionEvent {
         </div>
       </td>
 
+      <!-- PROJECT BADGE -->
+      <td class="py-3 px-3 align-middle whitespace-nowrap">
+        @if (state.project; as prj) {
+          <button
+            type="button"
+            (click)="selectProject.emit(prj.id)"
+            [title]="i18n.t('row.projectBadge', { name: prj.name })"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-label-ui text-xs font-medium transition-all active:scale-95"
+            [class]="prj.badgeClass"
+          >
+            <span class="material-symbols-rounded text-sm">{{ prj.icon }}</span>
+            <span>{{ prj.name }}</span>
+          </button>
+        } @else {
+          <span class="text-outline text-xs font-label-code-sm">—</span>
+        }
+      </td>
+
+      <!-- NEURON (CELL) BADGE -->
+      <td class="py-3 px-3 align-middle whitespace-nowrap">
+        @if (state.neuronName) {
+          <button
+            type="button"
+            (click)="selectNeuron.emit(state.neuronId || '')"
+            [title]="i18n.t('row.neuronBadge', { name: state.neuronName })"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container-high/70 hover:bg-surface-container-highest text-on-surface font-label-code-sm text-xs border border-outline-variant/30 transition-all active:scale-95"
+          >
+            <span class="material-symbols-rounded text-sm text-primary">hub</span>
+            <span class="font-medium">{{ state.neuronName }}</span>
+          </button>
+        } @else {
+          <span class="text-outline text-xs font-label-code-sm">—</span>
+        }
+      </td>
+
       <!-- ARCHITECTURE TYPE & CONCURRENCY BADGE -->
       <td class="py-3 px-3 align-middle whitespace-nowrap">
         <div class="flex flex-col gap-1 items-start">
@@ -271,6 +306,8 @@ export class FlowRowComponent {
   @Output() manage = new EventEmitter<string>();
   @Output() fsmTransition = new EventEmitter<FsmTransitionEvent>();
   @Output() selectRow = new EventEmitter<boolean>();
+  @Output() selectProject = new EventEmitter<string>();
+  @Output() selectNeuron = new EventEmitter<string>();
 
   typeUi(type: FlowType) {
     return getFlowTypeUi(type, this.i18n);

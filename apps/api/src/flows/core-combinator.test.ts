@@ -3,8 +3,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { CodeTasksService } from '../code-tasks/code-tasks.service';
 import { FoldersService } from '../folders/folders.service';
+import { NeuronMetricsService } from '../folders/neuron-metrics.service';
 import { ProfilesService } from '../profiles/profiles.service';
 import { FlowSchedulerService } from './flow-scheduler.service';
+import { FlowsEventBusService } from './flows-event-bus.service';
 import { FlowsService } from './flows.service';
 import { DEFAULT_FLOW_TYPE_HANDLERS } from './handlers/flow-type.handler';
 import { FlowTypeRegistry } from './handlers/flow-type.registry';
@@ -22,7 +24,17 @@ async function runCoreCombinatorTests() {
     flows: new Map<string, any>(),
     sessions: [] as any[],
     events: [] as any[],
+    bufferItems: [] as any[],
   };
+
+  db.folders.set(folderId, {
+    id: folderId,
+    name: 'Core Neuron',
+    path: 'workspace.core',
+    profileId: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
 
   db.flows.set(scheduleFlowId, {
     id: scheduleFlowId,
@@ -155,10 +167,24 @@ async function runCoreCombinatorTests() {
     },
     listSessions: async (flowId: string) => db.sessions.filter((s) => s.flowId === flowId),
     listEvents: async (flowId: string) => db.events.filter((e) => e.flowId === flowId),
+    findFlowsByFolder: async (fId: string) => Array.from(db.flows.values()).filter((f) => f.folderId === fId),
+    pushBufferItem: async (flowId: string, payload: any, dedupKey?: string) => {
+      const item = { id: `buf-${db.bufferItems.length + 1}`, flowId, payload, dedupKey, enqueuedAt: new Date(), flushedAt: null };
+      db.bufferItems.push(item);
+      return item;
+    },
+    findPendingBufferItems: async (flowId: string) =>
+      db.bufferItems.filter((i) => i.flowId === flowId && i.flushedAt === null),
+    flushBufferItems: async (flowId: string) => {
+      const pending = db.bufferItems.filter((i) => i.flowId === flowId && i.flushedAt === null);
+      pending.forEach((i) => (i.flushedAt = new Date()));
+      return pending;
+    },
   };
 
+  const eventBus = new FlowsEventBusService();
   const registry = new FlowTypeRegistry(DEFAULT_FLOW_TYPE_HANDLERS);
-  const flowsService = new FlowsService(mockFlowsRepo, registry);
+  const flowsService = new FlowsService(mockFlowsRepo, registry, eventBus);
   const scheduler = new FlowSchedulerService(mockFlowsRepo, flowsService);
 
   // 1. В 14:00 среды (внутри рабочего окна 10:00–19:00) запускаем тик планировщика
@@ -206,11 +232,15 @@ async function runCoreCombinatorTests() {
       id === folderId
         ? { id: folderId, name: 'Focus Modes', path: 'focus_modes', profileId: null }
         : db.folders.get(id) ?? null,
-    findFolderContextData: async () => ({
-      flows: [db.flows.get(scheduleFlowId), db.flows.get(logFlowId)],
-      activeSessions: db.sessions.filter((s) => s.endedAt === null),
-      recentEvents: db.events,
-    }),
+    findFolderContextData: async (fId?: string) => {
+      const targetFolderId = fId || folderId;
+      const folderFlows = Array.from(db.flows.values()).filter((f) => f.folderId === targetFolderId);
+      return {
+        flows: folderFlows,
+        activeSessions: db.sessions.filter((s) => s.endedAt === null),
+        recentEvents: db.events,
+      };
+    },
     insert: async (name: string, parentId: string | null, path: string, profileId: string | null) => {
       const id = `folder-${db.folders.size + 1}`;
       const f = { id, name, parentId, profileId, path, createdAt: new Date(), updatedAt: new Date() };
@@ -385,6 +415,164 @@ async function runCoreCombinatorTests() {
       fs.writeFileSync(resultsFilePath, originalResultsContent, 'utf-8');
     }
   }
+
+  // 7. Проверка шины импульсов (SSE / FlowsEventBus)
+  console.log('\nTest 7: Reactive FlowsEventBus Impulse Stream');
+  const capturedImpulses: any[] = [];
+  const impulseSub = eventBus.stream$().subscribe((packet) => capturedImpulses.push(packet));
+
+  // 8. Проверка TIMER потока и автоматических тиков планировщика
+  console.log('\nTest 8: TIMER Flow Cadence & Scheduler Ticks');
+  const timerFlow = await flowsService.create({
+    name: 'Watcher Cadence Timer',
+    type: FlowType.TIMER,
+    folderId,
+    config: { intervalSeconds: 60 },
+  });
+  await flowsService.updateStatus(timerFlow.id, FlowStatus.ACTIVE);
+
+  const tickNow = new Date('2026-11-04T15:00:00');
+  const schedulerResult = await scheduler.tick(new Date(tickNow.getTime() + 65000));
+  if (schedulerResult.timerTicks < 1) {
+    throw new Error('Expected scheduler to emit a timer tick after interval elapsed');
+  }
+  const timerEvents = await flowsService.listEvents(timerFlow.id);
+  if (!timerEvents.some((e) => e.eventType === 'TIMER_TICK')) {
+    throw new Error('Expected TIMER_TICK event in timer flow chronicle');
+  }
+  console.log('  ✓ TIMER поток активен, планировщик зафиксировал тик с интервалом 60s!');
+
+  // 9. Проверка CIRCUIT_BREAKER: сбой, размыкание (OPEN) и авто-восстановление (HALF_OPEN)
+  console.log('\nTest 9: CIRCUIT_BREAKER Supervisor, Trip on Error & Cooldown Recovery');
+  const breakerFlow = await flowsService.create({
+    name: 'External API Sentinel',
+    type: FlowType.CIRCUIT_BREAKER,
+    folderId,
+    config: { failureThreshold: 2, cooldownSeconds: 30, state: 'CLOSED' },
+  });
+
+  // Эмулируем 2 ошибки подряд
+  await flowsService.appendEvent(breakerFlow.id, {
+    eventType: 'API_ERROR',
+    payload: { error: '503 Service Unavailable', statusCode: 503 },
+  });
+  await flowsService.appendEvent(breakerFlow.id, {
+    eventType: 'API_ERROR',
+    payload: { error: '503 Service Unavailable', statusCode: 503 },
+  });
+
+  const trippedBreaker = await flowsService.findOne(breakerFlow.id);
+  if ((trippedBreaker.config as any)?.state !== 'OPEN') {
+    throw new Error('Expected Circuit Breaker to trip to OPEN after 2 errors');
+  }
+  console.log('  ✓ Circuit Breaker зафиксировал 2 сбоя и перешел в OPEN (цепь разомкнута)');
+
+  // Планировщик проверяет cooldown через 35 секунд
+  const cooldownPassTime = new Date(Date.now() + 35000);
+  const cbRecoverResult = await scheduler.tick(cooldownPassTime);
+  if (cbRecoverResult.circuitBreakersRecovered < 1) {
+    throw new Error('Expected scheduler to transition Circuit Breaker to HALF_OPEN after cooldown');
+  }
+  const halfOpenBreaker = await flowsService.findOne(breakerFlow.id);
+  if ((halfOpenBreaker.config as any)?.state !== 'HALF_OPEN') {
+    throw new Error('Expected Circuit Breaker state to be HALF_OPEN after cooldown');
+  }
+  console.log('  ✓ По истечении cooldown Circuit Breaker перешел в HALF_OPEN для пробного импульса!');
+
+  // 10. Проверка BATCH: буферизация, дедупликация и сброс по квоте (SIZE_THRESHOLD)
+  console.log('\nTest 10: BATCH Ingestion, Dedup Key & Automatic Flush');
+  const batchFlow = await flowsService.create({
+    name: 'Raw News Influx Buffer',
+    type: FlowType.BATCH,
+    folderId,
+    config: { maxBatchSize: 3, maxWaitSeconds: 60, idleTimeoutSeconds: 10, deduplicationKey: 'url' },
+  });
+  await flowsService.updateStatus(batchFlow.id, FlowStatus.ACTIVE);
+
+  await flowsService.pushBatch(batchFlow.id, {
+    items: [
+      { dedupKey: 'https://example.com/1', payload: { title: 'News 1' } },
+      { dedupKey: 'https://example.com/2', payload: { title: 'News 2' } },
+      { dedupKey: 'https://example.com/3', payload: { title: 'News 3' } },
+    ],
+  });
+
+  const batchEvents = await flowsService.listEvents(batchFlow.id);
+  const flushEvent = batchEvents.find((e) => e.eventType === 'BATCH_FLUSH');
+  if (!flushEvent || (flushEvent.payload as any)?.itemsCount !== 3) {
+    throw new Error('Expected BATCH_FLUSH event with 3 items when maxBatchSize is reached');
+  }
+  console.log('  ✓ BATCH буфер накопил 3 элемента и автоматически сбросил пачку по квоте размера!');
+
+  // 11. Проверка Activation Gate (BARRIER): защита запуска MUTEX условиями
+  console.log('\nTest 11: Activation Gate (BARRIER) on MUTEX');
+  // Вновь размыкаем breaker в OPEN
+  await flowsService.updateCircuitBreaker(breakerFlow.id, 'OPEN', 'Manual trip for testing gate');
+
+  const guardedMutex = await flowsService.create({
+    name: 'Guarded News Worker',
+    type: FlowType.MUTEX,
+    folderId,
+    isExclusive: false,
+    orchestratorRules: {
+      gate: {
+        enabled: true,
+        strategy: 'ALL',
+        conditions: [
+          {
+            type: FlowType.CIRCUIT_BREAKER,
+            flowId: breakerFlow.id,
+            expectedState: 'CLOSED',
+          },
+        ],
+      },
+    },
+  });
+
+  // Попытка запуска должна быть отклонена барьером (409 Conflict)
+  let gateBlocked = false;
+  try {
+    await flowsService.updateStatus(guardedMutex.id, FlowStatus.ACTIVE);
+  } catch (err: any) {
+    if (err.message.includes('Activation Gate blocked')) {
+      gateBlocked = true;
+    }
+  }
+  if (!gateBlocked) {
+    throw new Error('Expected Activation Gate to block MUTEX while Circuit Breaker is OPEN');
+  }
+  console.log('  ✓ Activation Gate заблокировал запуск MUTEX (Circuit Breaker в состоянии OPEN)');
+
+  // Восстанавливаем Circuit Breaker в CLOSED
+  await flowsService.updateCircuitBreaker(breakerFlow.id, 'CLOSED', 'All systems operational');
+  await flowsService.updateStatus(guardedMutex.id, FlowStatus.ACTIVE);
+  const activeGuarded = await flowsService.findOne(guardedMutex.id);
+  if (activeGuarded.status !== FlowStatus.ACTIVE) {
+    throw new Error('Expected MUTEX to successfully activate once Circuit Breaker became CLOSED');
+  }
+  console.log('  ✓ После восстановления Circuit Breaker барьер открылся, MUTEX перешел в ACTIVE!');
+
+  // 12. Проверка агрегатора MetricsNeuron
+  console.log('\nTest 12: MetricsNeuron Aggregator (Telemetry & Gates Summary)');
+  const neuronMetricsService = new NeuronMetricsService(mockFoldersRepo);
+  const metrics = await neuronMetricsService.calculateMetrics(folderId);
+
+  if (metrics.telemetry.totalPulses < 1) {
+    throw new Error('Expected MetricsNeuron to count recorded chronicle events');
+  }
+  if (!metrics.activeState.activeFlows.includes('Guarded News Worker')) {
+    throw new Error('Expected MetricsNeuron to include Guarded News Worker in activeFlows');
+  }
+  console.log(
+    `  ✓ MetricsNeuron рассчитал сводку: ${metrics.telemetry.totalPulses} событий, successRate: ${metrics.telemetry.successRate}%, активных потоков: ${metrics.activeState.activeFlows.length}!`,
+  );
+
+  // Проверяем захваченные импульсы
+  if (!capturedImpulses.some((p) => p.type === 'BATCH_FLUSH')) {
+    throw new Error('Expected BATCH_FLUSH impulse in event bus stream');
+  }
+  impulseSub.unsubscribe();
+  console.log(`  ✓ FlowsEventBus зафиксировал ${capturedImpulses.length} реактивных импульсов (SSE Stream готов)!`);
 
   console.log('\n=== All Clean Core Combinator Tests Passed! ===');
   process.exit(0);

@@ -55,3 +55,64 @@ export function formatDuration(totalSeconds: number): string {
   const pad = (n: number) => n.toString().padStart(2, '0');
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
+
+export interface ProjectTheme {
+  name: string;
+  icon: string;
+  badgeClass: string;
+}
+
+export const PROJECT_THEMES: Record<string, ProjectTheme> = {
+  workspace: {
+    name: 'Workspace',
+    icon: 'domain',
+    badgeClass: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/25 hover:bg-blue-500/20',
+  },
+  home: {
+    name: 'Lemon Home',
+    icon: 'cottage',
+    badgeClass: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25 hover:bg-amber-500/20',
+  },
+  arena: {
+    name: 'Neuron Arena',
+    icon: 'psychology',
+    badgeClass: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/25 hover:bg-purple-500/20',
+  },
+  infrastructure: {
+    name: 'Infrastructure',
+    icon: 'dns',
+    badgeClass: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/25 hover:bg-cyan-500/20',
+  },
+  focus_modes: {
+    name: 'Focus Modes',
+    icon: 'self_improvement',
+    badgeClass: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/20',
+  },
+  event_hooks: {
+    name: 'Event Hooks',
+    icon: 'bolt',
+    badgeClass: 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25 hover:bg-rose-500/20',
+  },
+  archival: {
+    name: 'Archival',
+    icon: 'archive',
+    badgeClass: 'bg-stone-500/10 text-stone-700 dark:text-stone-300 border-stone-500/25 hover:bg-stone-500/20',
+  },
+  code: {
+    name: 'Code Lab',
+    icon: 'terminal',
+    badgeClass: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/25 hover:bg-indigo-500/20',
+  },
+};
+
+export function getProjectTheme(path: string): ProjectTheme {
+  const root = (path.split('.')[0] || '').toLowerCase();
+  return (
+    PROJECT_THEMES[root] ?? {
+      name: root ? root.charAt(0).toUpperCase() + root.slice(1) : 'General',
+      icon: 'category',
+      badgeClass:
+        'bg-surface-container-high text-on-surface-variant border-outline-variant/30 hover:bg-surface-container-highest',
+    }
+  );
+}

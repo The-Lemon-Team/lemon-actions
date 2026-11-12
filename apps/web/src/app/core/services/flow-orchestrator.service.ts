@@ -22,13 +22,16 @@ import {
   CreateFlowPayload,
   Flow,
   FlowMetrics,
+  FlowRowProject,
   FlowRowState,
   FlowStatus,
   Folder,
   FolderNode,
+  ProjectInfo,
   TagWithCount,
 } from '../models/flow.models';
 import { buildFolderTree, isInSubtree } from '../utils/folder-tree';
+import { getProjectTheme } from '../utils/flow-ui';
 
 const isExecuting = (s: FlowStatus) => s === FlowStatus.ACTIVE || s === FlowStatus.PROCESSING;
 
@@ -41,6 +44,7 @@ export class FlowOrchestratorService {
   private readonly flowsSubject = new BehaviorSubject<Flow[]>([]);
   private readonly foldersSubject = new BehaviorSubject<Folder[]>([]);
   private readonly expandedIds = new BehaviorSubject<ReadonlySet<string>>(new Set<string>());
+  private readonly selectedProjectId = new BehaviorSubject<string | null>(null);
   private readonly selectedFolderId = new BehaviorSubject<string | null>(null);
   private readonly selectedTagName = new BehaviorSubject<string | null>(null);
   private readonly searchTerm = new BehaviorSubject<string>('');
@@ -62,7 +66,36 @@ export class FlowOrchestratorService {
   readonly flows$: Observable<Flow[]> = this.flowsSubject.asObservable();
   readonly folders$: Observable<Folder[]> = this.foldersSubject.asObservable();
   readonly search$ = this.searchTerm.asObservable();
+  readonly selectedProjectId$ = this.selectedProjectId.asObservable();
   readonly selectedFolderId$ = this.selectedFolderId.asObservable();
+
+  /** Projects list derived from root folders and flows. */
+  readonly projects$: Observable<ProjectInfo[]> = combineLatest([
+    this.folders$,
+    this.flows$,
+    this.selectedProjectId,
+  ]).pipe(
+    map(([folders, flows, selectedId]) => {
+      const roots = folders.filter((f) => !f.parentId || !f.path.includes('.'));
+      return roots.map((root) => {
+        const theme = getProjectTheme(root.path);
+        const matching = flows.filter((fl) => {
+          const fp = folders.find((x) => x.id === fl.folderId)?.path;
+          return !!fp && (fp === root.path || fp.startsWith(root.path + '.'));
+        });
+        return {
+          id: root.id,
+          name: this.i18n.translateFolder(root.name),
+          path: root.path,
+          icon: theme.icon,
+          badgeClass: theme.badgeClass,
+          flowCount: matching.length,
+          hasActiveFlow: matching.some((fl) => isExecuting(fl.status)),
+          isSelected: selectedId === root.id,
+        };
+      });
+    }),
+  );
 
   /** Flows currently holding an exclusive mutex lock. */
   readonly activeLocks$: Observable<Flow[]> = this.flows$.pipe(
@@ -73,10 +106,18 @@ export class FlowOrchestratorService {
     this.folders$,
     this.flows$,
     this.expandedIds,
+    this.selectedProjectId,
     this.selectedFolderId,
   ]).pipe(
-    map(([folders, flows, expandedIds, selectedId]) =>
-      buildFolderTree(folders, {
+    map(([folders, flows, expandedIds, selectedProjectId, selectedId]) => {
+      let filteredFolders = folders;
+      if (selectedProjectId) {
+        const root = folders.find((f) => f.id === selectedProjectId);
+        if (root) {
+          filteredFolders = folders.filter((f) => isInSubtree(f.path, root.path));
+        }
+      }
+      return buildFolderTree(filteredFolders, {
         expandedIds,
         selectedId,
         flowCountForPath: (path) =>
@@ -89,8 +130,8 @@ export class FlowOrchestratorService {
             const fp = folders.find((x) => x.id === f.folderId)?.path;
             return !!fp && isInSubtree(fp, path) && isExecuting(f.status);
           }),
-      }),
-    ),
+      });
+    }),
   );
 
   readonly tags$: Observable<TagWithCount[]> = combineLatest([this.flows$, this.selectedTagName]).pipe(
@@ -135,17 +176,24 @@ export class FlowOrchestratorService {
   readonly rows$: Observable<FlowRowState[]> = combineLatest([
     this.flows$,
     this.folders$,
+    this.selectedProjectId,
     this.selectedFolderId,
     this.selectedTagName,
     this.searchTerm,
   ]).pipe(
-    map(([flows, folders, folderId, tagName, term]) => {
+    map(([flows, folders, projectId, folderId, tagName, term]) => {
+      const selectedProjectFolder = folders.find((f) => f.id === projectId);
+      const projectPath = selectedProjectFolder?.path ?? null;
       const folderPath = folders.find((f) => f.id === folderId)?.path ?? null;
       const q = term.trim().toLowerCase();
+
       return flows
         .filter((f) => {
+          const fp = folders.find((x) => x.id === f.folderId)?.path;
+          if (projectPath) {
+            if (!fp || !isInSubtree(fp, projectPath)) return false;
+          }
           if (folderPath) {
-            const fp = folders.find((x) => x.id === f.folderId)?.path;
             if (!fp || !isInSubtree(fp, folderPath)) return false;
           }
           if (tagName && !f.tags.some((t) => t.name === tagName)) return false;
@@ -156,7 +204,7 @@ export class FlowOrchestratorService {
             f.tags.some((t) => t.name.toLowerCase().includes(q))
           );
         })
-        .map((f) => this.rowFor(f));
+        .map((f) => this.rowFor(f, folders));
     }),
     shareReplay({ bufferSize: 1, refCount: true }),
   );
@@ -164,6 +212,19 @@ export class FlowOrchestratorService {
   readonly totalFlowsCount$: Observable<number> = this.flows$.pipe(map((f) => f.length));
 
   /* ------------------------------ commands ------------------------------ */
+
+  selectProject(id: string | null): void {
+    const next = this.selectedProjectId.value === id ? null : id;
+    this.selectedProjectId.next(next);
+    // Reset folder if switching projects
+    if (this.selectedFolderId.value) {
+      const currentFolder = this.foldersSubject.value.find((f) => f.id === this.selectedFolderId.value);
+      const targetProject = next ? this.foldersSubject.value.find((f) => f.id === next) : null;
+      if (currentFolder && targetProject && !isInSubtree(currentFolder.path, targetProject.path)) {
+        this.selectedFolderId.next(null);
+      }
+    }
+  }
 
   /** (Re)loads flows and folders from the API for the active profile. */
   refresh(): void {
@@ -328,9 +389,31 @@ export class FlowOrchestratorService {
     });
   }
 
-  private rowFor(flow: Flow): FlowRowState {
+  private rowFor(flow: Flow, folders: Folder[] = this.foldersSubject.value): FlowRowState {
     const cached = this.rowCache.get(flow.id);
-    if (cached) return cached;
+    const folder = folders.find((x) => x.id === flow.folderId) ?? null;
+    const rootPath = folder ? folder.path.split('.')[0] : '';
+    const rootFolder = rootPath ? folders.find((x) => x.path === rootPath) : null;
+    const theme = getProjectTheme(rootPath);
+    const project: FlowRowProject | null = rootFolder
+      ? {
+          id: rootFolder.id,
+          name: this.i18n.translateFolder(rootFolder.name),
+          path: rootFolder.path,
+          icon: theme.icon,
+          badgeClass: theme.badgeClass,
+        }
+      : null;
+    const neuronName = folder ? this.i18n.translateFolder(folder.name) : undefined;
+    const neuronId = folder?.id ?? null;
+
+    if (cached) {
+      cached.flow = flow;
+      cached.project = project;
+      cached.neuronName = neuronName;
+      cached.neuronId = neuronId;
+      return cached;
+    }
 
     const flow$ = this.flows$.pipe(
       map((flows) => flows.find((f) => f.id === flow.id) ?? flow),
@@ -348,7 +431,16 @@ export class FlowOrchestratorService {
       switchMap((active) => (active ? timer(0, 1000) : of(0))),
     );
 
-    const row: FlowRowState = { flow, flow$, status$, isActive$, currentDuration$ };
+    const row: FlowRowState = {
+      flow,
+      flow$,
+      status$,
+      isActive$,
+      currentDuration$,
+      project,
+      neuronName,
+      neuronId,
+    };
     this.rowCache.set(flow.id, row);
     return row;
   }

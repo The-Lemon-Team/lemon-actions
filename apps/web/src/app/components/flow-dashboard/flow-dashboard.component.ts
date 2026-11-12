@@ -67,7 +67,83 @@ import { FlowTableComponent } from '../flow-table/flow-table.component';
         <app-flow-metrics [metrics]="metrics" />
       }
 
-      <!-- Command Ribbon: Domains & Folders directly above table -->
+      <!-- Project Filter Ribbon -->
+      @if (projects$ | async; as projects) {
+        @if (projects.length > 0) {
+          <div class="bg-surface-container-lowest rounded-xl p-2.5 shadow-sm border border-outline-variant/30 flex flex-col gap-2">
+            <div class="flex items-center justify-between px-1">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-rounded text-base text-secondary">source_environment</span>
+                <span class="font-label-ui text-xs uppercase tracking-wider text-on-surface-variant font-bold">
+                  {{ 'projects.title' | trans }}
+                </span>
+              </div>
+              @if (selectedProjectId$ | async; as selectedPrj) {
+                <button
+                  type="button"
+                  (click)="onSelectProject(null)"
+                  class="text-[11px] font-label-ui text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span class="material-symbols-rounded text-xs">close</span>
+                  <span>{{ 'projects.allProjects' | trans }}</span>
+                </button>
+              }
+            </div>
+
+            <div class="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 select-none">
+              <!-- ALL PROJECTS CHIP -->
+              <button
+                type="button"
+                (click)="onSelectProject(null)"
+                class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full font-label-ui text-xs transition-all active:scale-95 border cursor-pointer"
+                [class]="
+                  (selectedProjectId$ | async) === null
+                    ? 'bg-secondary-container text-on-secondary-container font-bold border-secondary/30 shadow-xs'
+                    : 'bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface border-transparent'
+                "
+              >
+                <span class="material-symbols-rounded text-sm">view_compact</span>
+                <span>{{ 'projects.allProjects' | trans }}</span>
+                <span
+                  class="font-label-code-sm text-[10px] px-1.5 py-0.2 rounded-full"
+                  [class]="(selectedProjectId$ | async) === null ? 'bg-on-secondary-container/20 text-on-secondary-container' : 'bg-surface-container text-on-surface-variant'"
+                  >{{ total$ | async }}</span
+                >
+              </button>
+
+              <!-- EACH PROJECT CHIP -->
+              @for (prj of projects; track prj.id) {
+                <button
+                  type="button"
+                  (click)="onSelectProject(prj.id)"
+                  class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full font-label-ui text-xs transition-all active:scale-95 border cursor-pointer"
+                  [class]="
+                    (selectedProjectId$ | async) === prj.id
+                      ? 'bg-primary-container text-on-primary-container font-bold border-primary/30 shadow-xs ring-1 ring-primary/40'
+                      : 'bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface border-transparent'
+                  "
+                >
+                  @if (prj.hasActiveFlow) {
+                    <span class="relative flex h-2 w-2">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+                    </span>
+                  }
+                  <span class="material-symbols-rounded text-sm">{{ prj.icon }}</span>
+                  <span class="whitespace-nowrap">{{ prj.name }}</span>
+                  <span
+                    class="font-label-code-sm text-[10px] px-1.5 py-0.2 rounded-full"
+                    [class]="(selectedProjectId$ | async) === prj.id ? 'bg-on-primary-container/20 text-on-primary-container' : 'bg-surface-container text-on-surface-variant'"
+                    >{{ prj.flowCount }}</span
+                  >
+                </button>
+              }
+            </div>
+          </div>
+        }
+      }
+
+      <!-- Command Ribbon: Neurons & Folders directly above table -->
       <app-command-ribbon
         [folderNodes]="(folderTree$ | async) ?? []"
         [selectedFolderId]="selectedFolderId$ | async"
@@ -111,6 +187,8 @@ import { FlowTableComponent } from '../flow-table/flow-table.component';
         (manage)="onManage($event)"
         (fsmTransition)="onFsmTransition($event)"
         (createChannel)="showCreateModal = true"
+        (selectProject)="onSelectProject($event)"
+        (selectNeuron)="onSelectFolder($event)"
       />
 
       <!-- Flow Rules & Chronicle Modal -->
@@ -148,10 +226,16 @@ export class FlowDashboardComponent {
   readonly folderTree$ = this.orchestrator.folderTree$;
   readonly folders$ = this.orchestrator.folders$;
   readonly selectedFolderId$ = this.orchestrator.selectedFolderId$;
+  readonly projects$ = this.orchestrator.projects$;
+  readonly selectedProjectId$ = this.orchestrator.selectedProjectId$;
 
   showCreateModal = false;
   isCreatingFlow = false;
   managedFlow: Flow | null = null;
+
+  onSelectProject(id: string | null): void {
+    this.orchestrator.selectProject(id);
+  }
 
   onSearch(term: string): void {
     this.orchestrator.setSearch(term);

@@ -5,25 +5,53 @@ import {
   Get,
   Headers,
   HttpCode,
+  MessageEvent,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Sse,
 } from '@nestjs/common';
+import { FlowType } from '@prisma/client';
+import { Observable, of } from 'rxjs';
+import { map } from 'rxjs/operators';
 import {
   CreateFlowDto,
   CreateFlowEventDto,
   ListFlowEventsQueryDto,
   ListFlowsQueryDto,
+  PushBatchItemsDto,
+  TriggerFlowDto,
+  TripCircuitBreakerDto,
   UpdateFlowDto,
   UpdateFlowStatusDto,
 } from './flow.dto';
+import { FlowsEventBusService } from './flows-event-bus.service';
 import { FlowsService } from './flows.service';
 
 @Controller('flows')
 export class FlowsController {
-  constructor(private readonly service: FlowsService) {}
+  constructor(
+    private readonly service: FlowsService,
+    @Optional() private readonly eventBus?: FlowsEventBusService,
+  ) {}
+
+  @Sse('stream')
+  stream(
+    @Query('folderId') folderId?: string,
+    @Query('flowId') flowId?: string,
+    @Query('flowType') flowType?: FlowType,
+    @Query('impulseType') impulseType?: any,
+  ): Observable<MessageEvent> {
+    if (!this.eventBus) {
+      return of({ data: { message: 'Event bus is not active' } } as MessageEvent);
+    }
+    return this.eventBus.stream$({ folderId, flowId, flowType, impulseType }).pipe(
+      map((packet) => ({ data: packet } as MessageEvent)),
+    );
+  }
 
   @Get()
   list(
@@ -65,6 +93,34 @@ export class FlowsController {
   @Post(':id/events')
   appendEvent(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateFlowEventDto) {
     return this.service.appendEvent(id, dto);
+  }
+
+  @Post(':id/trigger')
+  trigger(@Param('id', ParseUUIDPipe) id: string, @Body() dto?: TriggerFlowDto) {
+    return this.service.trigger(id, dto);
+  }
+
+  @Post(':id/batch/push')
+  pushBatch(@Param('id', ParseUUIDPipe) id: string, @Body() dto: PushBatchItemsDto) {
+    return this.service.pushBatch(id, dto);
+  }
+
+  @Post(':id/batch/flush')
+  flushBatch(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.flushBatch(id, 'MANUAL_TRIGGER');
+  }
+
+  @Get(':id/batch/items')
+  listBatchItems(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.listBatchItems(id);
+  }
+
+  @Post(':id/circuit-breaker')
+  updateCircuitBreaker(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: TripCircuitBreakerDto,
+  ) {
+    return this.service.updateCircuitBreaker(id, dto.state || 'OPEN', dto.reason);
   }
 
   @Post()

@@ -67,10 +67,60 @@ export class FsmFlowHandler extends BaseFlowTypeHandler {
   }
 }
 
+export class CircuitBreakerFlowHandler extends BaseFlowTypeHandler {
+  readonly type = FlowType.CIRCUIT_BREAKER;
+  validateConfig(config: unknown): void {
+    if (config == null) return;
+    if (typeof config !== 'object' || Array.isArray(config)) {
+      throw new BadRequestException('CIRCUIT_BREAKER config must be an object');
+    }
+    const c = config as any;
+    if (c.failureThreshold !== undefined && (typeof c.failureThreshold !== 'number' || c.failureThreshold <= 0)) {
+      throw new BadRequestException('failureThreshold must be a positive number');
+    }
+    if (c.cooldownSeconds !== undefined && (typeof c.cooldownSeconds !== 'number' || c.cooldownSeconds <= 0)) {
+      throw new BadRequestException('cooldownSeconds must be a positive number');
+    }
+  }
+}
+
+export class BatchFlowHandler extends BaseFlowTypeHandler {
+  readonly type = FlowType.BATCH;
+  validateConfig(config: unknown): void {
+    if (config == null) return;
+    if (typeof config !== 'object' || Array.isArray(config)) {
+      throw new BadRequestException('BATCH config must be an object');
+    }
+    const c = config as any;
+    if (c.maxBatchSize !== undefined && (typeof c.maxBatchSize !== 'number' || c.maxBatchSize <= 0)) {
+      throw new BadRequestException('maxBatchSize must be a positive number');
+    }
+    if (c.maxWaitSeconds !== undefined && (typeof c.maxWaitSeconds !== 'number' || c.maxWaitSeconds <= 0)) {
+      throw new BadRequestException('maxWaitSeconds must be a positive number');
+    }
+    if (c.idleTimeoutSeconds !== undefined && (typeof c.idleTimeoutSeconds !== 'number' || c.idleTimeoutSeconds <= 0)) {
+      throw new BadRequestException('idleTimeoutSeconds must be a positive number');
+    }
+  }
+}
+
+export class ProjectionFlowHandler extends BaseFlowTypeHandler {
+  readonly type = FlowType.PROJECTION;
+  validateConfig(config: unknown): void {
+    if (config == null) return;
+    if (typeof config !== 'object' || Array.isArray(config)) {
+      throw new BadRequestException('PROJECTION config must be an object');
+    }
+  }
+}
+
 export const DEFAULT_FLOW_TYPE_HANDLERS: FlowTypeHandler[] = [
   new ContextFlowHandler(),
   new MutexFlowHandler(),
   new ObserverFlowHandler(),
   new FsmFlowHandler(),
   new TimerFlowHandler(),
+  new CircuitBreakerFlowHandler(),
+  new BatchFlowHandler(),
+  new ProjectionFlowHandler(),
 ];

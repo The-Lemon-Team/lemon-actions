@@ -228,4 +228,56 @@ export class FlowsRepository {
       data: { updatedAt: new Date() },
     });
   }
+
+  findFlowsByFolder(folderId: string, db: Db = this.prisma): Promise<FlowWithTags[]> {
+    return db.flow.findMany({
+      where: { folderId },
+      include,
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async pushBufferItem(
+    flowId: string,
+    payload: Prisma.InputJsonObject,
+    dedupKey?: string,
+    db: Db = this.prisma,
+  ) {
+    if (dedupKey) {
+      const existing = await (db as any).flowBufferItem?.findFirst({
+        where: { flowId, dedupKey, flushedAt: null },
+      });
+      if (existing) {
+        return (db as any).flowBufferItem?.update({
+          where: { id: existing.id },
+          data: { payload, enqueuedAt: new Date() },
+        });
+      }
+    }
+    return (db as any).flowBufferItem?.create({
+      data: {
+        flowId,
+        dedupKey,
+        payload,
+      },
+    });
+  }
+
+  findPendingBufferItems(flowId: string, db: Db = this.prisma) {
+    return (db as any).flowBufferItem?.findMany({
+      where: { flowId, flushedAt: null },
+      orderBy: { enqueuedAt: 'asc' },
+    }) ?? Promise.resolve([]);
+  }
+
+  async flushBufferItems(flowId: string, db: Db = this.prisma) {
+    const items = await this.findPendingBufferItems(flowId, db);
+    if (items.length > 0) {
+      await (db as any).flowBufferItem?.updateMany({
+        where: { flowId, flushedAt: null },
+        data: { flushedAt: new Date() },
+      });
+    }
+    return items;
+  }
 }

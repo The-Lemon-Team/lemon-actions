@@ -116,6 +116,38 @@ export class CreateFlowEventDto {
   payload?: Record<string, unknown>;
 }
 
+export class BatchItemDto {
+  @IsOptional() @IsString()
+  id?: string;
+
+  @IsOptional() @IsString()
+  dedupKey?: string;
+
+  @IsObject()
+  payload: Record<string, unknown>;
+}
+
+export class PushBatchItemsDto {
+  @IsArray()
+  items: BatchItemDto[];
+}
+
+export class TriggerFlowDto {
+  @IsOptional() @IsObject()
+  payload?: Record<string, unknown>;
+
+  @IsOptional() @IsString()
+  action?: string;
+}
+
+export class TripCircuitBreakerDto {
+  @IsOptional() @IsString()
+  reason?: string;
+
+  @IsOptional() @IsString()
+  state?: 'OPEN' | 'CLOSED' | 'HALF_OPEN';
+}
+
 export class ListFlowEventsQueryDto {
   @IsOptional() @IsUUID()
   sessionId?: string;

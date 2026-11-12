@@ -42,7 +42,15 @@ export class FoldersService {
 
     const gates: Record<
       string,
-      { id: string; type: string; status: string; isExclusive: boolean; config: unknown }
+      {
+        id: string;
+        type: string;
+        status: string;
+        isExclusive: boolean;
+        config: unknown;
+        canActivate: boolean;
+        gateBlockReasons: string[];
+      }
     > = {};
     const activeFlows: string[] = [];
     let isExclusiveLocked = false;
@@ -53,12 +61,48 @@ export class FoldersService {
         activeFlows.push(f.name);
         if (f.isExclusive) isExclusiveLocked = true;
       }
+
+      const gateBlockReasons: string[] = [];
+      const rules = (f.orchestratorRules ?? {}) as any;
+      if (rules.gate && rules.gate.enabled !== false && Array.isArray(rules.gate.conditions)) {
+        for (const cond of rules.gate.conditions) {
+          const target = flows.find(
+            (other) =>
+              (cond.flowId && other.id === cond.flowId) ||
+              (cond.flowName && other.name.toLowerCase() === cond.flowName.toLowerCase()) ||
+              (cond.type && other.type === cond.type),
+          );
+          if (!target) {
+            gateBlockReasons.push('Target flow not found in container');
+            continue;
+          }
+          if (cond.expectedStatus && target.status !== cond.expectedStatus) {
+            gateBlockReasons.push(`Flow "${target.name}" is ${target.status}, expected ${cond.expectedStatus}`);
+          }
+          if (target.type === 'CIRCUIT_BREAKER') {
+            const cbState = (target.config as any)?.state || 'CLOSED';
+            const expected = cond.expectedState || 'CLOSED';
+            if (cbState !== expected) {
+              gateBlockReasons.push(`Circuit Breaker "${target.name}" is ${cbState}, expected ${expected}`);
+            }
+          }
+          if (cond.requirePendingItems && target.type === 'BATCH') {
+            const pendingCount = (target.config as any)?.pendingCount ?? 0;
+            if (pendingCount <= 0) {
+              gateBlockReasons.push(`Batch "${target.name}" has 0 pending items`);
+            }
+          }
+        }
+      }
+
       gates[f.name] = {
         id: f.id,
         type: f.type,
         status: f.status,
         isExclusive: f.isExclusive,
         config: f.config,
+        canActivate: gateBlockReasons.length === 0,
+        gateBlockReasons,
       };
     }
 

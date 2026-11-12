@@ -13,10 +13,14 @@ import {
 } from '@nestjs/common';
 import { CreateFolderDto, ListFoldersQueryDto, UpdateFolderDto } from './folder.dto';
 import { FoldersService } from './folders.service';
+import { NeuronMetricsService } from './neuron-metrics.service';
 
 @Controller('folders')
 export class FoldersController {
-  constructor(private readonly service: FoldersService) {}
+  constructor(
+    private readonly service: FoldersService,
+    private readonly metricsService: NeuronMetricsService,
+  ) {}
 
   @Get()
   findAll(
@@ -43,6 +47,11 @@ export class FoldersController {
   @Get(':id/context')
   context(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.context(id);
+  }
+
+  @Get(':id/metrics')
+  metrics(@Param('id', ParseUUIDPipe) id: string) {
+    return this.metricsService.calculateMetrics(id);
   }
 
   @Post()

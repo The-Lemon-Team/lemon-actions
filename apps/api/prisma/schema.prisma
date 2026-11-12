@@ -15,6 +15,9 @@ enum FlowType {
   OBSERVER
   FSM
   TIMER
+  CIRCUIT_BREAKER
+  BATCH
+  PROJECTION
 }
 
 enum FlowStatus {
@@ -89,9 +92,10 @@ model Flow {
 
   folder   Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
   profile  Profile?      @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  tags     FlowTag[]
-  sessions FlowSession[]
-  events   FlowEvent[]
+  tags          FlowTag[]
+  sessions      FlowSession[]
+  events        FlowEvent[]
+  bufferItems   FlowBufferItem[]
   subscriptions CardFlowSubscription[]
 
   @@index([folderId])
@@ -136,6 +140,21 @@ model FlowSession {
 
   @@index([flowId, endedAt])
   @@map("flow_sessions")
+}
+
+model FlowBufferItem {
+  id         String    @id @default(uuid()) @db.Uuid
+  flowId     String    @map("flow_id") @db.Uuid
+  dedupKey   String?   @map("dedup_key")
+  payload    Json      @default("{}")
+  enqueuedAt DateTime  @default(now()) @map("enqueued_at")
+  flushedAt  DateTime? @map("flushed_at")
+
+  flow Flow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@index([flowId, flushedAt])
+  @@index([flowId, dedupKey])
+  @@map("flow_buffer_items")
 }
 
 model Card {
