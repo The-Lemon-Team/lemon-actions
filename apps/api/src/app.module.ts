@@ -6,6 +6,8 @@ import { FoldersModule } from './folders/folders.module';
 import { HealthController } from './health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfilesModule } from './profiles/profiles.module';
+import { RegistryModule } from './registry/registry.module';
+import { ProjectariumModule } from './projectarium/projectarium.module';
 import { TagsModule } from './tags/tags.module';
 
 @Module({
@@ -17,7 +19,10 @@ import { TagsModule } from './tags/tags.module';
     FlowsModule,
     EventsModule,
     CodeTasksModule,
+    RegistryModule,
+    ProjectariumModule,
   ],
   controllers: [HealthController],
 })
 export class AppModule {}
+
