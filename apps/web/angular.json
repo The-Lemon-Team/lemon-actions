@@ -1,115 +1,162 @@
 {
-    "$schema":  "./node_modules/@angular/cli/lib/config/schema.json",
-    "version":  1,
-    "cli":  {
-                "packageManager":  "npm"
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "cli": {
+    "packageManager": "npm"
+  },
+  "newProjectRoot": "projects",
+  "projects": {
+    "web": {
+      "projectType": "application",
+      "schematics": {},
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:application",
+          "options": {
+            "outputPath": "dist/web",
+            "index": "src/index.html",
+            "browser": "src/main.ts",
+            "polyfills": [
+              "zone.js"
+            ],
+            "tsConfig": "tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public"
+              }
+            ],
+            "styles": [
+              "src/styles.css"
+            ],
+            "scripts": []
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "2kB",
+                  "maximumError": "4kB"
+                }
+              ],
+              "outputHashing": "all",
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": true
+                },
+                "fonts": {
+                  "inline": false
+                }
+              }
             },
-    "newProjectRoot":  "projects",
-    "projects":  {
-                     "web":  {
-                                 "projectType":  "application",
-                                 "schematics":  {
-
-                                                },
-                                 "root":  "",
-                                 "sourceRoot":  "src",
-                                 "prefix":  "app",
-                                 "architect":  {
-                                                   "build":  {
-                                                                 "builder":  "@angular-devkit/build-angular:application",
-                                                                 "options":  {
-                                                                                 "outputPath":  "dist/web",
-                                                                                 "index":  "src/index.html",
-                                                                                 "browser":  "src/main.ts",
-                                                                                 "polyfills":  [
-                                                                                                   "zone.js"
-                                                                                               ],
-                                                                                 "tsConfig":  "tsconfig.app.json",
-                                                                                 "assets":  [
-                                                                                                {
-                                                                                                    "glob":  "**/*",
-                                                                                                    "input":  "public"
-                                                                                                }
-                                                                                            ],
-                                                                                 "styles":  [
-                                                                                                "src/styles.css"
-                                                                                            ],
-                                                                                 "scripts":  [
-
-                                                                                             ]
-                                                                             },
-                                                                 "configurations":  {
-                                                                                        "production":  {
-                                                                                                           "budgets":  [
-                                                                                                                           {
-                                                                                                                               "type":  "initial",
-                                                                                                                               "maximumWarning":  "500kB",
-                                                                                                                               "maximumError":  "1MB"
-                                                                                                                           },
-                                                                                                                           {
-                                                                                                                               "type":  "anyComponentStyle",
-                                                                                                                               "maximumWarning":  "2kB",
-                                                                                                                               "maximumError":  "4kB"
-                                                                                                                           }
-                                                                                                                       ],
-                                                                                                           "outputHashing":  "all",
-                                                                                                           "optimization":  {
-                                                                                                                                "scripts":  true,
-                                                                                                                                "styles":  {
-                                                                                                                                               "minify":  true,
-                                                                                                                                               "inlineCritical":  true
-                                                                                                                                           },
-                                                                                                                                "fonts":  {
-                                                                                                                                              "inline":  false
-                                                                                                                                          }
-                                                                                                                            }
-                                                                                                       },
-                                                                                        "development":  {
-                                                                                                            "optimization":  false,
-                                                                                                            "extractLicenses":  false,
-                                                                                                            "sourceMap":  true
-                                                                                                        }
-                                                                                    },
-                                                                 "defaultConfiguration":  "production"
-                                                             },
-                                                   "serve":  {
-                                                                 "builder":  "@angular-devkit/build-angular:dev-server",
-                                                                 "configurations":  {
-                                                                                        "production":  {
-                                                                                                           "buildTarget":  "web:build:production"
-                                                                                                       },
-                                                                                        "development":  {
-                                                                                                            "buildTarget":  "web:build:development"
-                                                                                                        }
-                                                                                    },
-                                                                 "defaultConfiguration":  "development"
-                                                             },
-                                                   "extract-i18n":  {
-                                                                        "builder":  "@angular-devkit/build-angular:extract-i18n"
-                                                                    },
-                                                   "test":  {
-                                                                "builder":  "@angular-devkit/build-angular:karma",
-                                                                "options":  {
-                                                                                "polyfills":  [
-                                                                                                  "zone.js",
-                                                                                                  "zone.js/testing"
-                                                                                              ],
-                                                                                "tsConfig":  "tsconfig.spec.json",
-                                                                                "assets":  [
-                                                                                               {
-                                                                                                   "glob":  "**/*",
-                                                                                                   "input":  "public"
-                                                                                               }
-                                                                                           ],
-                                                                                "styles":  [
-                                                                                               "src/styles.css"
-                                                                                           ],
-                                                                                "scripts":  [
-
-                                                                                            ]
-                                                                            }
-                                                            }
-                                               }
-                             }
-                 }
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular-devkit/build-angular:dev-server",
+          "configurations": {
+            "production": {
+              "buildTarget": "web:build:production"
+            },
+            "development": {
+              "buildTarget": "web:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "extract-i18n": {
+          "builder": "@angular-devkit/build-angular:extract-i18n"
+        },
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ],
+            "tsConfig": "tsconfig.spec.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public"
+              }
+            ],
+            "styles": [
+              "src/styles.css"
+            ],
+            "scripts": []
+          }
+        }
+      }
+    },
+    "coding-agent": {
+      "projectType": "application",
+      "root": "../coding-agent",
+      "sourceRoot": "../coding-agent/src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:application",
+          "options": {
+            "outputPath": "dist/coding-agent",
+            "index": "../coding-agent/src/index.html",
+            "browser": "../coding-agent/src/main.ts",
+            "polyfills": [
+              "zone.js"
+            ],
+            "tsConfig": "../coding-agent/tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "../coding-agent/public"
+              }
+            ],
+            "styles": [
+              "../coding-agent/src/styles.css"
+            ],
+            "scripts": []
+          },
+          "configurations": {
+            "production": {
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular-devkit/build-angular:dev-server",
+          "configurations": {
+            "production": {
+              "buildTarget": "coding-agent:build:production"
+            },
+            "development": {
+              "buildTarget": "coding-agent:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        }
+      }
+    }
+  }
 }

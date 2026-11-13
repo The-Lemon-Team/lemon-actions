@@ -21,8 +21,55 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
             <span class="font-label-code-sm text-label-code-sm px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">{{ 'app.version' | trans }}</span>
           </div>
 
-          <!-- Mode Navigation: /home, /code, /core, /arena -->
+          <!-- Mode Navigation: /actions, /registrar, /home, /code, /core, /arena -->
           <nav aria-label="Apps Navigation" class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-low border border-outline-variant/25">
+            <a
+              routerLink="/projectarium"
+              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
+              [routerLinkActiveOptions]="{ exact: false }"
+              (click)="modeChange.emit('projectarium')"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              [class]="
+                appMode === 'projectarium'
+                  ? 'bg-primary-container text-on-primary-container shadow-xs'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              "
+            >
+              <span class="material-symbols-rounded text-base">domain</span>
+              <span>Projectarium</span>
+              <span class="px-1.5 py-0.2 rounded-full bg-primary/20 text-primary text-[9px] font-extrabold uppercase">Cockpit</span>
+            </a>
+            <a
+              routerLink="/actions"
+              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
+              [routerLinkActiveOptions]="{ exact: false }"
+              (click)="modeChange.emit('actions')"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              [class]="
+                appMode === 'actions'
+                  ? 'bg-primary-container text-on-primary-container shadow-xs'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              "
+            >
+              <span class="material-symbols-rounded text-base">style</span>
+              <span>Lemon Actions</span>
+            </a>
+            <a
+              routerLink="/registrar"
+              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
+              [routerLinkActiveOptions]="{ exact: false }"
+              (click)="modeChange.emit('registrar')"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              [class]="
+                appMode === 'registrar'
+                  ? 'bg-primary-container text-on-primary-container shadow-xs'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              "
+            >
+              <span class="material-symbols-rounded text-base">verified_user</span>
+              <span>Port Shield</span>
+              <span class="px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[9px] font-extrabold uppercase">Live</span>
+            </a>
             <a
               routerLink="/home"
               routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"

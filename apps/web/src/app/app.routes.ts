@@ -2,6 +2,30 @@ import { Routes } from '@angular/router';
 
 export const routes: Routes = [
   {
+    path: 'projectarium',
+    loadComponent: () =>
+      import('./components/projectarium/projectarium-cockpit.component').then(
+        (m) => m.ProjectariumCockpitComponent,
+      ),
+    title: 'Lemon Projectarium | Stand Cockpit & Port Shield',
+  },
+  {
+    path: 'actions',
+    loadComponent: () =>
+      import('./components/lemon-workers/worker-board.component').then(
+        (m) => m.WorkerBoardComponent,
+      ),
+    title: 'Lemon Actions | Worker Cards & Streams',
+  },
+  {
+    path: 'registrar',
+    loadComponent: () =>
+      import('./components/app-registrar/app-registrar.component').then(
+        (m) => m.AppRegistrarComponent,
+      ),
+    title: 'Lemon Registrar | Live Service Mesh & Port Shield',
+  },
+  {
     path: 'core',
     loadComponent: () =>
       import('./components/flow-dashboard/flow-dashboard.component').then(

@@ -45,6 +45,16 @@ export interface Translations {
     noConflictsDesc: string;
     taxonomyFilters: string;
     tagsCount: string;
+    showAllTags: string;
+    showFewerTags: string;
+    searchTagsPlaceholder: string;
+    clearTagFilter: string;
+    collapseTaxonomy: string;
+    expandTaxonomy: string;
+    noTagsFound: string;
+    allTags: string;
+    viewModeStrip: string;
+    viewModeGrid: string;
   };
   folderTree: {
     collapse: string;

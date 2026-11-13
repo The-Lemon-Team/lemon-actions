@@ -329,8 +329,16 @@ export class FlowOrchestratorService {
     this.expandedIds.next(next);
   }
 
-  selectTag(name: string): void {
+  selectTag(name: string | null): void {
+    if (!name) {
+      this.selectedTagName.next(null);
+      return;
+    }
     this.selectedTagName.next(this.selectedTagName.value === name ? null : name);
+  }
+
+  clearTag(): void {
+    this.selectedTagName.next(null);
   }
 
   saveFlowRules(

@@ -31,6 +31,7 @@ import { ThemeService } from './core/services/theme.service';
         [isMutexLocked]="(isMutexLocked$ | async) ?? false"
         [activeLocks]="(activeLocks$ | async) ?? []"
         (tagSelect)="orchestrator.selectTag($event)"
+        (tagClear)="orchestrator.clearTag()"
       />
       <router-outlet />
     </app-layout>
@@ -82,7 +83,13 @@ export class AppComponent implements OnInit {
   }
 
   private syncModeFromUrl(url: string): void {
-    if (url.startsWith('/home')) {
+    if (url.startsWith('/projectarium')) {
+      this.profileService.setAppMode('projectarium');
+    } else if (url.startsWith('/actions')) {
+      this.profileService.setAppMode('actions');
+    } else if (url.startsWith('/registrar')) {
+      this.profileService.setAppMode('registrar');
+    } else if (url.startsWith('/home')) {
       this.profileService.setAppMode('home');
     } else if (url.startsWith('/code')) {
       this.profileService.setAppMode('code');
