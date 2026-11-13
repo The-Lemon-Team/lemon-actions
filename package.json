@@ -1,0 +1,31 @@
+{
+  "name": "lemon-actions-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lemon Actions - Reactive Flow Orchestration, Core Combinator & Autonomous Agent Suite",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:core": "npm run --prefix packages/core-combinator build",
+    "build:registrar": "npx --prefix packages/core-combinator tsc --project packages/lemon-app-registrar/tsconfig.json",
+    "build:projectarium": "npx --prefix packages/core-combinator tsc --project packages/lemon-projectarium/tsconfig.json",
+    "build:sdk": "npm run --prefix packages/core-combinator-sdk build",
+    "build:neurons": "npm run --prefix packages/lemon-seasons-neurons build",
+    "build:api": "npm run --prefix apps/api build",
+    "build:web": "npm run --prefix apps/web build",
+    "build:agent": "npm run --prefix apps/web build:agent",
+    "build:all": "npm run build:core && npm run build:registrar && npm run build:projectarium && npm run build:sdk && npm run build:neurons && npm run build:api && npm run build:web",
+    "dev:up": "powershell -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
+    "start:api": "npm run --prefix apps/api start:dev",
+    "start:web": "npm run --prefix apps/web start",
+    "start:projectarium": "npm run --prefix apps/web start:projectarium",
+    "start:registrar-mcp": "node packages/lemon-app-registrar/dist/mcp/registrar-mcp.server.js",
+    "start:agent": "npm run --prefix apps/web start:agent",
+    "migrate:data": "ts-node -r tsconfig-paths/register apps/api/src/migrations/agent-data-migration.ts"
+  },
+  "devDependencies": {
+    "typescript": "5.5.4"
+  }
+}
