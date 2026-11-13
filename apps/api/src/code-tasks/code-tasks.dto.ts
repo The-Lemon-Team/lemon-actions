@@ -53,6 +53,78 @@ export class PushCodeResultsDto {
   }>;
 }
 
+export class StartAgentSessionDto {
+  @IsString()
+  @IsNotEmpty()
+  clientId: string;
+
+  @IsString()
+  @IsOptional()
+  clientVersion?: string;
+
+  @IsString()
+  @IsOptional()
+  agentRole?: string;
+
+  @IsString()
+  @IsOptional()
+  workspaceRoot?: string;
+
+  @IsString()
+  @IsOptional()
+  repoName?: string;
+
+  @IsString()
+  @IsOptional()
+  environment?: string;
+}
+
+export class AgentHeartbeatDto {
+  @IsString()
+  @IsNotEmpty()
+  sessionId: string;
+}
+
+export class RecordAgentDecisionDto {
+  @IsString()
+  @IsNotEmpty()
+  sessionId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @IsString()
+  @IsNotEmpty()
+  rationaleMarkdown: string;
+
+  @IsArray()
+  @IsOptional()
+  tags?: string[];
+
+  @IsString()
+  @IsOptional()
+  repoName?: string;
+
+  @IsString()
+  @IsOptional()
+  flowId?: string;
+}
+
+export class CommitDailyDigestDto {
+  @IsString()
+  @IsOptional()
+  repoPath?: string;
+
+  @IsString()
+  @IsOptional()
+  commitMessage?: string;
+
+  @IsString()
+  @IsOptional()
+  date?: string;
+}
+
 export interface CodeRepoView {
   id: string;
   name: string;

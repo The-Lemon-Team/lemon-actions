@@ -10,17 +10,24 @@ export interface CoreCombinatorClientOptions {
   profileId?: string;
 }
 
+export interface HttpClient {
+  get: <T>(path: string, params?: Record<string, any>) => Promise<T>;
+  post: <T>(path: string, body?: any) => Promise<T>;
+  patch: <T>(path: string, body?: any) => Promise<T>;
+}
+
 export class CoreCombinatorClient {
   public readonly baseUrl: string;
   public readonly neurons: NeuronsModule;
   public readonly batch: BatchModule;
   public readonly chronicle: ChronicleModule;
   public readonly stream: StreamModule;
+  private readonly http: HttpClient;
 
   constructor(private readonly options: CoreCombinatorClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
 
-    const http = {
+    this.http = {
       get: async <T>(path: string, params?: Record<string, any>): Promise<T> => {
         const url = new URL(`${this.baseUrl}${path.startsWith('/') ? path : '/' + path}`);
         if (params) {
@@ -63,19 +70,17 @@ export class CoreCombinatorClient {
     };
 
     this.stream = new StreamModule(this.baseUrl);
-    this.neurons = new NeuronsModule(http);
-    this.batch = new BatchModule(http, this.stream);
-    this.chronicle = new ChronicleModule(http);
+    this.neurons = new NeuronsModule(this.http);
+    this.batch = new BatchModule(this.http, this.stream);
+    this.chronicle = new ChronicleModule(this.http);
   }
 
   /**
    * Захватывает эксклюзивный лиз мьютекса с автоматическим фоновым heart-beat пульсом.
    */
   async acquireLease(flowId: string, options: LeaseGuardOptions = {}): Promise<LeaseGuard> {
-    // 1. Активируем поток MUTEX в Core Combinator
     await this.updateFlowStatus(flowId, 'ACTIVE');
 
-    // 2. Возвращаем страж лиза
     return new LeaseGuard(
       flowId,
       {
@@ -106,6 +111,73 @@ export class CoreCombinatorClient {
       headers: this.buildHeaders(),
       body: JSON.stringify({ action: 'heartbeat' }),
     });
+  }
+
+  /**
+   * Получение метрик оптимизации нагрузки на потоки от Core Combinator Engine.
+   */
+  async getOptimizationMetrics(): Promise<any> {
+    return this.http.get('/flows/stream/metrics');
+  }
+
+  /**
+   * Логирование начала сессии / открытия клиента кодинг-агента.
+   */
+  async startAgentSession(input: {
+    clientId: string;
+    clientVersion?: string;
+    agentRole?: string;
+    workspaceRoot?: string;
+    repoName?: string;
+    environment?: string;
+  }): Promise<any> {
+    return this.http.post('/flows/agent/session/start', input);
+  }
+
+  /**
+   * Легковесный heart-beat агента (коалесцируется StreamOptimizer без лишней нагрузки на БД).
+   */
+  async sendAgentHeartbeat(sessionId: string): Promise<any> {
+    return this.http.post('/flows/agent/session/heartbeat', { sessionId });
+  }
+
+  /**
+   * Запись архитектурного решения / мысли агента в память.
+   */
+  async recordAgentDecision(input: {
+    sessionId: string;
+    title: string;
+    rationaleMarkdown: string;
+    tags?: string[];
+    repoName?: string;
+    flowId?: string;
+  }): Promise<any> {
+    return this.http.post('/flows/agent/decision', input);
+  }
+
+  /**
+   * Выполнение коммита в конце дня и отправка сформированной выжимки (Daily Digest Snapshot).
+   */
+  async commitDailyDigest(input: {
+    repoPath?: string;
+    commitMessage?: string;
+    date?: string;
+  }): Promise<any> {
+    return this.http.post('/flows/agent/digest/eod-commit', input);
+  }
+
+  /**
+   * Получение выжимки за день.
+   */
+  async getDailyDigest(date?: string): Promise<any> {
+    return this.http.get('/flows/agent/digest/today', { date });
+  }
+
+  /**
+   * Получение структурированной истории сессий и решений.
+   */
+  async getAgentHistory(repoName?: string): Promise<any> {
+    return this.http.get('/flows/agent/history', { repoName });
   }
 
   private buildHeaders(): Record<string, string> {

@@ -1,0 +1,19 @@
+{
+  "name": "@lemon/core-combinator",
+  "version": "0.1.0",
+  "description": "Core Combinator Engine - Stream Registry, Load Optimization & Reactive Orchestration Kernel",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "watch": "tsc --watch"
+  },
+  "dependencies": {
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.14.0"
+  }
+}

@@ -1,55 +1,53 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { FlowType } from '@prisma/client';
-import { Observable, Subject } from 'rxjs';
-import { filter } from 'rxjs/operators';
+import { Observable } from 'rxjs';
+import {
+  CoreCombinatorEngine,
+  FlowImpulsePacket as CorePacket,
+  FlowImpulseType as CoreImpulseType,
+  OptimizationMetrics,
+  StreamDescriptor,
+  StreamFilter as CoreFilter,
+  StreamLoadStats,
+} from '@lemon/core-combinator';
 
-export type FlowImpulseType =
-  | 'MUTEX_STATUS'
-  | 'CONTEXT_UPDATED'
-  | 'TIMER_TICK'
-  | 'CIRCUIT_BREAKER_STATE'
-  | 'BATCH_FLUSH'
-  | 'PROJECTION_UPDATED'
-  | 'FLOW_TRIGGER'
-  | 'CHRONICLE_EVENT';
-
-export interface FlowImpulsePacket {
-  id: string;
-  type: FlowImpulseType;
-  folderId: string | null;
-  flowId: string;
-  flowName: string;
-  flowType: FlowType;
-  timestamp: string;
-  payload: Record<string, unknown>;
-  activeSessionIds?: string[];
-}
-
-export interface StreamFilter {
-  folderId?: string;
-  flowId?: string;
-  flowType?: FlowType;
-  impulseType?: FlowImpulseType;
-}
+export type FlowImpulseType = CoreImpulseType;
+export type FlowImpulsePacket = CorePacket;
+export type StreamFilter = CoreFilter;
 
 @Injectable()
-export class FlowsEventBusService {
-  private readonly bus$ = new Subject<FlowImpulsePacket>();
+export class FlowsEventBusService implements OnModuleDestroy {
+  public readonly engine: CoreCombinatorEngine;
 
-  emit(packet: FlowImpulsePacket): void {
-    this.bus$.next(packet);
+  constructor() {
+    this.engine = new CoreCombinatorEngine();
+  }
+
+  onModuleDestroy() {
+    this.engine.flush();
+  }
+
+  registerStream(descriptor: StreamDescriptor): void {
+    this.engine.registerStream(descriptor);
+  }
+
+  emit(packet: FlowImpulsePacket, onReady?: (p: FlowImpulsePacket) => void): void {
+    this.engine.emit(packet, onReady);
   }
 
   stream$(filterOptions?: StreamFilter): Observable<FlowImpulsePacket> {
-    return this.bus$.asObservable().pipe(
-      filter((packet) => {
-        if (!filterOptions) return true;
-        if (filterOptions.folderId && packet.folderId !== filterOptions.folderId) return false;
-        if (filterOptions.flowId && packet.flowId !== filterOptions.flowId) return false;
-        if (filterOptions.flowType && packet.flowType !== filterOptions.flowType) return false;
-        if (filterOptions.impulseType && packet.type !== filterOptions.impulseType) return false;
-        return true;
-      }),
-    );
+    return this.engine.stream$(filterOptions);
+  }
+
+  getMetrics(): OptimizationMetrics {
+    return this.engine.getOptimizationMetrics();
+  }
+
+  getStreamStats(streamId: string): StreamLoadStats | null {
+    return this.engine.getStreamStats(streamId);
+  }
+
+  getAllStreamStats(): StreamLoadStats[] {
+    return this.engine.getAllStreamStats();
   }
 }

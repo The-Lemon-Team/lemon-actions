@@ -1,0 +1,10 @@
+{
+  "name": "lemon-coding-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Antigravity Coding Agent - Sessions, History, EOD Commits & Stream Monitoring",
+  "scripts": {
+    "start": "ng serve coding-agent --port 4202",
+    "build": "ng build coding-agent"
+  }
+}

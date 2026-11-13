@@ -113,4 +113,82 @@ export class CodingMemoryAxon {
 
     return { noteId: res.noteId };
   }
+
+  /**
+   * Логирует открытие клиента / запуск рабочей сессии агента.
+   */
+  async recordClientLaunch(input: {
+    sessionId: string;
+    clientId: string;
+    agentRole: string;
+    workspaceRoot: string;
+    repoName?: string;
+    environment?: string;
+    combinatorFlowId?: string;
+  }): Promise<{ noteId: string }> {
+    const res = await this.bridge.ingestNote(
+      {
+        externalId: `client-launch:${input.sessionId}`,
+        title: `🚀 Client Launched: ${input.agentRole}`,
+        content: `Agent initialized in workspace: \`${input.workspaceRoot}\`\nClient ID: \`${input.clientId}\`\nEnvironment: \`${input.environment || 'production'}\``,
+        summary: `Agent session initialized (${input.agentRole})`,
+        type: 'SINGLE',
+        privacy: this.privacy,
+        status: 'PUBLISHED',
+        feedSlug: this.thoughtsFeedSlug,
+        streamSlug: this.streamSlug,
+        tags: ['client-launch', 'agent-session', `repo:${input.repoName || 'workspace'}`],
+        origin: 'CODING_AGENT',
+        metadata: {
+          sessionId: input.sessionId,
+          clientId: input.clientId,
+          agentRole: input.agentRole,
+          workspaceRoot: input.workspaceRoot,
+        },
+      },
+      input.combinatorFlowId,
+    );
+
+    return { noteId: res.noteId };
+  }
+
+  /**
+   * Фиксирует срез за день (End-of-Day Commit & Daily Digest).
+   * Отправляет агрегированную историю за день в память агента и таймлайн Seasons.
+   */
+  async recordDailyDigestCommit(input: {
+    date: string;
+    commitHash?: string;
+    tasksCompleted: Array<{ title: string; testsPassed?: number }>;
+    decisions: string[];
+    markdownSummary: string;
+    repoName?: string;
+    combinatorFlowId?: string;
+  }): Promise<{ noteId: string }> {
+    const repo = input.repoName || 'workspace';
+    const res = await this.bridge.ingestNote(
+      {
+        externalId: `daily-digest:${input.date}:${input.commitHash || 'snapshot'}`,
+        title: `📅 End-of-Day Digest [${input.date}] · ${input.tasksCompleted.length} tasks`,
+        content: input.markdownSummary,
+        summary: `EOD Digest for ${input.date}: ${input.tasksCompleted.length} tasks completed, ${input.decisions.length} decisions logged`,
+        type: 'PERIOD',
+        privacy: this.privacy,
+        status: 'PUBLISHED',
+        feedSlug: this.changelogsFeedSlug,
+        streamSlug: this.streamSlug,
+        tags: ['daily-digest', 'eod-commit', 'summary', `repo:${repo}`],
+        origin: 'CODING_AGENT',
+        metadata: {
+          date: input.date,
+          commitHash: input.commitHash,
+          tasksCount: input.tasksCompleted.length,
+          decisionsCount: input.decisions.length,
+        },
+      },
+      input.combinatorFlowId,
+    );
+
+    return { noteId: res.noteId };
+  }
 }

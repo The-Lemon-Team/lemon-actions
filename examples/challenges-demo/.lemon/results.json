@@ -1,33 +1,74 @@
 {
-  "timestamp": "2026-11-05T06:00:00.000Z",
-  "runner": "vitest",
+  "$schema": "https://lemon.actions/schemas/test-results.v1.json",
+  "version": "1.0",
+  "timestamp": "2026-11-12T22:57:09.318Z",
+  "summary": {
+    "totalTasks": 4,
+    "passedTasks": 0,
+    "failedTasks": 0
+  },
   "results": [
     {
       "taskId": "task-debounce-01",
-      "status": "PASSED",
+      "status": "STUB",
       "tests": {
-        "total": 6,
-        "passed": 6,
+        "total": 0,
+        "passed": 0,
         "failed": 0,
         "skipped": 0
       },
-      "durationMs": 42
+      "logs": [
+        {
+          "test": "suite_discovery",
+          "error": "Файл не найден: tasks/01-debounce/solution.spec.ts"
+        }
+      ]
     },
     {
       "taskId": "task-tauri-ipc-02",
-      "status": "FAILED",
+      "status": "STUB",
       "tests": {
-        "total": 6,
-        "passed": 2,
-        "failed": 4,
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
         "skipped": 0
       },
-      "durationMs": 115,
       "logs": [
         {
-          "test": "ipc_router::test_command_authorization",
-          "error": "AccessDenied: role 'guest' cannot dispatch cmd 'sys_exec'",
-          "stack": "at tests/ipc_tests.rs:48\nat src/router.rs:112"
+          "test": "suite_discovery",
+          "error": "Файл не найден: tasks/02-tauri-ipc/tests.rs"
+        }
+      ]
+    },
+    {
+      "taskId": "task-rest-client-03",
+      "status": "STUB",
+      "tests": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0
+      },
+      "logs": [
+        {
+          "test": "suite_discovery",
+          "error": "Файл не найден: tasks/03-rest/client.spec.ts"
+        }
+      ]
+    },
+    {
+      "taskId": "task-vite-inline-04",
+      "status": "STUB",
+      "tests": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0
+      },
+      "logs": [
+        {
+          "test": "suite_discovery",
+          "error": "Файл не найден: tasks/04-vite-plugin/plugin.spec.ts"
         }
       ]
     }

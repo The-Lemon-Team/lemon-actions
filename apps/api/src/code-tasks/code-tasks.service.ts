@@ -5,15 +5,27 @@ import {
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { FlowStatus, FlowType } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { FlowsService } from '../flows/flows.service';
+import { FlowsEventBusService } from '../flows/flows-event-bus.service';
 import { toLtreeLabel } from '../folders/folders.service';
 import { FoldersRepository } from '../folders/folders.repository';
 import { PrismaService } from '../prisma/prisma.service';
-import { CodeRepoView, PushCodeResultsDto, RegisterCodeRepoDto } from './code-tasks.dto';
+import {
+  AgentHeartbeatDto,
+  CodeRepoView,
+  CommitDailyDigestDto,
+  PushCodeResultsDto,
+  RecordAgentDecisionDto,
+  RegisterCodeRepoDto,
+  StartAgentSessionDto,
+} from './code-tasks.dto';
+import { runAgentDataMigration } from '../migrations/agent-data-migration';
 
 interface RegisteredRepoRecord {
   id: string;
@@ -60,11 +72,13 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
   private readonly repos = new Map<string, RegisteredRepoRecord>();
   private readonly watchers = new Map<string, fs.FSWatcher>();
   private readonly debounceTimers = new Map<string, NodeJS.Timeout>();
+  private readonly activeSessions = new Map<string, any>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly foldersRepo: FoldersRepository,
     private readonly flowsService: FlowsService,
+    @Optional() private readonly eventBus?: FlowsEventBusService,
   ) {}
 
   async onModuleInit() {
@@ -101,6 +115,28 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`[CodeTasks] Auto-registered async challenges from: ${asyncPath}`);
       } catch (err: any) {
         this.logger.warn(`[CodeTasks] Could not auto-register async repo: ${err.message}`);
+      }
+    }
+
+    // Автоматически регистрируем автономный практикум js-practice, если он существует
+    const candidateJsPracticePaths = [
+      path.resolve(process.env.USERPROFILE || '', 'projects', 'js-practice'),
+      path.resolve(process.cwd(), '..', 'js-practice'),
+      'c:/Users/Ilege/projects/js-practice',
+    ];
+    for (const jsPracticePath of candidateJsPracticePaths) {
+      if (fs.existsSync(path.join(jsPracticePath, '.lemon', 'tasks.json'))) {
+        try {
+          await this.registerRepo({
+            localPath: jsPracticePath,
+            name: 'JavaScript Practice Lab (js-practice)',
+            defaultTags: ['#js', '#practice', '#algorithms', '#typescript'],
+          });
+          this.logger.log(`[CodeTasks] Auto-registered js-practice from: ${jsPracticePath}`);
+          break;
+        } catch (err: any) {
+          this.logger.warn(`[CodeTasks] Could not auto-register js-practice: ${err.message}`);
+        }
       }
     }
   }
@@ -412,6 +448,11 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
               });
             }
           } else if (isFailed) {
+            const sanitizedLogs = (testResult.logs || []).slice(0, 3).map((l: any) => ({
+              test: l.test,
+              error: typeof l.error === 'string' ? l.error.slice(0, 200) : undefined,
+            }));
+
             await this.flowsService.appendEvent(flow.id, {
               source: 'lemon-code-watcher',
               eventType: 'TESTS_FAILED',
@@ -419,7 +460,7 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
                 action: 'tests_failing',
                 tests: testResult.tests,
                 failedCount: testResult.tests?.failed,
-                logs: testResult.logs,
+                logs: sanitizedLogs,
               },
             });
           }
@@ -488,5 +529,378 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
     }, 300);
 
     this.debounceTimers.set(repoId, timer);
+  }
+
+  /**
+   * Гарантирует наличие корневого потока сессий агента.
+   */
+  private async ensureAgentSessionFlow(): Promise<string> {
+    const defaultProfile = await this.prisma.profile.findFirst({ orderBy: { createdAt: 'asc' } });
+    const profileId = defaultProfile?.id ?? undefined;
+
+    const existing = await this.prisma.flow.findFirst({
+      where: { name: 'Antigravity Agent Session Orchestrator' },
+    });
+    if (existing) return existing.id;
+
+    // Ищем или создаем папку code
+    const codeFolder = await this.prisma.folder.findFirst({
+      where: { name: 'Code Lab' },
+    });
+
+    const flow = await this.flowsService.create({
+      name: 'Antigravity Agent Session Orchestrator',
+      description: 'Stream orchestrator for Antigravity coding agent sessions, decisions and EOD commits',
+      type: FlowType.OBSERVER,
+      folderId: codeFolder?.id,
+      profileId,
+      tags: ['#agent', '#antigravity', '#session'],
+      config: {
+        agentConfig: {
+          runtime: 'antigravity-2.0',
+          streamCoalescing: true,
+        },
+      },
+    });
+
+    return flow.id;
+  }
+
+  /**
+   * Логирование начала сессии / открытия клиента кодинг-агента.
+   */
+  async startAgentSession(dto: StartAgentSessionDto) {
+    const flowId = await this.ensureAgentSessionFlow();
+    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const startedAt = new Date().toISOString();
+
+    const sessionRecord = {
+      sessionId,
+      clientId: dto.clientId,
+      clientVersion: dto.clientVersion || '2.0.0',
+      agentRole: dto.agentRole || 'Full-Stack Coding Agent',
+      workspaceRoot: dto.workspaceRoot || process.cwd(),
+      repoName: dto.repoName || 'lemon-actions',
+      environment: dto.environment || 'development',
+      startedAt,
+      status: 'ACTIVE',
+      lastHeartbeatAt: startedAt,
+      decisionsCount: 0,
+      tasksCompletedCount: 0,
+    };
+
+    this.activeSessions.set(sessionId, sessionRecord);
+
+    // Записываем событие старта сессии в долговечную историю
+    await this.flowsService.appendEvent(flowId, {
+      source: 'antigravity-agent',
+      eventType: 'AGENT_SESSION_INIT',
+      payload: sessionRecord,
+    });
+
+    // Излучаем оптимизированный импульс в Core Combinator
+    if (this.eventBus) {
+      this.eventBus.emit({
+        id: `pulse-${Date.now()}`,
+        type: 'AGENT_SESSION_INIT',
+        folderId: null,
+        flowId,
+        flowName: 'Antigravity Agent Session Orchestrator',
+        flowType: FlowType.OBSERVER,
+        timestamp: startedAt,
+        payload: sessionRecord,
+      });
+    }
+
+    this.logger.log(`[AgentSession] Agent session initiated: ${sessionId} (${sessionRecord.agentRole})`);
+    return sessionRecord;
+  }
+
+  /**
+   * Легковесный heart-beat (коалесцируется StreamOptimizer, не спамит базу).
+   */
+  async sendAgentHeartbeat(dto: AgentHeartbeatDto) {
+    const session = this.activeSessions.get(dto.sessionId);
+    const now = new Date().toISOString();
+    if (session) {
+      session.lastHeartbeatAt = now;
+    }
+
+    if (this.eventBus) {
+      const flowId = await this.ensureAgentSessionFlow();
+      this.eventBus.emit({
+        id: `hb-${Date.now()}`,
+        type: 'AGENT_HEARTBEAT',
+        folderId: null,
+        flowId,
+        flowName: 'Antigravity Agent Session Orchestrator',
+        flowType: FlowType.OBSERVER,
+        timestamp: now,
+        payload: { sessionId: dto.sessionId, lastSeen: now },
+      });
+    }
+
+    return { ok: true, timestamp: now };
+  }
+
+  /**
+   * Запись архитектурного решения / мысли агента в память.
+   */
+  async recordAgentDecision(dto: RecordAgentDecisionDto) {
+    const flowId = dto.flowId || (await this.ensureAgentSessionFlow());
+    const decisionId = `decision-${Date.now()}`;
+    const timestamp = new Date().toISOString();
+
+    const session = this.activeSessions.get(dto.sessionId);
+    if (session) {
+      session.decisionsCount = (session.decisionsCount || 0) + 1;
+    }
+
+    const decisionPayload = {
+      decisionId,
+      sessionId: dto.sessionId,
+      title: dto.title,
+      rationaleMarkdown: dto.rationaleMarkdown,
+      tags: dto.tags || ['architecture', 'decision'],
+      repoName: dto.repoName || 'lemon-actions',
+      timestamp,
+    };
+
+    await this.flowsService.appendEvent(flowId, {
+      source: 'antigravity-agent',
+      eventType: 'AGENT_DECISION',
+      payload: decisionPayload,
+    });
+
+    if (this.eventBus) {
+      this.eventBus.emit({
+        id: `decision-pulse-${Date.now()}`,
+        type: 'AGENT_DECISION',
+        folderId: null,
+        flowId,
+        flowName: 'Antigravity Agent Session Orchestrator',
+        flowType: FlowType.OBSERVER,
+        timestamp,
+        payload: decisionPayload,
+      });
+    }
+
+    this.logger.log(`[AgentDecision] Recorded architectural decision: "${dto.title}"`);
+    return { ok: true, decisionId, timestamp };
+  }
+
+  /**
+   * Создание среза в конце дня и коммит выжимки (End-of-Day Commit & Daily Digest).
+   */
+  async commitDailyDigest(dto: CommitDailyDigestDto) {
+    const flowId = await this.ensureAgentSessionFlow();
+    const dateKey = dto.date || new Date().toISOString().split('T')[0];
+    const digestId = `digest-${dateKey}-${Date.now()}`;
+
+    // 1. Собираем выполненные задачи за сегодня
+    const codeFolders = await this.foldersRepo.findAll({ scope: 'code' });
+    const codeFolderIds = codeFolders.map((f) => f.id);
+
+    const codeFlows = await this.prisma.flow.findMany({
+      where: {
+        folderId: { in: codeFolderIds },
+      },
+    });
+
+    const completedTasks: Array<{ id: string; title: string; testsPassed?: number; status: string }> = [];
+    for (const f of codeFlows) {
+      const taskMeta = (f.config as any)?.codeTask;
+      if (taskMeta && (taskMeta.status === 'PASSED' || taskMeta.status === 'DONE')) {
+        completedTasks.push({
+          id: f.id,
+          title: f.name,
+          testsPassed: taskMeta.testsPassed || 0,
+          status: taskMeta.status,
+        });
+      }
+    }
+
+    // 2. Собираем архитектурные решения за сегодня
+    const decisionEvents = await this.prisma.flowEvent.findMany({
+      where: {
+        eventType: 'AGENT_DECISION',
+        createdAt: {
+          gte: new Date(new Date().setHours(0, 0, 0, 0)),
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    const decisions = decisionEvents.map((e) => {
+      const p = (e.payload as any) || {};
+      return {
+        title: p.title || 'Architectural Decision',
+        summary: (p.rationaleMarkdown || '').slice(0, 200),
+      };
+    });
+
+    // 3. Получаем хэш коммита Git (если доступен)
+    let commitHash = 'snapshot-' + Math.random().toString(36).substring(2, 8);
+    try {
+      commitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
+    } catch {
+      // Игнорируем ошибку git если запускается без git cli
+    }
+
+    // 4. Формируем структурированный Markdown отчет
+    const tasksMd = completedTasks.length > 0
+      ? completedTasks.map((t) => `- ✅ **${t.title}** (${t.testsPassed} tests passed)`).join('\n')
+      : '_Нет завершенных задач за сегодня._';
+
+    const decisionsMd = decisions.length > 0
+      ? decisions.map((d) => `- 💡 **${d.title}**: ${d.summary}`).join('\n')
+      : '_Решений не зафиксировано._';
+
+    const markdownSummary = `### 📅 Daily Digest [${dateKey}]
+**Git Commit**: \`${commitHash}\` · ${dto.commitMessage || 'End-of-day checkpoint'}
+
+#### 🎯 Выполненные задачи (${completedTasks.length}):
+${tasksMd}
+
+#### 💡 Архитектурные решения (${decisions.length}):
+${decisionsMd}
+
+---
+_Срез сформирован агентом Antigravity в конце рабочего дня._`;
+
+    const snapshot = {
+      date: dateKey,
+      digestId,
+      generatedAt: new Date().toISOString(),
+      commitHash,
+      commitMessage: dto.commitMessage || `End-of-day digest snapshot for ${dateKey}`,
+      repoPath: dto.repoPath || process.cwd(),
+      tasksCompleted: completedTasks,
+      decisions,
+      metrics: {
+        totalSessions: this.activeSessions.size || 1,
+        tasksPassedCount: completedTasks.length,
+        testsPassedCount: completedTasks.reduce((sum, t) => sum + (t.testsPassed || 0), 0),
+      },
+      markdownSummary,
+    };
+
+    // Сохраняем в долговечный лог
+    await this.flowsService.appendEvent(flowId, {
+      source: 'antigravity-agent',
+      eventType: 'DAILY_DIGEST_COMMITTED',
+      payload: snapshot,
+    });
+
+    // Излучаем импульс в Core Combinator
+    if (this.eventBus) {
+      this.eventBus.emit({
+        id: `digest-pulse-${Date.now()}`,
+        type: 'DAILY_DIGEST_COMMITTED',
+        folderId: null,
+        flowId,
+        flowName: 'Antigravity Agent Session Orchestrator',
+        flowType: FlowType.OBSERVER,
+        timestamp: new Date().toISOString(),
+        payload: snapshot,
+      });
+    }
+
+    this.logger.log(`[DailyDigest] End-of-day commit & digest created for ${dateKey} (Commit: ${commitHash})`);
+    return snapshot;
+  }
+
+  /**
+   * Получение текущей выжимки за день.
+   */
+  async getTodayDigest(date?: string) {
+    const flowId = await this.ensureAgentSessionFlow();
+    const dateKey = date || new Date().toISOString().split('T')[0];
+
+    const digestEvent = await this.prisma.flowEvent.findFirst({
+      where: {
+        flowId,
+        eventType: 'DAILY_DIGEST_COMMITTED',
+        payload: {
+          path: ['date'],
+          equals: dateKey,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (digestEvent) {
+      return digestEvent.payload;
+    }
+
+    // Если коммит за день еще не сделан, генерируем драфт выжимки
+    return this.generateDraftDigest(dateKey);
+  }
+
+  private async generateDraftDigest(dateKey: string) {
+    const codeFolders = await this.foldersRepo.findAll({ scope: 'code' });
+    const codeFolderIds = codeFolders.map((f) => f.id);
+
+    const codeFlows = await this.prisma.flow.findMany({
+      where: {
+        folderId: { in: codeFolderIds },
+      },
+    });
+
+    const completed = codeFlows
+      .filter((f) => (f.config as any)?.codeTask?.status === 'PASSED')
+      .map((f) => ({
+        id: f.id,
+        title: f.name,
+        testsPassed: (f.config as any)?.codeTask?.testsPassed || 0,
+        status: 'PASSED',
+      }));
+
+    return {
+      date: dateKey,
+      status: 'DRAFT',
+      tasksCompleted: completed,
+      activeSessionsCount: this.activeSessions.size,
+      note: 'Срез за день еще не зафиксирован. Нажмите "Сделать коммит в конце дня".',
+    };
+  }
+
+  /**
+   * Получение истории сессий и решений.
+   */
+  async getAgentHistory(repoName?: string) {
+    const flowId = await this.ensureAgentSessionFlow();
+
+    const events = await this.prisma.flowEvent.findMany({
+      where: {
+        flowId,
+        eventType: {
+          in: ['AGENT_SESSION_INIT', 'DAILY_DIGEST_COMMITTED', 'AGENT_DECISION'],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return {
+      activeSessions: Array.from(this.activeSessions.values()),
+      events: events.map((e) => ({
+        id: e.id,
+        eventType: e.eventType,
+        createdAt: e.createdAt,
+        payload: e.payload,
+      })),
+    };
+  }
+
+  /**
+   * Запуск миграции старых данных.
+   */
+  async runMigration() {
+    this.logger.log('[Migration] Starting data cleanup & migration...');
+    const result = await runAgentDataMigration(this.prisma);
+    this.logger.log(`[Migration] Completed: ${JSON.stringify(result)}`);
+    return result;
   }
 }

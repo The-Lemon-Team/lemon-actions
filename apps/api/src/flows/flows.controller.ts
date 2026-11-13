@@ -53,6 +53,16 @@ export class FlowsController {
     );
   }
 
+  @Get('stream/metrics')
+  streamMetrics() {
+    return this.eventBus ? this.eventBus.getMetrics() : { totalImpulsesReceived: 0, overallReductionRate: 0 };
+  }
+
+  @Get('stream/stats')
+  streamStats() {
+    return this.eventBus ? this.eventBus.getAllStreamStats() : [];
+  }
+
   @Get()
   list(
     @Query() q: ListFlowsQueryDto,

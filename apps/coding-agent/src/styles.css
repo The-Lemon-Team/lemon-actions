@@ -1,0 +1,9 @@
+@import '../../web/src/styles.css';
+
+/* Custom styling for coding agent telemetry & terminal cards */
+.terminal-card {
+  background: #1e1e24;
+  color: #dcdfe4;
+  border-radius: 1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
