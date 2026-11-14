@@ -1,0 +1,126 @@
+{
+  "version": "0.1.0",
+  "centers": [
+    {
+      "id": "crown",
+      "order": 1,
+      "bodyLabel": "Макушка / Ясность и смысл",
+      "sanskritName": "Сахасрара",
+      "colorHex": "#8B5CF6",
+      "enabledByDefault": false,
+      "highStateHint": "Чистое сознание, ощущение цельности и покоя",
+      "lowStateHint": "Ментальный туман, потеря ориентиров, расфокус",
+      "defaultMantra": "Я возвращаюсь в тишину и ясность настоящего момента.",
+      "quickPractices": [
+        { "id": "silence_90s", "title": "90 секунд тишины с закрытыми глазами", "durationSec": 90 }
+      ]
+    },
+    {
+      "id": "third_eye",
+      "order": 2,
+      "bodyLabel": "Голова / Фокус и мысли",
+      "sanskritName": "Аджна",
+      "colorHex": "#4F46E5",
+      "enabledByDefault": true,
+      "highStateHint": "Голова свежая, мысли не теряются, лёгкая концентрация",
+      "lowStateHint": "Усталость мозга, вязкие мысли, перегрузка экрана",
+      "defaultMantra": "Мои мысли ясны, я отпускаю лишнее напряжение.",
+      "quickPractices": [
+        { "id": "soft_gaze", "title": "Расфокусировка взгляда вдаль", "durationSec": 120 },
+        { "id": "eye_palming", "title": "Тёплые ладони на глаза (пальминг)", "durationSec": 90 }
+      ]
+    },
+    {
+      "id": "throat",
+      "order": 3,
+      "bodyLabel": "Горло / Выражение и голос",
+      "sanskritName": "Вишуддха",
+      "colorHex": "#0EA5E9",
+      "enabledByDefault": false,
+      "highStateHint": "Свободно говорить правду, лёгкость в общении",
+      "lowStateHint": "Ком в горле, недосказанность, усталость от разговоров",
+      "defaultMantra": "Я говорю спокойно, честно и в своём ритме.",
+      "quickPractices": [
+        { "id": "long_exhale_hum", "title": "Мягкий гул на длинном выдохе (Брамари)", "durationSec": 90 }
+      ]
+    },
+    {
+      "id": "heart",
+      "order": 4,
+      "bodyLabel": "Грудь / Сердце и тепло",
+      "sanskritName": "Анахата",
+      "colorHex": "#10B981",
+      "enabledByDefault": true,
+      "highStateHint": "Открытость, спокойное тепло, эмоциональный ресурс",
+      "lowStateHint": "Тяжесть в груди, зажим, эмоциональное выгорание",
+      "defaultMantra": "Я дышу свободно; в груди достаточно места и тепла.",
+      "quickPractices": [
+        { "id": "coherent_breathing", "title": "Дыхание через сердце (вдох 4с / выдох 6с)", "durationSec": 120 },
+        { "id": "shoulder_open", "title": "Мягкое раскрытие грудной клетки", "durationSec": 60 }
+      ]
+    },
+    {
+      "id": "solar_plexus",
+      "order": 5,
+      "bodyLabel": "Солнечное сплетение / Воля и драйв",
+      "sanskritName": "Манипура",
+      "colorHex": "#EAB308",
+      "enabledByDefault": true,
+      "highStateHint": "Уверенность, собранность, желание действовать",
+      "lowStateHint": "Бессилие, прокрастинация, спазм от стресса",
+      "defaultMantra": "Моя сила спокойна и устойчива; я действую шаг за шагом.",
+      "quickPractices": [
+        { "id": "belly_release", "title": "Расслабление живота на глубоком выдохе", "durationSec": 90 }
+      ]
+    },
+    {
+      "id": "sacral",
+      "order": 6,
+      "bodyLabel": "Низ живота / Удовольствие и поток",
+      "sanskritName": "Свадхистана",
+      "colorHex": "#F97316",
+      "enabledByDefault": false,
+      "highStateHint": "Творческий отклик, живость, вкус к процессу",
+      "lowStateHint": "Сухость, пресность, работа «на автопилоте»",
+      "defaultMantra": "Я позволяю себе чувствовать вкус и лёгкость движения.",
+      "quickPractices": [
+        { "id": "hip_sway", "title": "2 минуты лёгкой разминки и движения", "durationSec": 120 }
+      ]
+    },
+    {
+      "id": "root",
+      "order": 7,
+      "bodyLabel": "Корень / Опора и тело",
+      "sanskritName": "Муладхара",
+      "colorHex": "#DC2626",
+      "enabledByDefault": true,
+      "highStateHint": "Устойчивость, контакт с телом, базовое спокойствие",
+      "lowStateHint": "Тревожность, «вылетел из тела», физическая усталость",
+      "defaultMantra": "Я на твёрдой опоре, моё тело в безопасности.",
+      "quickPractices": [
+        { "id": "feet_grounding", "title": "Заземление: внимание в стопы и контакт с полом", "durationSec": 90 }
+      ]
+    }
+  ],
+  "qualities": [
+    { "id": "clarity", "label": "Ясность" },
+    { "id": "flow", "label": "Поток" },
+    { "id": "calm", "label": "Спокойствие" },
+    { "id": "fatigue", "label": "Усталость" },
+    { "id": "heaviness", "label": "Тяжесть" },
+    { "id": "tension", "label": "Зажим" },
+    { "id": "emptiness", "label": "Пустота" }
+  ],
+  "defaultTriggers": [
+    "глубокая работа",
+    "созвон",
+    "конфликт",
+    "перегруз",
+    "кофе",
+    "прогулка",
+    "спорт",
+    "сон",
+    "общение",
+    "тишина"
+  ]
+}
