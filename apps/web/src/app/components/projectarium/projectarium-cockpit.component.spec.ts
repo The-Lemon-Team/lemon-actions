@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { ProjectariumCockpitComponent } from './projectarium-cockpit.component';
 
 describe('ProjectariumCockpitComponent', () => {
@@ -87,5 +88,81 @@ describe('ProjectariumCockpitComponent', () => {
       }
     }).unsubscribe();
     expect(partyNotesCount).toBe(2);
+  });
+
+  it('creates a new stand when app-create-stand-modal emits create and selects its tab', async () => {
+    await TestBed.configureTestingModule({
+      imports: [ProjectariumCockpitComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(ProjectariumCockpitComponent);
+    fixture.componentInstance.showCreateStandModal = true;
+    fixture.detectChanges();
+
+    const modalEl = fixture.debugElement.query(By.css('app-create-stand-modal'));
+    expect(modalEl).toBeTruthy();
+
+    modalEl.triggerEventHandler('create', {
+      name: 'Alpha Telemetry',
+      description: 'Standalone prod monitoring',
+      neuronPath: 'apps/telemetry',
+      color: 'lemon',
+      tags: ['prod'],
+    });
+    fixture.detectChanges();
+
+    const tabs = Array.from(
+      fixture.nativeElement.querySelectorAll('nav[role="tablist"] button[role="tab"]') as NodeListOf<HTMLButtonElement>,
+    );
+    const createdTab = tabs.find((t) => t.textContent?.includes('Alpha Telemetry'));
+    expect(createdTab).toBeTruthy();
+    expect(createdTab?.getAttribute('aria-selected')).toBe('true');
+    expect(fixture.componentInstance.showCreateStandModal).toBeFalse();
+  });
+
+  it('delegates smart touch registration to ProjectStandService and refreshes stands', async () => {
+    await TestBed.configureTestingModule({
+      imports: [ProjectariumCockpitComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const httpMock = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(ProjectariumCockpitComponent);
+    fixture.detectChanges();
+
+    // Drain initial fetchFromBackend request triggered by ProjectStandService constructor
+    const initReqs = httpMock.match('/api/projectarium/projects');
+    initReqs.forEach((req) => req.flush([]));
+
+    fixture.componentInstance.smartProjectName = 'Alpha Telemetry';
+    fixture.componentInstance.smartAppName = 'telemetry-worker';
+    fixture.componentInstance.smartHost = '192.168.1.100';
+    fixture.componentInstance.smartPort = 4305;
+    fixture.componentInstance.smartEnvironment = 'production';
+    fixture.componentInstance.executeSmartTouch();
+
+    const registerReq = httpMock.expectOne('/api/projectarium/register');
+    expect(registerReq.request.method).toBe('POST');
+    expect(registerReq.request.body).toEqual(
+      jasmine.objectContaining({
+        projectName: 'Alpha Telemetry',
+        appName: 'telemetry-worker',
+        host: '192.168.1.100',
+        preferredPort: 4305,
+        environment: 'production',
+        networkMode: 'lan',
+        author: 'cockpit-ui',
+      }),
+    );
+    registerReq.flush({ message: 'Registered', projectToken: 'tok-123' });
+
+    const refreshReq = httpMock.expectOne('/api/projectarium/projects');
+    refreshReq.flush([]);
+    expect(fixture.componentInstance.smartFeedback).toContain('tok-123');
+
+    // Drain unrelated FlowStateService bootstrap GETs before verifying no open Projectarium requests remain
+    httpMock.match((req) => !req.url.includes('/api/projectarium/'));
+    httpMock.verify();
   });
 });

@@ -12,11 +12,9 @@
 .agents
 *.docx
 *.zip
-stitch_prototype
 chrome-tab-cloud
 examples
 architecture-docs
-screen.png
-code.html
+lemon-mantra
 apps/coding-agent
 apps/api/.env

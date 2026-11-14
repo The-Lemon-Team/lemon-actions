@@ -18,6 +18,7 @@
     "build:web:core": "npm run --prefix apps/web build:core",
     "build:web:projectarium": "npm run --prefix apps/web build:projectarium",
     "build:agent": "npm run --prefix apps/web build:agent",
+    "test:web": "npm run --prefix apps/web test:ci",
     "build:all": "npm run build:core && npm run build:registrar && npm run build:projectarium && npm run build:sdk && npm run build:neurons && npm run build:api && npm run build:web",
     "dev:up": "powershell -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
     "dev:projectarium": "powershell -ExecutionPolicy Bypass -File ./scripts/start-projectarium-dev.ps1",

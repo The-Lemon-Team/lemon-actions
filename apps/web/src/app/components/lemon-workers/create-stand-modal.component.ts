@@ -7,7 +7,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ModalOverlayDirective } from '../../core/directives/modal-overlay.directive';
-import { LemonCardColor } from '../../core/models/worker.models';
+import { LemonCardColor, getLemonColorDotClass } from '../../core/models/worker.models';
 
 @Component({
   selector: 'app-create-stand-modal',
@@ -204,23 +204,6 @@ export class CreateStandModalComponent {
   }
 
   getColorDotBg(color: LemonCardColor): string {
-    switch (color) {
-      case 'lemon':
-        return 'bg-[#ffe176]';
-      case 'amber':
-        return 'bg-[#ffb74d]';
-      case 'sage':
-        return 'bg-[#a5d6a7]';
-      case 'lavender':
-        return 'bg-[#ce93d8]';
-      case 'sky':
-        return 'bg-[#81d4fa]';
-      case 'rose':
-        return 'bg-[#ef9a9a]';
-      case 'slate':
-        return 'bg-[#b0bec5]';
-      default:
-        return 'bg-[#ffffff]';
-    }
+    return getLemonColorDotClass(color);
   }
 }

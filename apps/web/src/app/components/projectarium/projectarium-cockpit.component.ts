@@ -5,10 +5,9 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, combineLatest, map, Observable } from 'rxjs';
+import { BehaviorSubject, combineLatest, map } from 'rxjs';
 import { ProjectStandService } from '../../core/services/project-stand.service';
-import { LemonCardColor } from '../../core/models/worker.models';
+import { LemonCardColor, getLemonColorDotClass } from '../../core/models/worker.models';
 import { ProjectStand } from '../../core/models/project-stand.models';
 import { AppEnvironment, AppNetworkMode } from '../../core/models/health-checker.models';
 import { ProjectStandCardComponent } from '../lemon-workers/project-stand-card.component';
@@ -329,7 +328,7 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
       @if (showCreateStandModal) {
         <app-create-stand-modal
           (close)="showCreateStandModal = false"
-          (created)="onCreateStand($event)"
+          (create)="onCreateStand($event)"
         />
       }
 
@@ -345,7 +344,6 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
 })
 export class ProjectariumCockpitComponent {
   readonly standService = inject(ProjectStandService);
-  private readonly http = inject(HttpClient);
 
   showCreateStandModal = false;
   showAddAppModal = false;
@@ -469,13 +467,30 @@ export class ProjectariumCockpitComponent {
     this.showAddAppModal = true;
   }
 
-  onCreateStand(payload: any): void {
+  onCreateStand(payload: {
+    name: string;
+    description: string;
+    neuronPath: string;
+    color: LemonCardColor;
+    tags: string[];
+  }): void {
     const created = this.standService.registerStand(payload);
     this.selectProjectTab(created.slug);
     this.showCreateStandModal = false;
   }
 
-  onAddAppToStand(payload: { standId: string; appData: any }): void {
+  onAddAppToStand(payload: {
+    standId: string;
+    appData: {
+      appName: string;
+      role: string;
+      host?: string;
+      desiredPort?: number;
+      environment: AppEnvironment;
+      networkMode: AppNetworkMode;
+      customUrl?: string;
+    };
+  }): void {
     this.standService.addAppToStand(payload.standId, payload.appData);
     this.showAddAppModal = false;
     this.selectedStandIdForAddApp = null;
@@ -497,8 +512,8 @@ export class ProjectariumCockpitComponent {
     this.isSubmitting = true;
     this.smartFeedback = 'Вызов Smart Handler POST /api/projectarium/register...';
 
-    this.http
-      .post<any>('/api/projectarium/register', {
+    this.standService
+      .smartRegister({
         projectName: this.smartProjectName.trim(),
         appName: this.smartAppName.trim(),
         host,
@@ -518,7 +533,6 @@ export class ProjectariumCockpitComponent {
           if (res.project?.slug) {
             this.selectProjectTab(res.project.slug);
           }
-          this.standService.fetchFromBackend();
         },
         error: (err) => {
           this.isSubmitting = false;
@@ -536,23 +550,6 @@ export class ProjectariumCockpitComponent {
   }
 
   getColorDotBg(color: LemonCardColor): string {
-    switch (color) {
-      case 'lemon':
-        return 'bg-[#ffe176]';
-      case 'amber':
-        return 'bg-[#ffb74d]';
-      case 'sage':
-        return 'bg-[#a5d6a7]';
-      case 'lavender':
-        return 'bg-[#ce93d8]';
-      case 'sky':
-        return 'bg-[#81d4fa]';
-      case 'rose':
-        return 'bg-[#ef9a9a]';
-      case 'slate':
-        return 'bg-[#b0bec5]';
-      default:
-        return 'bg-[#ffffff]';
-    }
+    return getLemonColorDotClass(color);
   }
 }

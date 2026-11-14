@@ -14,7 +14,7 @@ import {
   StandNoteItem,
 } from '../../core/models/project-stand.models';
 import { AppEnvironment, AppNetworkMode } from '../../core/models/health-checker.models';
-import { LEMON_CARD_PALETTES, LemonCardColor } from '../../core/models/worker.models';
+import { LEMON_CARD_PALETTES, LemonCardColor, getLemonColorDotClass } from '../../core/models/worker.models';
 import { ChronicleEventType, ProjectSessionLogEntry } from '../../core/models/chronicle-card.models';
 import { ReactiveTriggerType } from '../../core/models/todo-card.models';
 
@@ -1156,23 +1156,6 @@ export class ProjectStandCardComponent {
   }
 
   getColorDotBg(color: LemonCardColor): string {
-    switch (color) {
-      case 'lemon':
-        return 'bg-[#ffe176]';
-      case 'amber':
-        return 'bg-[#ffb74d]';
-      case 'sage':
-        return 'bg-[#a5d6a7]';
-      case 'lavender':
-        return 'bg-[#ce93d8]';
-      case 'sky':
-        return 'bg-[#81d4fa]';
-      case 'rose':
-        return 'bg-[#ef9a9a]';
-      case 'slate':
-        return 'bg-[#b0bec5]';
-      default:
-        return 'bg-[#ffffff]';
-    }
+    return getLemonColorDotClass(color);
   }
 }

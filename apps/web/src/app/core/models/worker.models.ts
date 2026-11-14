@@ -337,6 +337,22 @@ export const LEMON_CARD_PALETTES: Record<LemonCardColor, LemonColorPalette> = {
   },
 };
 
+const LEMON_COLOR_DOT_CLASSES: Record<LemonCardColor, string> = {
+  default: 'bg-[#ffffff]',
+  lemon: 'bg-[#ffe176]',
+  amber: 'bg-[#ffb74d]',
+  sage: 'bg-[#a5d6a7]',
+  lavender: 'bg-[#ce93d8]',
+  sky: 'bg-[#81d4fa]',
+  rose: 'bg-[#ef9a9a]',
+  slate: 'bg-[#b0bec5]',
+};
+
+/** Returns Tailwind background class for a card color picker dot. */
+export function getLemonColorDotClass(color: LemonCardColor): string {
+  return LEMON_COLOR_DOT_CLASSES[color] ?? 'bg-[#ffffff]';
+}
+
 export interface WorkerCardViewState {
   card: LemonWorkerCard;
   status$: Observable<WorkerStatus>;
