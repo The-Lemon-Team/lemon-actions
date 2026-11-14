@@ -1,14 +1,17 @@
-version: "3.8"
-
 services:
   api:
-    build: ./apps/api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     ports:
       - "3000:3000"
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgresql://lemon:secret@postgres:5432/lemon_db
+      CORS_ORIGIN: "*"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
   postgres:
     image: postgres:15-alpine
@@ -18,3 +21,13 @@ services:
       POSTGRES_DB: lemon_db
     ports:
       - "5432:5432"
+    volumes:
+      - lemon_dev_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lemon -d lemon_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  lemon_dev_pgdata:

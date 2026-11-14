@@ -89,18 +89,30 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
             </button>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-6 gap-2.5 text-xs">
             <input
               type="text"
               [(ngModel)]="smartProjectName"
-              placeholder="Имя проекта (например: Lemon Billing)..."
+              placeholder="Имя проекта (Lemon Seasons)..."
               class="px-3 py-2 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-on-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <input
               type="text"
               [(ngModel)]="smartAppName"
-              placeholder="Имя сервиса (например: Payment Relay)..."
+              placeholder="Имя сервиса (Gateway, CMS)..."
               class="px-3 py-2 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-on-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <input
+              type="text"
+              [(ngModel)]="smartHost"
+              placeholder="Хост (localhost, 192.168.1.100)"
+              class="px-3 py-2 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-on-surface font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <input
+              type="number"
+              [(ngModel)]="smartPort"
+              placeholder="Порт (авто)"
+              class="px-3 py-2 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-on-surface font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <select
               [(ngModel)]="smartEnvironment"
@@ -189,10 +201,9 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
                 class="px-2.5 py-1.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
                 <option value="ALL">Все Нейроны</option>
-                <option value="workspace.seasons">workspace.seasons (Lemon Seasons)</option>
-                <option value="workspace.actions">workspace.actions (Lemon Actions)</option>
-                <option value="workspace.sportdrop">workspace.sportdrop (Sportdrop)</option>
-                <option value="workspace.core">workspace.core</option>
+                @for (neuron of vm.availableNeurons; track neuron) {
+                  <option [value]="neuron">{{ neuron }}</option>
+                }
               </select>
             </div>
 
@@ -223,81 +234,95 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
           </div>
         </section>
 
-        <!-- PINNED STANDS -->
-        @if (vm.pinned.length > 0) {
-          <section class="flex flex-col gap-3.5">
-            <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-on-surface-variant/80">
-              <span class="material-symbols-rounded text-sm text-primary">push_pin</span>
-              <span>Закреплённые стенды проектов ({{ vm.pinned.length }})</span>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              @for (stand of vm.pinned; track stand.id) {
-                <app-project-stand-card
-                  [stand]="stand"
-                  (pinToggle)="standService.togglePinStand($event)"
-                  (colorChange)="standService.setStandColor($event.standId, $event.color)"
-                  (deleteStand)="standService.deleteStand($event)"
-                  (pingStand)="standService.pingStandApps($event)"
-                  (envFilterChange)="standService.setActiveEnvironment($event.standId, $event.env)"
-                  (openAddApp)="onOpenAddApp($event)"
-                  (removeApp)="standService.removeAppFromStand($event.standId, $event.appId)"
-                  (simulateFailure)="standService.simulateAppFailure($event.standId, $event.appId)"
-                  (heartbeatApp)="standService.heartbeatApp($event.standId, $event.appId)"
-                  (addChronicle)="standService.addChronicleEntry($event.standId, $event.entry)"
-                  (toggleTodo)="standService.toggleTodoItem($event.standId, $event.todoId)"
-                  (addTodo)="standService.addTodoItem($event.standId, $event.item)"
-                  (deleteTodo)="standService.deleteTodoItem($event.standId, $event.todoId)"
-                />
-              }
-            </div>
-          </section>
-        }
-
-        <!-- REGULAR STANDS -->
-        <section class="flex flex-col gap-3.5 mt-2">
-          @if (vm.pinned.length > 0 && vm.regular.length > 0) {
-            <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-on-surface-variant/80">
-              <span class="material-symbols-rounded text-sm text-on-surface-variant">domain</span>
-              <span>Все стенды ({{ vm.regular.length }})</span>
-            </div>
-          }
-
-          @if (vm.regular.length > 0) {
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              @for (stand of vm.regular; track stand.id) {
-                <app-project-stand-card
-                  [stand]="stand"
-                  (pinToggle)="standService.togglePinStand($event)"
-                  (colorChange)="standService.setStandColor($event.standId, $event.color)"
-                  (deleteStand)="standService.deleteStand($event)"
-                  (pingStand)="standService.pingStandApps($event)"
-                  (envFilterChange)="standService.setActiveEnvironment($event.standId, $event.env)"
-                  (openAddApp)="onOpenAddApp($event)"
-                  (removeApp)="standService.removeAppFromStand($event.standId, $event.appId)"
-                  (simulateFailure)="standService.simulateAppFailure($event.standId, $event.appId)"
-                  (heartbeatApp)="standService.heartbeatApp($event.standId, $event.appId)"
-                  (addChronicle)="standService.addChronicleEntry($event.standId, $event.entry)"
-                  (toggleTodo)="standService.toggleTodoItem($event.standId, $event.todoId)"
-                  (addTodo)="standService.addTodoItem($event.standId, $event.item)"
-                  (deleteTodo)="standService.deleteTodoItem($event.standId, $event.todoId)"
-                />
-              }
-            </div>
-          } @else if (vm.pinned.length === 0) {
-            <div class="p-12 text-center rounded-2xl bg-surface-container-low/40 border border-dashed border-outline-variant/40 flex flex-col items-center justify-center gap-3">
-              <span class="material-symbols-rounded text-3xl text-on-surface-variant">domain_disabled</span>
-              <span class="text-sm font-medium text-on-surface">Нет стендов, соответствующих фильтру</span>
+        <!-- PROJECT TABS SWITCHER -->
+        @if (vm.ordered.length > 0) {
+          <nav
+            role="tablist"
+            aria-label="Переключение между проектами"
+            class="flex items-center gap-2 flex-wrap p-2 rounded-2xl bg-surface-container-low border border-outline-variant/25"
+          >
+            @for (stand of vm.ordered; track stand.id) {
               <button
                 type="button"
-                (click)="showCreateStandModal = true"
-                class="px-4 py-2 rounded-xl bg-primary-container text-on-primary-container text-xs font-bold shadow-2xs hover:bg-primary-fixed-dim cursor-pointer"
+                role="tab"
+                [attr.aria-selected]="vm.activeTab === stand.slug"
+                (click)="selectProjectTab(stand.slug)"
+                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                [class]="getProjectTabClass(vm.activeTab === stand.slug)"
               >
-                Зарегистрировать первый стенд
+                <span
+                  class="w-2.5 h-2.5 rounded-full border border-black/15 flex-shrink-0"
+                  [ngClass]="getColorDotBg(stand.color)"
+                ></span>
+                @if (stand.isPinned) {
+                  <span class="material-symbols-rounded text-xs text-primary">push_pin</span>
+                }
+                <span class="truncate max-w-[180px]">{{ stand.name }}</span>
+                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-black/10 dark:bg-white/10">
+                  {{ stand.apps.length }}
+                </span>
+                @if (hasStandIssue(stand)) {
+                  <span
+                    class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"
+                    title="Есть сервисы со сбоем (DEGRADED / EVICTED)"
+                  ></span>
+                }
               </button>
-            </div>
-          }
-        </section>
+            }
+
+            <button
+              type="button"
+              role="tab"
+              [attr.aria-selected]="vm.activeTab === 'ALL'"
+              (click)="selectProjectTab('ALL')"
+              class="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              [class]="getProjectTabClass(vm.activeTab === 'ALL')"
+              title="Показать все стенды одновременно"
+            >
+              <span class="material-symbols-rounded text-sm">grid_view</span>
+              <span>Все ({{ vm.ordered.length }})</span>
+            </button>
+          </nav>
+
+          <!-- ACTIVE PROJECT TAB PANEL OR ALL-STANDS GRID -->
+          <section
+            role="tabpanel"
+            [class]="vm.activeTab === 'ALL' ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : 'w-full'"
+          >
+            @for (stand of vm.displayedStands; track stand.id) {
+              <app-project-stand-card
+                [stand]="stand"
+                [expanded]="vm.activeTab !== 'ALL'"
+                (pinToggle)="standService.togglePinStand($event)"
+                (colorChange)="standService.setStandColor($event.standId, $event.color)"
+                (deleteStand)="standService.deleteStand($event)"
+                (pingStand)="standService.pingStandApps($event)"
+                (envFilterChange)="standService.setActiveEnvironment($event.standId, $event.env)"
+                (openAddApp)="onOpenAddApp($event)"
+                (removeApp)="standService.removeAppFromStand($event.standId, $event.appId)"
+                (addChronicle)="standService.addChronicleEntry($event.standId, $event.entry)"
+                (toggleTodo)="standService.toggleTodoItem($event.standId, $event.todoId)"
+                (addTodo)="standService.addTodoItem($event.standId, $event.item)"
+                (deleteTodo)="standService.deleteTodoItem($event.standId, $event.todoId)"
+                (addNote)="standService.addNoteItem($event.standId, $event.note)"
+                (updateNote)="standService.updateNoteItem($event.standId, $event.noteId, $event.patch)"
+                (deleteNote)="standService.deleteNoteItem($event.standId, $event.noteId)"
+              />
+            }
+          </section>
+        } @else {
+          <div class="p-12 text-center rounded-2xl bg-surface-container-low/40 border border-dashed border-outline-variant/40 flex flex-col items-center justify-center gap-3">
+            <span class="material-symbols-rounded text-3xl text-on-surface-variant">domain_disabled</span>
+            <span class="text-sm font-medium text-on-surface">Нет стендов, соответствующих фильтру</span>
+            <button
+              type="button"
+              (click)="showCreateStandModal = true"
+              class="px-4 py-2 rounded-xl bg-primary-container text-on-primary-container text-xs font-bold shadow-2xs hover:bg-primary-fixed-dim cursor-pointer"
+            >
+              Зарегистрировать первый стенд
+            </button>
+          </div>
+        }
       }
 
       <!-- MODALS -->
@@ -312,7 +337,7 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
         <app-add-app-modal
           [standId]="selectedStandIdForAddApp"
           (close)="showAddAppModal = false; selectedStandIdForAddApp = null"
-          (added)="onAddAppToStand($event)"
+          (add)="onAddAppToStand($event)"
         />
       }
     </div>
@@ -329,6 +354,8 @@ export class ProjectariumCockpitComponent {
   showSmartTouch = false;
   smartProjectName = '';
   smartAppName = '';
+  smartHost = 'localhost';
+  smartPort?: number;
   smartEnvironment: AppEnvironment = 'dev';
   isSubmitting = false;
   smartFeedback = '';
@@ -336,6 +363,7 @@ export class ProjectariumCockpitComponent {
   readonly searchTerm$ = new BehaviorSubject<string>('');
   readonly selectedFolder$ = new BehaviorSubject<string>('ALL');
   readonly selectedColor$ = new BehaviorSubject<string>('ALL');
+  readonly selectedTab$ = new BehaviorSubject<string>(this.loadSavedTab());
 
   readonly filterColors: LemonCardColor[] = [
     'lemon',
@@ -352,8 +380,9 @@ export class ProjectariumCockpitComponent {
     this.searchTerm$,
     this.selectedFolder$,
     this.selectedColor$,
+    this.selectedTab$,
   ]).pipe(
-    map(([stands, search, folder, color]) => {
+    map(([stands, search, folder, color, selectedTab]) => {
       let filtered = stands;
 
       if (search.trim()) {
@@ -364,7 +393,20 @@ export class ProjectariumCockpitComponent {
             s.description.toLowerCase().includes(q) ||
             s.neuronPath.toLowerCase().includes(q) ||
             s.tags.some((t) => t.toLowerCase().includes(q)) ||
-            s.apps.some((a) => a.appName.toLowerCase().includes(q) || a.role.toLowerCase().includes(q)),
+            (s.notes || []).some(
+              (n) =>
+                (n.title && n.title.toLowerCase().includes(q)) ||
+                n.content.toLowerCase().includes(q) ||
+                (n.tags || []).some((t) => t.toLowerCase().includes(q)),
+            ) ||
+            s.apps.some(
+              (a) =>
+                a.appName.toLowerCase().includes(q) ||
+                a.role.toLowerCase().includes(q) ||
+                (a.host && a.host.toLowerCase().includes(q)) ||
+                a.url.toLowerCase().includes(q) ||
+                String(a.port).includes(q),
+            ),
         );
       }
 
@@ -376,16 +418,50 @@ export class ProjectariumCockpitComponent {
         filtered = filtered.filter((s) => s.color === color);
       }
 
+      const pinned = filtered.filter((s) => s.isPinned);
+      const regular = filtered.filter((s) => !s.isPinned);
+      const ordered = [...pinned, ...regular];
+
+      const activeStand =
+        selectedTab === 'ALL'
+          ? null
+          : ordered.find((s) => s.slug === selectedTab) ?? ordered[0] ?? null;
+      const activeTab = selectedTab === 'ALL' ? 'ALL' : activeStand?.slug ?? '';
+      const displayedStands =
+        activeTab === 'ALL' ? ordered : activeStand ? [activeStand] : [];
+
       return {
         totalCount: stands.length,
-        pinned: filtered.filter((s) => s.isPinned),
-        regular: filtered.filter((s) => !s.isPinned),
+        availableNeurons: Array.from(new Set(stands.map((s) => s.neuronPath))),
+        ordered,
+        activeTab,
+        activeStand,
+        displayedStands,
       };
     }),
   );
 
-  getTotalAppsCount(vm: { pinned: ProjectStand[]; regular: ProjectStand[] }): number {
-    return [...vm.pinned, ...vm.regular].reduce((acc, s) => acc + s.apps.length, 0);
+  getTotalAppsCount(vm: { ordered: ProjectStand[] }): number {
+    return vm.ordered.reduce((acc, s) => acc + s.apps.length, 0);
+  }
+
+  selectProjectTab(slugOrAll: string): void {
+    this.selectedTab$.next(slugOrAll);
+    try {
+      localStorage.setItem('lemon_projectarium_active_tab_v1', slugOrAll);
+    } catch {
+      // storage unavailable
+    }
+  }
+
+  hasStandIssue(stand: ProjectStand): boolean {
+    return stand.apps.some((app) => app.status === 'DEGRADED' || app.status === 'EVICTED');
+  }
+
+  getProjectTabClass(isActive: boolean): string {
+    return isActive
+      ? 'bg-primary-container text-on-primary-container border-primary shadow-2xs'
+      : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/30 hover:text-on-surface hover:bg-surface-container';
   }
 
   onOpenAddApp(standId: string): void {
@@ -394,18 +470,29 @@ export class ProjectariumCockpitComponent {
   }
 
   onCreateStand(payload: any): void {
-    this.standService.registerStand(payload);
+    const created = this.standService.registerStand(payload);
+    this.selectProjectTab(created.slug);
     this.showCreateStandModal = false;
   }
 
-  onAddAppToStand(payload: any): void {
-    this.standService.addAppToStand(payload.standId, payload.app);
+  onAddAppToStand(payload: { standId: string; appData: any }): void {
+    this.standService.addAppToStand(payload.standId, payload.appData);
     this.showAddAppModal = false;
     this.selectedStandIdForAddApp = null;
   }
 
   executeSmartTouch(): void {
     if (!this.smartProjectName.trim() || !this.smartAppName.trim()) return;
+
+    const host = this.smartHost.trim() || 'localhost';
+    const networkMode: AppNetworkMode =
+      host === 'localhost' || host === '127.0.0.1'
+        ? 'local'
+        : host.endsWith('.ts.net')
+          ? 'tailscale-funnel'
+          : host.startsWith('100.')
+            ? 'tailscale-lan'
+            : 'lan';
 
     this.isSubmitting = true;
     this.smartFeedback = 'Вызов Smart Handler POST /api/projectarium/register...';
@@ -414,8 +501,10 @@ export class ProjectariumCockpitComponent {
       .post<any>('/api/projectarium/register', {
         projectName: this.smartProjectName.trim(),
         appName: this.smartAppName.trim(),
+        host,
+        preferredPort: this.smartPort && this.smartPort > 0 ? this.smartPort : undefined,
         environment: this.smartEnvironment,
-        networkMode: 'local',
+        networkMode,
         author: 'cockpit-ui',
       })
       .subscribe({
@@ -424,6 +513,11 @@ export class ProjectariumCockpitComponent {
           this.smartFeedback = `✓ Успех: ${res.message} (Токен: ${res.projectToken})`;
           this.smartProjectName = '';
           this.smartAppName = '';
+          this.smartHost = 'localhost';
+          this.smartPort = undefined;
+          if (res.project?.slug) {
+            this.selectProjectTab(res.project.slug);
+          }
           this.standService.fetchFromBackend();
         },
         error: (err) => {
@@ -431,6 +525,14 @@ export class ProjectariumCockpitComponent {
           this.smartFeedback = `Ошибка регистрации: ${err.message || 'Сбой API'}`;
         },
       });
+  }
+
+  private loadSavedTab(): string {
+    try {
+      return localStorage.getItem('lemon_projectarium_active_tab_v1') || '';
+    } catch {
+      return '';
+    }
   }
 
   getColorDotBg(color: LemonCardColor): string {

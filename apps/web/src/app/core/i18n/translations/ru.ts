@@ -78,11 +78,15 @@ export const ru: Translations = {
     inFolder: 'В нейроне: {{name}}',
     saveFolder: 'Сохранить нейрон',
     cancel: 'Отмена',
+    noSubNeurons: 'Поднейроны пока не созданы',
   },
   projects: {
     allProjects: 'Все проекты',
     title: 'Проекты',
     filterBy: 'Фильтр по проекту: {{name}}',
+    newProject: 'Новый проект',
+    newProjectPlaceholder: 'Имя нового проекта...',
+    saveProject: 'Создать проект',
   },
   metrics: {
     registered: 'Зарегистрировано',

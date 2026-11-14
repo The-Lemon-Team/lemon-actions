@@ -11,8 +11,11 @@ import { ProjectariumService } from './projectarium.service';
 import {
   AddAppToProjectDto,
   AddChronicleEventDto,
+  AddProjectNoteDto,
   AddProjectTodoDto,
+  CreateProjectStandDto,
   ProjectariumRegisterDto,
+  UpdateProjectNoteDto,
 } from './projectarium.dto';
 
 @Controller('projectarium')
@@ -35,6 +38,14 @@ export class ProjectariumController {
   @Get('projects')
   listProjects() {
     return this.projectariumService.listProjects();
+  }
+
+  /**
+   * Create a project stand without an initial app
+   */
+  @Post('projects')
+  createProject(@Body() dto: CreateProjectStandDto) {
+    return this.projectariumService.createProject(dto);
   }
 
   /**
@@ -76,25 +87,30 @@ export class ProjectariumController {
   }
 
   /**
-   * Simulate failure (Circuit Breaker demo)
+   * Delete a project stand
    */
-  @Post('projects/:slugOrToken/apps/:instanceId/simulate-failure')
-  simulateFailure(
-    @Param('slugOrToken') slugOrToken: string,
-    @Param('instanceId') instanceId: string
-  ) {
-    return this.projectariumService.simulateFailure(slugOrToken, instanceId);
+  @Delete('projects/:slugOrToken')
+  deleteProject(@Param('slugOrToken') slugOrToken: string) {
+    return this.projectariumService.deleteProject(slugOrToken);
   }
 
   /**
-   * Heartbeat recovery
+   * Active healthcheck round for all apps in a project stand (HTTP + TCP)
    */
-  @Post('projects/:slugOrToken/apps/:instanceId/heartbeat')
-  heartbeat(
+  @Post('projects/:slugOrToken/ping')
+  pingStand(@Param('slugOrToken') slugOrToken: string) {
+    return this.projectariumService.pingStand(slugOrToken, { recordSummary: true });
+  }
+
+  /**
+   * Active healthcheck for a single app instance in a project stand
+   */
+  @Post('projects/:slugOrToken/apps/:instanceId/ping')
+  pingApp(
     @Param('slugOrToken') slugOrToken: string,
     @Param('instanceId') instanceId: string
   ) {
-    return this.projectariumService.heartbeat(slugOrToken, instanceId);
+    return this.projectariumService.pingApp(slugOrToken, instanceId);
   }
 
   /**
@@ -117,6 +133,40 @@ export class ProjectariumController {
     @Param('todoId') todoId: string
   ) {
     return this.projectariumService.toggleTodo(slugOrToken, todoId);
+  }
+
+  /**
+   * Add Note item
+   */
+  @Post('projects/:slugOrToken/notes')
+  addNote(
+    @Param('slugOrToken') slugOrToken: string,
+    @Body() dto: AddProjectNoteDto
+  ) {
+    return this.projectariumService.addNote(slugOrToken, dto);
+  }
+
+  /**
+   * Update Note item
+   */
+  @Patch('projects/:slugOrToken/notes/:noteId')
+  updateNote(
+    @Param('slugOrToken') slugOrToken: string,
+    @Param('noteId') noteId: string,
+    @Body() dto: UpdateProjectNoteDto
+  ) {
+    return this.projectariumService.updateNote(slugOrToken, noteId, dto);
+  }
+
+  /**
+   * Delete Note item
+   */
+  @Delete('projects/:slugOrToken/notes/:noteId')
+  deleteNote(
+    @Param('slugOrToken') slugOrToken: string,
+    @Param('noteId') noteId: string
+  ) {
+    return this.projectariumService.deleteNote(slugOrToken, noteId);
   }
 
   /**

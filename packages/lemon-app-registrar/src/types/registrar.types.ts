@@ -10,7 +10,7 @@ export type AppHealthStatus = 'HEALTHY' | 'DEGRADED' | 'CHECKING' | 'EVICTED';
 
 export type AppEnvironment = 'dev' | 'staging' | 'production';
 
-export type AppNetworkMode = 'local' | 'tailscale-lan' | 'tailscale-funnel';
+export type AppNetworkMode = 'local' | 'lan' | 'tailscale-lan' | 'tailscale-funnel';
 
 export interface ServiceCheckpointContext {
   id: string;

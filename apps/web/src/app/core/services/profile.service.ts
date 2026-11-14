@@ -17,7 +17,7 @@ export class ProfileService {
 
   private readonly profilesSubject = new BehaviorSubject<Profile[]>([this.defaultProfile]);
   private readonly activeProfileIdSubject = new BehaviorSubject<string>(this.defaultProfile.id);
-  private readonly appModeSubject = new BehaviorSubject<AppMode>('party');
+  private readonly appModeSubject = new BehaviorSubject<AppMode>('core');
 
   readonly profiles$: Observable<Profile[]> = this.profilesSubject.asObservable();
   readonly activeProfileId$: Observable<string> = this.activeProfileIdSubject.pipe(

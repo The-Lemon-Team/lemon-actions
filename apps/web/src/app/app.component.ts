@@ -9,6 +9,8 @@ import { AppMode } from './core/models/flow.models';
 import { FlowOrchestratorService } from './core/services/flow-orchestrator.service';
 import { ProfileService } from './core/services/profile.service';
 import { ThemeService } from './core/services/theme.service';
+import { APP_SHELL_MANIFEST } from './core/shell/app-shell.models';
+import { APP_SHELL_MANIFEST_DATA } from './core/shell/shell.manifest';
 
 @Component({
   selector: 'app-root',
@@ -18,21 +20,26 @@ import { ThemeService } from './core/services/theme.service';
   template: `
     <app-layout
       [isDark]="(theme.theme$ | async) === 'dark'"
-      [appMode]="(profileService.appMode$ | async) ?? 'core'"
+      [appMode]="(profileService.appMode$ | async) ?? shellManifest.defaultMode"
       [profileName]="(profileService.activeProfile$ | async)?.displayName ?? 'Мой Дом'"
+      [navItems]="shellManifest.navItems"
+      [clusterLabel]="shellManifest.clusterLabel"
+      [hideSidebar]="shellManifest.hideSidebar ?? false"
       (themeToggle)="theme.toggle()"
       (modeChange)="onModeChange($event)"
     >
-      <app-sidebar
-        slot="sidebar"
-        [workspaceName]="(profileService.activeProfile$ | async)?.displayName ?? 'Мой Дом'"
-        [tags]="(tags$ | async) ?? []"
-        [activeFlows]="(activeFlows$ | async) ?? 0"
-        [isMutexLocked]="(isMutexLocked$ | async) ?? false"
-        [activeLocks]="(activeLocks$ | async) ?? []"
-        (tagSelect)="orchestrator.selectTag($event)"
-        (tagClear)="orchestrator.clearTag()"
-      />
+      @if (!shellManifest.hideSidebar) {
+        <app-sidebar
+          slot="sidebar"
+          [workspaceName]="(profileService.activeProfile$ | async)?.displayName ?? 'Мой Дом'"
+          [tags]="(tags$ | async) ?? []"
+          [activeFlows]="(activeFlows$ | async) ?? 0"
+          [isMutexLocked]="(isMutexLocked$ | async) ?? false"
+          [activeLocks]="(activeLocks$ | async) ?? []"
+          (tagSelect)="orchestrator.selectTag($event)"
+          (tagClear)="orchestrator.clearTag()"
+        />
+      }
       <router-outlet />
     </app-layout>
 
@@ -51,6 +58,8 @@ export class AppComponent implements OnInit {
   protected readonly orchestrator = inject(FlowOrchestratorService);
   protected readonly profileService = inject(ProfileService);
   protected readonly theme = inject(ThemeService);
+  protected readonly shellManifest =
+    inject(APP_SHELL_MANIFEST, { optional: true }) ?? APP_SHELL_MANIFEST_DATA;
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -83,20 +92,7 @@ export class AppComponent implements OnInit {
   }
 
   private syncModeFromUrl(url: string): void {
-    if (url.startsWith('/projectarium')) {
-      this.profileService.setAppMode('projectarium');
-    } else if (url.startsWith('/actions')) {
-      this.profileService.setAppMode('actions');
-    } else if (url.startsWith('/registrar')) {
-      this.profileService.setAppMode('registrar');
-    } else if (url.startsWith('/home')) {
-      this.profileService.setAppMode('home');
-    } else if (url.startsWith('/code')) {
-      this.profileService.setAppMode('code');
-    } else if (url.startsWith('/arena')) {
-      this.profileService.setAppMode('arena');
-    } else {
-      this.profileService.setAppMode('core');
-    }
+    const matched = this.shellManifest.navItems.find((item) => url.startsWith(item.route));
+    this.profileService.setAppMode(matched?.id ?? this.shellManifest.defaultMode);
   }
 }

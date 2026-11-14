@@ -78,6 +78,7 @@ export interface Translations {
     inFolder: string;
     saveFolder: string;
     cancel: string;
+    noSubNeurons: string;
   };
   metrics: {
     registered: string;
@@ -93,6 +94,9 @@ export interface Translations {
     allProjects: string;
     title: string;
     filterBy: string;
+    newProject: string;
+    newProjectPlaceholder: string;
+    saveProject: string;
   };
   table: {
     selectAllAria: string;

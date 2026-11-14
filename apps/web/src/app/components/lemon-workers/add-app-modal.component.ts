@@ -115,12 +115,44 @@ import { AppEnvironment, AppNetworkMode } from '../../core/models/health-checker
             </label>
             <select
               [(ngModel)]="networkMode"
+              (ngModelChange)="onNetworkModeChange($event)"
               class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 font-semibold"
             >
-              <option value="local">Localhost (Локальный порт)</option>
+              <option value="local">Localhost (Локальный хост)</option>
+              <option value="lan">LAN (Удаленный хост, напр. 192.168.1.100)</option>
               <option value="tailscale-lan">Tailscale LAN (Защищённая сеть 100.64.x.x)</option>
               <option value="tailscale-funnel">Tailscale Funnel (Публичный туннель HTTPS)</option>
             </select>
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-center justify-between gap-2">
+              <label class="font-label-ui text-xs font-bold text-on-surface">
+                Хост / Адрес, где крутится сервис:
+              </label>
+              <div class="flex items-center gap-1 text-[10px] font-mono">
+                <button
+                  type="button"
+                  (click)="host = 'localhost'; networkMode = 'local'"
+                  class="px-1.5 py-0.5 rounded bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant cursor-pointer"
+                >
+                  localhost
+                </button>
+                <button
+                  type="button"
+                  (click)="host = '192.168.1.100'; networkMode = 'lan'"
+                  class="px-1.5 py-0.5 rounded bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant cursor-pointer"
+                >
+                  192.168.1.100
+                </button>
+              </div>
+            </div>
+            <input
+              type="text"
+              [(ngModel)]="host"
+              placeholder="localhost, 192.168.1.100, my-node.ts.net"
+              class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 font-mono"
+            />
           </div>
 
           <div class="flex flex-col gap-1.5">
@@ -167,6 +199,7 @@ export class AddAppModalComponent {
     appData: {
       appName: string;
       role: string;
+      host?: string;
       desiredPort?: number;
       environment: AppEnvironment;
       networkMode: AppNetworkMode;
@@ -176,10 +209,19 @@ export class AddAppModalComponent {
 
   appName = '';
   role = '';
+  host = 'localhost';
   desiredPort?: number;
   environment: AppEnvironment = 'dev';
   networkMode: AppNetworkMode = 'local';
   customUrl = '';
+
+  onNetworkModeChange(mode: AppNetworkMode): void {
+    if (mode === 'lan' && (!this.host || this.host === 'localhost')) {
+      this.host = '192.168.1.100';
+    } else if (mode === 'local' && this.host === '192.168.1.100') {
+      this.host = 'localhost';
+    }
+  }
 
   onCancel(): void {
     this.resetState();
@@ -194,6 +236,7 @@ export class AddAppModalComponent {
       appData: {
         appName: this.appName.trim(),
         role: this.role.trim() || 'Микросервис стенда',
+        host: this.host.trim() || undefined,
         desiredPort: this.desiredPort && this.desiredPort > 0 ? this.desiredPort : undefined,
         environment: this.environment,
         networkMode: this.networkMode,
@@ -207,6 +250,7 @@ export class AddAppModalComponent {
   private resetState(): void {
     this.appName = '';
     this.role = '';
+    this.host = 'localhost';
     this.desiredPort = undefined;
     this.environment = 'dev';
     this.networkMode = 'local';

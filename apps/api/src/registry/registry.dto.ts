@@ -15,7 +15,7 @@ export class RegisterAppDto {
   environment?: AppEnvironment;
 
   @IsOptional()
-  @IsIn(['local', 'tailscale-lan', 'tailscale-funnel'])
+  @IsIn(['local', 'lan', 'tailscale-lan', 'tailscale-funnel'])
   networkMode?: AppNetworkMode;
 
   @IsOptional()

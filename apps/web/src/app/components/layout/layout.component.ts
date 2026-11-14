@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { AppMode } from '../../core/models/flow.models';
+import { AppNavBadgeVariant, AppNavItem } from '../../core/shell/app-shell.models';
 import { LanguageSwitcherComponent } from '../language-switcher/language-switcher.component';
 
 @Component({
@@ -21,122 +22,33 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
             <span class="font-label-code-sm text-label-code-sm px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">{{ 'app.version' | trans }}</span>
           </div>
 
-          <!-- Mode Navigation: /actions, /registrar, /home, /code, /core, /arena -->
-          <nav aria-label="Apps Navigation" class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-low border border-outline-variant/25">
-            <a
-              routerLink="/projectarium"
-              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
-              [routerLinkActiveOptions]="{ exact: false }"
-              (click)="modeChange.emit('projectarium')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              [class]="
-                appMode === 'projectarium'
-                  ? 'bg-primary-container text-on-primary-container shadow-xs'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              "
-            >
-              <span class="material-symbols-rounded text-base">domain</span>
-              <span>Projectarium</span>
-              <span class="px-1.5 py-0.2 rounded-full bg-primary/20 text-primary text-[9px] font-extrabold uppercase">Cockpit</span>
-            </a>
-            <a
-              routerLink="/actions"
-              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
-              [routerLinkActiveOptions]="{ exact: false }"
-              (click)="modeChange.emit('actions')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              [class]="
-                appMode === 'actions'
-                  ? 'bg-primary-container text-on-primary-container shadow-xs'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              "
-            >
-              <span class="material-symbols-rounded text-base">style</span>
-              <span>Lemon Actions</span>
-            </a>
-            <a
-              routerLink="/registrar"
-              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
-              [routerLinkActiveOptions]="{ exact: false }"
-              (click)="modeChange.emit('registrar')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              [class]="
-                appMode === 'registrar'
-                  ? 'bg-primary-container text-on-primary-container shadow-xs'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              "
-            >
-              <span class="material-symbols-rounded text-base">verified_user</span>
-              <span>Port Shield</span>
-              <span class="px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[9px] font-extrabold uppercase">Live</span>
-            </a>
-            <a
-              routerLink="/home"
-              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
-              [routerLinkActiveOptions]="{ exact: false }"
-              (click)="modeChange.emit('home')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              [class]="
-                appMode === 'home'
-                  ? 'bg-primary-container text-on-primary-container shadow-xs'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              "
-            >
-              <span class="material-symbols-rounded text-base">home</span>
-              <span>Lemon Home</span>
-            </a>
-            <a
-              routerLink="/code"
-              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
-              [routerLinkActiveOptions]="{ exact: false }"
-              (click)="modeChange.emit('code')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              [class]="
-                appMode === 'code'
-                  ? 'bg-primary-container text-on-primary-container shadow-xs'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              "
-            >
-              <span class="material-symbols-rounded text-base">terminal</span>
-              <span>Lemon Code</span>
-            </a>
-            <a
-              routerLink="/core"
-              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
-              [routerLinkActiveOptions]="{ exact: false }"
-              (click)="modeChange.emit('core')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              [class]="
-                appMode === 'core'
-                  ? 'bg-primary-container text-on-primary-container shadow-xs'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              "
-            >
-              <span class="material-symbols-rounded text-base">hub</span>
-              <span>Core Console</span>
-            </a>
-            <a
-              routerLink="/arena"
-              routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
-              [routerLinkActiveOptions]="{ exact: false }"
-              (click)="modeChange.emit('arena')"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              [class]="
-                appMode === 'arena'
-                  ? 'bg-primary-container text-on-primary-container shadow-xs'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              "
-            >
-              <span class="material-symbols-rounded text-base">diversity_3</span>
-              <span>Neuron Arena</span>
-            </a>
-          </nav>
+          <!-- Data-driven App Header Navigation (delivered via APP_SHELL_MANIFEST) -->
+          @if (navItems.length > 0) {
+            <nav aria-label="Apps Navigation" class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-low border border-outline-variant/25">
+              @for (item of navItems; track item.id) {
+                <a
+                  [routerLink]="item.route"
+                  routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
+                  [routerLinkActiveOptions]="{ exact: false }"
+                  (click)="modeChange.emit(item.id)"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  [class]="navItemClass(item.id)"
+                >
+                  <span class="material-symbols-rounded text-base">{{ item.icon }}</span>
+                  <span>{{ item.label }}</span>
+                  @if (item.badge; as badge) {
+                    <span [class]="badgeClass(badge.variant)">{{ badge.text }}</span>
+                  }
+                </a>
+              }
+            </nav>
+          }
         </div>
 
         <div class="flex items-center gap-space-md flex-shrink-0">
           <div class="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-low text-on-surface-variant">
             <span class="w-2 h-2 rounded-full bg-success shadow-[0_0_0_3px_rgb(var(--c-success)/0.2)]"></span>
-            <span class="font-label-code-sm text-label-code-sm text-on-surface">{{ 'cluster.status' | trans }}</span>
+            <span class="font-label-code-sm text-label-code-sm text-on-surface">{{ clusterLabel || ('cluster.status' | trans) }}</span>
           </div>
 
           <!-- Language Switcher (RU / EN) -->
@@ -165,25 +77,21 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
     <main class="w-full pt-16 bg-surface min-h-screen">
       <div
         class="w-full mx-auto py-space-md"
-        [class]="
-          appMode === 'arena'
-            ? 'px-3 sm:px-6 max-w-[1800px]'
-            : 'max-w-[1440px] px-margin'
-        "
+        [class]="mainContainerClass"
       >
         <div
           [class]="
-            appMode !== 'arena'
+            showSidebar
               ? 'grid grid-cols-1 xl:grid-cols-12 gap-gutter items-start'
               : 'w-full'
           "
         >
-          @if (appMode !== 'arena') {
+          @if (showSidebar) {
             <div class="xl:col-span-3"><ng-content select="[slot=sidebar]" /></div>
           }
           <div
             [class]="
-              appMode !== 'arena'
+              showSidebar
                 ? 'xl:col-span-9 min-w-0'
                 : 'w-full min-w-0'
             "
@@ -197,8 +105,34 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
 })
 export class LayoutComponent {
   @Input() isDark = false;
-  @Input() appMode: AppMode = 'home';
+  @Input() appMode: AppMode = 'core';
   @Input() profileName = 'Мой Дом';
+  @Input() navItems: readonly AppNavItem[] = [];
+  @Input() clusterLabel?: string;
+  @Input() hideSidebar = false;
   @Output() themeToggle = new EventEmitter<void>();
   @Output() modeChange = new EventEmitter<AppMode>();
+
+  get showSidebar(): boolean {
+    return !this.hideSidebar && this.appMode !== 'arena';
+  }
+
+  get mainContainerClass(): string {
+    if (this.appMode === 'arena') {
+      return 'px-3 sm:px-6 max-w-[1800px]';
+    }
+    return 'max-w-[1440px] px-margin';
+  }
+
+  navItemClass(id: AppMode): string {
+    return this.appMode === id
+      ? 'bg-primary-container text-on-primary-container shadow-xs'
+      : 'text-on-surface-variant hover:text-on-surface';
+  }
+
+  badgeClass(variant: AppNavBadgeVariant): string {
+    return variant === 'success'
+      ? 'px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[9px] font-extrabold uppercase'
+      : 'px-1.5 py-0.2 rounded-full bg-primary/20 text-primary text-[9px] font-extrabold uppercase';
+  }
 }

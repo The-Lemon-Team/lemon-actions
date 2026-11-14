@@ -32,12 +32,12 @@ const FOLDER_ICONS: Record<string, string> = {
         <div class="flex items-center gap-2">
           <span class="material-symbols-rounded text-base text-primary">tune</span>
           <span class="font-label-ui text-xs uppercase tracking-wider text-on-surface-variant font-bold"
-            >{{ 'commandRibbon.title' | trans }}</span
+            >{{ 'commandRibbon.title' | trans }}@if (projectName) { · <span class="text-on-surface">{{ projectName }}</span> }</span
           >
         </div>
         <button
           type="button"
-          (click)="showCreateModal = !showCreateModal"
+          (click)="toggleCreateModal()"
           class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-label-code-sm text-xs bg-surface-container-low hover:bg-surface-container-high text-on-surface transition-colors"
         >
           <span class="material-symbols-rounded text-sm">add</span>
@@ -160,6 +160,8 @@ const FOLDER_ICONS: Record<string, string> = {
               </div>
             }
           </div>
+        } @empty {
+          <span class="font-body-sm text-xs text-on-surface-variant px-2">{{ 'commandRibbon.noSubNeurons' | trans }}</span>
         }
       </div>
 
@@ -178,7 +180,11 @@ const FOLDER_ICONS: Record<string, string> = {
             [(ngModel)]="newParentId"
             class="px-2.5 py-1.5 rounded-lg bg-surface-container-low text-on-surface text-xs font-label-ui focus:outline-none focus:ring-2 focus:ring-primary-container"
           >
-            <option [ngValue]="null">{{ 'commandRibbon.rootNoParent' | trans }}</option>
+            @if (projectId && projectName) {
+              <option [ngValue]="projectId">{{ 'commandRibbon.inFolder' | trans: { name: projectName } }}</option>
+            } @else {
+              <option [ngValue]="null">{{ 'commandRibbon.rootNoParent' | trans }}</option>
+            }
             @for (folder of folderNodes; track folder.id) {
               <option [ngValue]="folder.id">{{ 'commandRibbon.inFolder' | trans: { name: i18n.translateFolder(folder.name) } }}</option>
             }
@@ -210,6 +216,8 @@ export class CommandRibbonComponent {
   @Input({ required: true }) folderNodes: FolderNode[] = [];
   @Input() selectedFolderId: string | null = null;
   @Input() totalCount = 0;
+  @Input() projectId: string | null = null;
+  @Input() projectName: string | null = null;
 
   @Output() select = new EventEmitter<string | null>();
   @Output() create = new EventEmitter<{ name: string; parentId?: string | null }>();
@@ -218,6 +226,13 @@ export class CommandRibbonComponent {
   showCreateModal = false;
   newFolderName = '';
   newParentId: string | null = null;
+
+  toggleCreateModal(): void {
+    this.showCreateModal = !this.showCreateModal;
+    if (this.showCreateModal) {
+      this.newParentId = this.projectId;
+    }
+  }
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
@@ -243,10 +258,10 @@ export class CommandRibbonComponent {
     if (!this.newFolderName.trim()) return;
     this.create.emit({
       name: this.newFolderName.trim(),
-      parentId: this.newParentId,
+      parentId: this.newParentId ?? this.projectId,
     });
     this.newFolderName = '';
-    this.newParentId = null;
+    this.newParentId = this.projectId;
     this.showCreateModal = false;
   }
 }

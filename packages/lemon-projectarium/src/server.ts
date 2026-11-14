@@ -114,9 +114,9 @@ const server = http.createServer((req, res) => {
           <div class="app-item">
             <div>
               <div style="font-weight: bold; font-size: 12px;">${a.appName}</div>
-              <div style="font-size: 10px; color: #64748b;">${a.networkMode} • ${a.status}</div>
+              <div style="font-size: 10px; color: #64748b;">${a.host || 'localhost'}:${a.port} • ${a.networkMode} • ${a.status}</div>
             </div>
-            <div class="port">:${a.port}</div>
+            <div class="port">${a.host || 'localhost'}:${a.port}</div>
           </div>
         `,
           )

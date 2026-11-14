@@ -8,10 +8,20 @@ export class HealthController {
   @Get()
   async check() {
     let db = 'up';
+    let timer: NodeJS.Timeout | undefined;
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
+      await Promise.race([
+        this.prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error('DB healthcheck timeout')), 1200);
+        }),
+      ]);
     } catch {
       db = 'down';
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
     }
     return { status: 'ok', db };
   }

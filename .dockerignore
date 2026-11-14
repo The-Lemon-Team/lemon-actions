@@ -1,0 +1,22 @@
+# Ignore dependencies, build artifacts, caches and unrelated workspace folders
+**/node_modules
+**/dist
+**/dist-seed
+**/out-tsc
+**/.angular
+**/*.tsbuildinfo
+**/*.log
+
+.git
+.vscode
+.agents
+*.docx
+*.zip
+stitch_prototype
+chrome-tab-cloud
+examples
+architecture-docs
+screen.png
+code.html
+apps/coding-agent
+apps/api/.env

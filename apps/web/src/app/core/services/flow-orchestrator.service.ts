@@ -97,6 +97,14 @@ export class FlowOrchestratorService {
     }),
   );
 
+  /** Currently selected root project (null when viewing All Projects). */
+  readonly selectedProject$: Observable<ProjectInfo | null> = combineLatest([
+    this.projects$,
+    this.selectedProjectId,
+  ]).pipe(
+    map(([projects, selectedId]) => (selectedId ? projects.find((p) => p.id === selectedId) ?? null : null)),
+  );
+
   /** Flows currently holding an exclusive mutex lock. */
   readonly activeLocks$: Observable<Flow[]> = this.flows$.pipe(
     map((flows) => flows.filter((f) => f.isExclusive && isExecuting(f.status))),
@@ -110,14 +118,15 @@ export class FlowOrchestratorService {
     this.selectedFolderId,
   ]).pipe(
     map(([folders, flows, expandedIds, selectedProjectId, selectedId]) => {
-      let filteredFolders = folders;
-      if (selectedProjectId) {
-        const root = folders.find((f) => f.id === selectedProjectId);
-        if (root) {
-          filteredFolders = folders.filter((f) => isInSubtree(f.path, root.path));
-        }
+      if (!selectedProjectId) {
+        return [];
       }
-      return buildFolderTree(filteredFolders, {
+      const root = folders.find((f) => f.id === selectedProjectId);
+      if (!root) {
+        return [];
+      }
+      const filteredFolders = folders.filter((f) => isInSubtree(f.path, root.path));
+      const tree = buildFolderTree(filteredFolders, {
         expandedIds,
         selectedId,
         flowCountForPath: (path) =>
@@ -131,6 +140,8 @@ export class FlowOrchestratorService {
             return !!fp && isInSubtree(fp, path) && isExecuting(f.status);
           }),
       });
+      // Return only direct sub-neurons of the selected project so the second ribbon never duplicates root projects
+      return tree[0]?.children ?? [];
     }),
   );
 
@@ -214,13 +225,17 @@ export class FlowOrchestratorService {
   /* ------------------------------ commands ------------------------------ */
 
   selectProject(id: string | null): void {
-    const next = this.selectedProjectId.value === id ? null : id;
+    const next = id === null ? null : this.selectedProjectId.value === id ? null : id;
     this.selectedProjectId.next(next);
-    // Reset folder if switching projects
+    // Reset folder if returning to All Projects or switching to another project
+    if (!next) {
+      this.selectedFolderId.next(null);
+      return;
+    }
     if (this.selectedFolderId.value) {
       const currentFolder = this.foldersSubject.value.find((f) => f.id === this.selectedFolderId.value);
-      const targetProject = next ? this.foldersSubject.value.find((f) => f.id === next) : null;
-      if (currentFolder && targetProject && !isInSubtree(currentFolder.path, targetProject.path)) {
+      const targetProject = this.foldersSubject.value.find((f) => f.id === next);
+      if (!currentFolder || !targetProject || !isInSubtree(currentFolder.path, targetProject.path) || currentFolder.id === targetProject.id) {
         this.selectedFolderId.next(null);
       }
     }
@@ -320,6 +335,23 @@ export class FlowOrchestratorService {
   }
 
   selectFolder(id: string | null): void {
+    if (!id) {
+      this.selectedFolderId.next(null);
+      return;
+    }
+    const folders = this.foldersSubject.value;
+    const folder = folders.find((f) => f.id === id);
+    if (folder) {
+      const rootPath = folder.path.split('.')[0];
+      const rootFolder = folders.find((f) => f.path === rootPath);
+      if (rootFolder) {
+        this.selectedProjectId.next(rootFolder.id);
+        if (folder.id === rootFolder.id) {
+          this.selectedFolderId.next(null);
+          return;
+        }
+      }
+    }
     this.selectedFolderId.next(this.selectedFolderId.value === id ? null : id);
   }
 
@@ -380,6 +412,7 @@ export class FlowOrchestratorService {
 
   constructor() {
     this.profileService.activeProfile$.subscribe(() => {
+      this.selectedProjectId.next(null);
       this.selectedFolderId.next(null);
       this.refresh();
     });

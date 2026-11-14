@@ -478,6 +478,8 @@ export class AppRegistrarComponent {
     switch (mode) {
       case 'local':
         return 'bg-slate-500/10 text-slate-800 dark:text-slate-300 border border-slate-500/20';
+      case 'lan':
+        return 'bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border border-indigo-500/30';
       case 'tailscale-lan':
         return 'bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/30';
       case 'tailscale-funnel':
@@ -489,6 +491,8 @@ export class AppRegistrarComponent {
     switch (mode) {
       case 'local':
         return 'terminal';
+      case 'lan':
+        return 'lan';
       case 'tailscale-lan':
         return 'lock';
       case 'tailscale-funnel':
@@ -500,6 +504,8 @@ export class AppRegistrarComponent {
     switch (mode) {
       case 'local':
         return 'Localhost';
+      case 'lan':
+        return 'LAN';
       case 'tailscale-lan':
         return 'TS-LAN';
       case 'tailscale-funnel':

@@ -9,6 +9,7 @@ export interface StandAppItem {
   id: string;
   appName: string;
   role: string;
+  host?: string;
   port: number;
   url: string;
   instanceId: string;
@@ -20,6 +21,16 @@ export interface StandAppItem {
   lastCheckedAt: string;
   consecutiveFailures: number;
   icon: string;
+}
+
+export interface StandNoteItem {
+  id: string;
+  title?: string;
+  content: string;
+  author: string;
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProjectStand {
@@ -37,6 +48,7 @@ export interface ProjectStand {
   apps: StandAppItem[];
   chronicle: ProjectSessionLogEntry[];
   todos: ReactiveTodoItem[];
+  notes: StandNoteItem[];
   createdAt: string;
   updatedAt: string;
 }

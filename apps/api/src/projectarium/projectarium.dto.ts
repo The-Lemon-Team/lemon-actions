@@ -24,6 +24,18 @@ export class ProjectariumRegisterDto {
   appName?: string;
 
   @IsOptional()
+  @IsString()
+  host?: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsString()
+  icon?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(80)
   preferredPort?: number;
@@ -33,7 +45,7 @@ export class ProjectariumRegisterDto {
   environment?: ProjectariumEnvironment;
 
   @IsOptional()
-  @IsIn(['local', 'tailscale-lan', 'tailscale-funnel'])
+  @IsIn(['local', 'lan', 'tailscale-lan', 'tailscale-funnel'])
   networkMode?: ProjectariumNetworkMode;
 
   @IsOptional()
@@ -53,9 +65,46 @@ export class ProjectariumRegisterDto {
   author?: string;
 }
 
+export class CreateProjectStandDto {
+  @IsString()
+  projectName!: string;
+
+  @IsOptional()
+  @IsString()
+  projectSlug?: string;
+
+  @IsOptional()
+  @IsString()
+  neuronWorkspace?: string;
+
+  @IsOptional()
+  @IsObject()
+  context?: Record<string, any>;
+
+  @IsOptional()
+  @IsArray()
+  initialTodos?: string[];
+
+  @IsOptional()
+  @IsString()
+  author?: string;
+}
+
 export class AddAppToProjectDto {
   @IsString()
   appName!: string;
+
+  @IsOptional()
+  @IsString()
+  host?: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsString()
+  icon?: string;
 
   @IsOptional()
   @IsNumber()
@@ -67,7 +116,7 @@ export class AddAppToProjectDto {
   environment?: ProjectariumEnvironment;
 
   @IsOptional()
-  @IsIn(['local', 'tailscale-lan', 'tailscale-funnel'])
+  @IsIn(['local', 'lan', 'tailscale-lan', 'tailscale-funnel'])
   networkMode?: ProjectariumNetworkMode;
 
   @IsOptional()
@@ -97,6 +146,43 @@ export class AddProjectTodoDto {
   @IsOptional()
   @IsString()
   author?: string;
+}
+
+export class AddProjectNoteDto {
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsString()
+  content!: string;
+
+  @IsOptional()
+  @IsString()
+  author?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+}
+
+export class UpdateProjectNoteDto {
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  content?: string;
+
+  @IsOptional()
+  @IsString()
+  author?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
 }
 
 export class AddChronicleEventDto {

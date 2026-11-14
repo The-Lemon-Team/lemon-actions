@@ -11,13 +11,14 @@ import {
   ProjectStand,
   StandAppItem,
   StandAppStatus,
+  StandNoteItem,
 } from '../../core/models/project-stand.models';
 import { AppEnvironment, AppNetworkMode } from '../../core/models/health-checker.models';
 import { LEMON_CARD_PALETTES, LemonCardColor } from '../../core/models/worker.models';
 import { ChronicleEventType, ProjectSessionLogEntry } from '../../core/models/chronicle-card.models';
 import { ReactiveTriggerType } from '../../core/models/todo-card.models';
 
-type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
+type StandSubTab = 'APPS' | 'TODOS' | 'NOTES' | 'CHRONICLE';
 
 @Component({
   selector: 'app-project-stand-card',
@@ -93,7 +94,7 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
 
         <!-- TAGS ROW -->
         @if (stand.tags && stand.tags.length > 0) {
-          <div class="flex flex-wrap gap-1.5 mb-3.5">
+          <div class="flex flex-wrap gap-1.5 mb-2.5">
             @for (tag of stand.tags; track tag) {
               <span class="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-black/5 dark:bg-white/10 text-on-surface-variant">
                 #{{ tag }}
@@ -102,8 +103,24 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
           </div>
         }
 
+        <!-- HOSTS SUMMARY ROW -->
+        @if (standHosts.length > 0) {
+          <div class="flex items-center gap-1.5 flex-wrap mb-3.5 text-[10px] font-mono">
+            <span class="text-on-surface-variant/80 font-semibold">Где крутится:</span>
+            @for (host of standHosts; track host) {
+              <span
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold"
+                [class]="getHostBadgeClass(host)"
+              >
+                <span class="material-symbols-rounded text-[11px]">{{ getHostIcon(host) }}</span>
+                <span>{{ host }}</span>
+              </span>
+            }
+          </div>
+        }
+
         <!-- SUB-TABS SELECTOR (KEEP COCKPIT STYLE) -->
-        <div class="flex items-center gap-1.5 p-1 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 mb-4 text-xs font-semibold">
+        <div class="flex items-center gap-1.5 flex-wrap p-1 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 mb-4 text-xs font-semibold">
           <button
             type="button"
             (click)="activeSubTab = 'APPS'"
@@ -121,6 +138,16 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
           >
             <span class="material-symbols-rounded text-sm">checklist</span>
             <span>Чек-лист ({{ completedTodosCount }}/{{ stand.todos.length }})</span>
+          </button>
+          <button
+            type="button"
+            (click)="activeSubTab = 'NOTES'"
+            data-testid="stand-tab-notes"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
+            [class]="activeSubTab === 'NOTES' ? 'bg-primary-container text-on-primary-container shadow-2xs font-bold' : 'text-on-surface-variant hover:text-on-surface'"
+          >
+            <span class="material-symbols-rounded text-sm">sticky_note_2</span>
+            <span>Заметки ({{ standNotes.length }})</span>
           </button>
           <button
             type="button"
@@ -186,7 +213,7 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
             </div>
 
             <!-- List of protected apps -->
-            <div class="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+            <div [class]="appsListContainerClass">
               @for (app of filteredApps; track app.id) {
                 <div class="p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all hover:bg-black/10">
                   <!-- App Icon & Details -->
@@ -197,11 +224,30 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
                     <div class="flex flex-col min-w-0">
                       <div class="flex items-center gap-1.5 flex-wrap">
                         <span class="font-bold text-xs text-on-surface truncate">{{ app.appName }}</span>
-                        <!-- Port Shield Badge -->
-                        <span class="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-black/10 dark:bg-white/10 text-on-surface flex items-center gap-0.5">
-                          <span class="material-symbols-rounded text-[11px] text-primary">shield</span>
-                          <span>:{{ app.port }}</span>
-                        </span>
+                        <!-- Host:Port Address Badge -->
+                        @if (isHttpUrl(app.url)) {
+                          <a
+                            [href]="app.url"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 transition-colors hover:underline"
+                            [class]="getHostBadgeClass(getAppHost(app))"
+                            [title]="'Открыть ' + app.url"
+                          >
+                            <span class="material-symbols-rounded text-[11px]">{{ getHostIcon(getAppHost(app)) }}</span>
+                            <span>{{ getAppAddress(app) }}</span>
+                            <span class="material-symbols-rounded text-[10px] opacity-70">open_in_new</span>
+                          </a>
+                        } @else {
+                          <span
+                            class="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1"
+                            [class]="getHostBadgeClass(getAppHost(app))"
+                            [title]="app.url"
+                          >
+                            <span class="material-symbols-rounded text-[11px]">{{ getHostIcon(getAppHost(app)) }}</span>
+                            <span>{{ getAppAddress(app) }}</span>
+                          </span>
+                        }
                         <!-- Lease Token Badge -->
                         @if (app.leaseToken) {
                           <span
@@ -214,6 +260,9 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
                       </div>
                       <span class="text-[10px] text-on-surface-variant/80 truncate">
                         {{ app.role }}
+                      </span>
+                      <span class="font-mono text-[9px] text-on-surface-variant/65 truncate" [title]="app.url">
+                        {{ app.url }}
                       </span>
                     </div>
                   </div>
@@ -234,6 +283,8 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
                     <div
                       class="flex items-center gap-1 px-2 py-1 rounded-lg font-mono text-[10px] font-bold"
                       [class]="getHealthBadgeClass(app.status)"
+                      [title]="getHealthTooltip(app)"
+                      data-testid="app-health-badge"
                     >
                       <span
                         class="w-1.5 h-1.5 rounded-full"
@@ -242,39 +293,21 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
                       <span>{{ getHealthLabel(app) }}</span>
                     </div>
 
-                    <!-- Circuit Breaker Action: Simulate Failure -->
-                    <button
-                      type="button"
-                      (click)="simulateFailure.emit({ standId: stand.id, appId: app.id })"
-                      class="px-1.5 py-1 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 hover:bg-amber-500/25 transition-all cursor-pointer flex items-center gap-0.5"
-                      title="Симулировать сбой сервиса (Circuit Breaker тест)"
-                    >
-                      <span class="material-symbols-rounded text-xs">bolt</span>
-                      <span>Сбой</span>
-                    </button>
+                    <span class="w-px h-4 bg-black/10 dark:bg-white/10" aria-hidden="true"></span>
 
-                    <!-- Heartbeat Recovery Action -->
-                    @if (app.status === 'DEGRADED' || app.status === 'EVICTED') {
+                    <!-- Service Actions -->
+                    <div class="flex items-center gap-1">
+                      <!-- Delete button -->
                       <button
                         type="button"
-                        (click)="heartbeatApp.emit({ standId: stand.id, appId: app.id })"
-                        class="px-1.5 py-1 rounded-md text-[10px] font-bold bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/30 transition-all cursor-pointer flex items-center gap-0.5"
-                        title="Восстановить работу сервиса (Heartbeat OK)"
+                        (click)="removeApp.emit({ standId: stand.id, appId: app.id })"
+                        class="w-6 h-6 rounded-md flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors opacity-60 hover:opacity-100 cursor-pointer"
+                        title="Освободить порт и удалить приложение из пула"
+                        aria-label="Удалить сервис"
                       >
-                        <span class="material-symbols-rounded text-xs">healing</span>
-                        <span>Восстановить</span>
+                        <span class="material-symbols-rounded text-sm">close</span>
                       </button>
-                    }
-
-                    <!-- Delete button -->
-                    <button
-                      type="button"
-                      (click)="removeApp.emit({ standId: stand.id, appId: app.id })"
-                      class="w-6 h-6 rounded-md flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors opacity-60 hover:opacity-100 cursor-pointer"
-                      title="Освободить порт и удалить приложение из пула"
-                    >
-                      <span class="material-symbols-rounded text-sm">close</span>
-                    </button>
+                    </div>
                   </div>
                 </div>
               } @empty {
@@ -387,7 +420,7 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
             }
 
             <!-- Tasks list -->
-            <div class="flex flex-col gap-1.5 max-h-60 overflow-y-auto pr-1">
+            <div [class]="secondaryListContainerClass">
               @for (todo of stand.todos; track todo.id) {
                 <div
                   class="p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition-all"
@@ -457,7 +490,171 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
         }
 
         <!-- ============================================================== -->
-        <!-- SUB-TAB 3: ХРОНИКА ИЗМЕНЕНИЙ (CHRONICLE & AUDIT TRAIL)          -->
+        <!-- SUB-TAB 3: ЗАМЕТКИ ПРОЕКТА (SIMPLE NOTES WITH EDIT & ADD)      -->
+        <!-- ============================================================== -->
+        @if (activeSubTab === 'NOTES') {
+          <section class="flex flex-col gap-2.5 mb-3">
+            <div class="flex items-center justify-between text-[11px] font-bold text-on-surface-variant/80 uppercase">
+              <span>Заметки стенда ({{ standNotes.length }})</span>
+              <button
+                type="button"
+                (click)="toggleAddNoteForm()"
+                data-testid="toggle-add-note"
+                class="text-primary hover:underline lowercase font-medium flex items-center gap-0.5 cursor-pointer"
+              >
+                <span class="material-symbols-rounded text-xs">{{ showAddNote ? 'expand_less' : 'add' }}</span>
+                <span>{{ showAddNote ? 'Скрыть форму' : 'Новая заметка' }}</span>
+              </button>
+            </div>
+
+            @if (showAddNote) {
+              <div class="p-3 rounded-2xl bg-surface-container-lowest/95 border border-outline-variant/30 flex flex-col gap-2 text-xs shadow-xs">
+                <input
+                  type="text"
+                  [(ngModel)]="newNoteTitle"
+                  placeholder="Заголовок заметки (необязательно)..."
+                  data-testid="new-note-title"
+                  class="px-2.5 py-1.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <textarea
+                  [(ngModel)]="newNoteContent"
+                  rows="3"
+                  placeholder="Текст заметки (наброски, идеи, ссылки, мысли на потом)..."
+                  data-testid="new-note-content"
+                  class="px-2.5 py-1.5 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface text-xs leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary"
+                ></textarea>
+                <input
+                  type="text"
+                  [(ngModel)]="newNoteTagsText"
+                  placeholder="Теги через запятую (например: Time Traveling, Hero Cards)..."
+                  data-testid="new-note-tags"
+                  class="px-2.5 py-1 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <div class="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    (click)="showAddNote = false"
+                    class="px-2.5 py-1 text-[11px] text-on-surface-variant hover:text-on-surface cursor-pointer"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="button"
+                    (click)="submitNewNote()"
+                    [disabled]="!newNoteContent.trim()"
+                    data-testid="submit-new-note"
+                    class="px-3.5 py-1.5 rounded-xl bg-primary-container text-on-primary-container font-bold text-[11px] disabled:opacity-40 cursor-pointer"
+                  >
+                    Сохранить заметку
+                  </button>
+                </div>
+              </div>
+            }
+
+            <div [class]="notesListContainerClass">
+              @for (note of standNotes; track note.id) {
+                <div class="p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 flex flex-col gap-1.5 transition-all">
+                  @if (editingNoteId === note.id) {
+                    <div class="flex flex-col gap-2 text-xs">
+                      <input
+                        type="text"
+                        [(ngModel)]="editNoteTitle"
+                        placeholder="Заголовок заметки..."
+                        data-testid="edit-note-title"
+                        class="px-2.5 py-1.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-on-surface text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <textarea
+                        [(ngModel)]="editNoteContent"
+                        rows="4"
+                        placeholder="Текст заметки..."
+                        data-testid="edit-note-content"
+                        class="px-2.5 py-1.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-on-surface text-xs leading-relaxed resize-y focus:outline-none focus:ring-1 focus:ring-primary"
+                      ></textarea>
+                      <input
+                        type="text"
+                        [(ngModel)]="editNoteTagsText"
+                        placeholder="Теги через запятую..."
+                        data-testid="edit-note-tags"
+                        class="px-2.5 py-1 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-on-surface font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <div class="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          (click)="cancelEditNote()"
+                          class="px-2.5 py-1 text-[11px] text-on-surface-variant hover:text-on-surface cursor-pointer"
+                        >
+                          Отмена
+                        </button>
+                        <button
+                          type="button"
+                          (click)="saveEditNote(note.id)"
+                          [disabled]="!editNoteContent.trim()"
+                          data-testid="save-edit-note"
+                          class="px-3.5 py-1 rounded-xl bg-primary-container text-on-primary-container font-bold text-[11px] disabled:opacity-40 cursor-pointer"
+                        >
+                          Сохранить
+                        </button>
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="flex flex-col min-w-0">
+                        @if (note.title) {
+                          <span class="font-bold text-xs text-on-surface leading-snug">{{ note.title }}</span>
+                        }
+                        <span class="text-[10px] font-mono text-on-surface-variant/75">
+                          {{ note.author }} · {{ formatNoteTimestamp(note.updatedAt || note.createdAt) }}
+                        </span>
+                      </div>
+
+                      <div class="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          type="button"
+                          (click)="startEditNote(note)"
+                          data-testid="edit-note-btn"
+                          class="w-6 h-6 rounded-md flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                          title="Редактировать заметку"
+                          aria-label="Редактировать заметку"
+                        >
+                          <span class="material-symbols-rounded text-sm">edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          (click)="deleteNote.emit({ standId: stand.id, noteId: note.id })"
+                          data-testid="delete-note-btn"
+                          class="w-6 h-6 rounded-md flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors opacity-65 hover:opacity-100 cursor-pointer"
+                          title="Удалить заметку"
+                          aria-label="Удалить заметку"
+                        >
+                          <span class="material-symbols-rounded text-sm">close</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <p class="text-xs text-on-surface/90 leading-relaxed whitespace-pre-wrap break-words">{{ note.content }}</p>
+
+                    @if (note.tags && note.tags.length > 0) {
+                      <div class="flex flex-wrap gap-1 pt-0.5">
+                        @for (tag of note.tags; track tag) {
+                          <span class="px-1.5 py-0.5 rounded-md text-[9px] font-mono font-semibold bg-black/5 dark:bg-white/10 text-on-surface-variant">
+                            #{{ tag }}
+                          </span>
+                        }
+                      </div>
+                    }
+                  }
+                </div>
+              } @empty {
+                <div class="p-3 text-center rounded-xl bg-black/5 text-[11px] text-on-surface-variant">
+                  Заметок пока нет. Добавьте первую заметку по проекту!
+                </div>
+              }
+            </div>
+          </section>
+        }
+
+        <!-- ============================================================== -->
+        <!-- SUB-TAB 4: ХРОНИКА ИЗМЕНЕНИЙ (CHRONICLE & AUDIT TRAIL)          -->
         <!-- ============================================================== -->
         @if (activeSubTab === 'CHRONICLE') {
           <section class="flex flex-col gap-2.5 mb-3">
@@ -512,7 +709,7 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
               </div>
             }
 
-            <div class="flex flex-col gap-1.5 max-h-60 overflow-y-auto pr-1">
+            <div [class]="secondaryListContainerClass">
               @for (log of stand.chronicle; track log.id) {
                 <div class="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 flex flex-col gap-1 text-xs">
                   <div class="flex items-center justify-between text-[9px] font-mono">
@@ -540,6 +737,8 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
           <span>{{ stand.apps.length }} сервисов</span>
           <span>•</span>
           <span>{{ completedTodosCount }}/{{ stand.todos.length }} задач</span>
+          <span>•</span>
+          <span>{{ standNotes.length }} заметок</span>
         </div>
 
         <div class="flex items-center gap-2">
@@ -574,6 +773,7 @@ type StandSubTab = 'APPS' | 'TODOS' | 'CHRONICLE';
 })
 export class ProjectStandCardComponent {
   @Input({ required: true }) stand!: ProjectStand;
+  @Input() expanded = false;
 
   @Output() pinToggle = new EventEmitter<string>();
   @Output() colorChange = new EventEmitter<{ standId: string; color: LemonCardColor }>();
@@ -582,8 +782,6 @@ export class ProjectStandCardComponent {
   @Output() envFilterChange = new EventEmitter<{ standId: string; env: AppEnvironment | 'ALL' }>();
   @Output() openAddApp = new EventEmitter<string>();
   @Output() removeApp = new EventEmitter<{ standId: string; appId: string }>();
-  @Output() simulateFailure = new EventEmitter<{ standId: string; appId: string }>();
-  @Output() heartbeatApp = new EventEmitter<{ standId: string; appId: string }>();
   @Output() addChronicle = new EventEmitter<{
     standId: string;
     entry: Omit<ProjectSessionLogEntry, 'id' | 'timestamp'>;
@@ -602,6 +800,16 @@ export class ProjectStandCardComponent {
     };
   }>();
   @Output() deleteTodo = new EventEmitter<{ standId: string; todoId: string }>();
+  @Output() addNote = new EventEmitter<{
+    standId: string;
+    note: { title?: string; content: string; author?: string; tags?: string[] };
+  }>();
+  @Output() updateNote = new EventEmitter<{
+    standId: string;
+    noteId: string;
+    patch: { title?: string; content: string; tags?: string[] };
+  }>();
+  @Output() deleteNote = new EventEmitter<{ standId: string; noteId: string }>();
 
   activeSubTab: StandSubTab = 'APPS';
 
@@ -614,6 +822,16 @@ export class ProjectStandCardComponent {
   newTodoScope: 'PROJECT' | 'APP' = 'PROJECT';
   newTodoTargetAppName = '';
   newTodoPriority: 'LOW' | 'MEDIUM' | 'HIGH' = 'HIGH';
+
+  showAddNote = false;
+  newNoteTitle = '';
+  newNoteContent = '';
+  newNoteTagsText = '';
+
+  editingNoteId: string | null = null;
+  editNoteTitle = '';
+  editNoteContent = '';
+  editNoteTagsText = '';
 
   readonly availableColors: LemonCardColor[] = [
     'default',
@@ -628,6 +846,24 @@ export class ProjectStandCardComponent {
 
   get palette() {
     return LEMON_CARD_PALETTES[this.stand.color] || LEMON_CARD_PALETTES.default;
+  }
+
+  get appsListContainerClass(): string {
+    return this.expanded
+      ? 'flex flex-col gap-2'
+      : 'flex flex-col gap-2 max-h-[34rem] overflow-y-auto pr-1';
+  }
+
+  get secondaryListContainerClass(): string {
+    return this.expanded
+      ? 'flex flex-col gap-1.5'
+      : 'flex flex-col gap-1.5 max-h-96 overflow-y-auto pr-1';
+  }
+
+  get notesListContainerClass(): string {
+    return this.expanded
+      ? 'flex flex-col gap-2'
+      : 'flex flex-col gap-2 max-h-96 overflow-y-auto pr-1';
   }
 
   get pinVariation(): string {
@@ -654,6 +890,10 @@ export class ProjectStandCardComponent {
     return Math.round((this.completedTodosCount / this.stand.todos.length) * 100);
   }
 
+  get standNotes(): StandNoteItem[] {
+    return this.stand.notes || [];
+  }
+
   countByEnv(env: AppEnvironment): number {
     return this.stand.apps.filter((a) => a.environment === env).length;
   }
@@ -669,12 +909,60 @@ export class ProjectStandCardComponent {
     }
   }
 
+  get standHosts(): string[] {
+    const hosts = this.stand.apps.map((app) => this.getAppHost(app));
+    return Array.from(new Set(hosts));
+  }
+
+  getAppHost(app: StandAppItem): string {
+    if (app.host?.trim()) {
+      return app.host.trim();
+    }
+    try {
+      return new URL(app.url).hostname || 'localhost';
+    } catch {
+      const match = app.url?.match(/^(?:[a-z]+:\/\/)?([^/:?#\s]+)/i);
+      return match?.[1] || 'localhost';
+    }
+  }
+
+  getAppAddress(app: StandAppItem): string {
+    const host = this.getAppHost(app);
+    return `${host}:${app.port}`;
+  }
+
+  isHttpUrl(url?: string): boolean {
+    return Boolean(url && /^https?:\/\//i.test(url));
+  }
+
+  getHostIcon(host: string): string {
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'computer';
+    }
+    if (host.endsWith('.ts.net') || host.startsWith('100.')) {
+      return 'vpn_lock';
+    }
+    return 'dns';
+  }
+
+  getHostBadgeClass(host: string): string {
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30';
+    }
+    if (host.endsWith('.ts.net') || host.startsWith('100.')) {
+      return 'bg-purple-500/15 text-purple-800 dark:text-purple-300 border-purple-500/30';
+    }
+    return 'bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-500/30';
+  }
+
   getNetworkLabel(mode: AppNetworkMode): string {
     switch (mode) {
       case 'tailscale-funnel':
         return 'Funnel';
       case 'tailscale-lan':
         return 'TS-LAN';
+      case 'lan':
+        return 'LAN';
       default:
         return 'Local';
     }
@@ -687,6 +975,7 @@ export class ProjectStandCardComponent {
       case 'DEGRADED':
         return 'bg-amber-500/20 text-amber-800 dark:text-amber-300';
       case 'EVICTED':
+      case 'OFFLINE':
         return 'bg-rose-500/20 text-rose-800 dark:text-rose-300';
       default:
         return 'bg-slate-500/15 text-slate-800 dark:text-slate-300';
@@ -698,8 +987,11 @@ export class ProjectStandCardComponent {
       case 'HEALTHY':
         return 'bg-emerald-500 animate-pulse';
       case 'DEGRADED':
-        return 'bg-amber-500';
+        return 'bg-amber-500 animate-pulse';
+      case 'CHECKING':
+        return 'bg-sky-500 animate-ping';
       case 'EVICTED':
+      case 'OFFLINE':
         return 'bg-rose-500';
       default:
         return 'bg-slate-400';
@@ -707,13 +999,29 @@ export class ProjectStandCardComponent {
   }
 
   getHealthLabel(app: StandAppItem): string {
-    if (app.status === 'EVICTED') {
-      return 'EVICTED (5/5)';
+    if (app.status === 'CHECKING') {
+      return 'CHECKING...';
     }
-    if (app.status === 'DEGRADED') {
+    if (app.status === 'EVICTED' || app.status === 'OFFLINE') {
+      return 'DOWN';
+    }
+    if (app.status === 'DEGRADED' || app.consecutiveFailures > 0) {
       return `DEGRADED (${app.consecutiveFailures}/5)`;
     }
-    return `${app.lastLatencyMs}ms`;
+    return `UP · ${app.lastLatencyMs}ms`;
+  }
+
+  getHealthTooltip(app: StandAppItem): string {
+    if (app.status === 'CHECKING') {
+      return 'Выполняется активная проверка доступности сервиса...';
+    }
+    if (app.status === 'EVICTED' || app.status === 'OFFLINE') {
+      return `Сервис недоступен (DOWN): превышен лимит ошибок (${app.consecutiveFailures || 5}/5), порт освобождён`;
+    }
+    if (app.status === 'DEGRADED' || app.consecutiveFailures > 0) {
+      return `Деградация связи с сервисом: ${app.consecutiveFailures}/5 ошибок подряд до отключения`;
+    }
+    return `Сервис активен (UP) — задержка ответа ${app.lastLatencyMs}ms`;
   }
 
   getScopeBadgeClass(scope?: 'PROJECT' | 'APP'): string {
@@ -762,6 +1070,79 @@ export class ProjectStandCardComponent {
     });
     this.newTodoText = '';
     this.showAddTodo = false;
+  }
+
+  toggleAddNoteForm(): void {
+    this.showAddNote = !this.showAddNote;
+  }
+
+  submitNewNote(): void {
+    const content = this.newNoteContent.trim();
+    if (!content) return;
+    this.addNote.emit({
+      standId: this.stand.id,
+      note: {
+        title: this.newNoteTitle.trim() || undefined,
+        content,
+        author: 'Developer',
+        tags: this.parseTags(this.newNoteTagsText),
+      },
+    });
+    this.newNoteTitle = '';
+    this.newNoteContent = '';
+    this.newNoteTagsText = '';
+    this.showAddNote = false;
+  }
+
+  startEditNote(note: StandNoteItem): void {
+    this.editingNoteId = note.id;
+    this.editNoteTitle = note.title || '';
+    this.editNoteContent = note.content;
+    this.editNoteTagsText = (note.tags || []).join(', ');
+  }
+
+  cancelEditNote(): void {
+    this.editingNoteId = null;
+    this.editNoteTitle = '';
+    this.editNoteContent = '';
+    this.editNoteTagsText = '';
+  }
+
+  saveEditNote(noteId: string): void {
+    const content = this.editNoteContent.trim();
+    if (!content) return;
+    this.updateNote.emit({
+      standId: this.stand.id,
+      noteId,
+      patch: {
+        title: this.editNoteTitle.trim() || undefined,
+        content,
+        tags: this.parseTags(this.editNoteTagsText),
+      },
+    });
+    this.cancelEditNote();
+  }
+
+  formatNoteTimestamp(iso?: string): string {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString([], {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return '';
+    }
+  }
+
+  private parseTags(raw: string): string[] {
+    return raw
+      .split(',')
+      .map((t) => t.trim().replace(/^#/, ''))
+      .filter(Boolean);
   }
 
   formatTimestamp(iso?: string): string {

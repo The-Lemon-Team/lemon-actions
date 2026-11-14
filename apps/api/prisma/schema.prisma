@@ -206,3 +206,90 @@ model CardFlowSubscription {
   @@id([cardId, flowId])
   @@map("card_flow_subscriptions")
 }
+
+model ProjectariumStand {
+  id              String                    @id
+  slug            String                    @unique
+  name            String
+  neuronWorkspace String                    @map("neuron_workspace")
+  projectToken    String                    @unique @map("project_token")
+  context         Json                      @default("{}")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+  apps            ProjectariumAppRecord[]
+  todos           ProjectariumTodoRecord[]
+  notes           ProjectariumNoteRecord[]
+  chronicle       ProjectariumEventRecord[]
+
+  @@map("projectarium_stands")
+}
+
+model ProjectariumAppRecord {
+  id                  String            @id
+  standId             String            @map("stand_id")
+  appName             String            @map("app_name")
+  port                Int
+  instanceId          String            @unique @map("instance_id")
+  leaseToken          String            @map("lease_token")
+  environment         String            @default("dev")
+  networkMode         String            @default("local") @map("network_mode")
+  status              String            @default("ONLINE")
+  healthUrl           String?           @map("health_url")
+  lastPingAt          DateTime?         @map("last_ping_at")
+  pingLatencyMs       Int?              @map("ping_latency_ms")
+  consecutiveFailures Int               @default(0) @map("consecutive_failures")
+  registeredAt        DateTime          @default(now()) @map("registered_at")
+  metadata            Json?
+  stand               ProjectariumStand @relation(fields: [standId], references: [id], onDelete: Cascade)
+
+  @@index([standId])
+  @@map("projectarium_apps")
+}
+
+model ProjectariumTodoRecord {
+  id            String            @id
+  standId       String            @map("stand_id")
+  title         String
+  completed     Boolean           @default(false)
+  scope         String            @default("PROJECT")
+  targetAppName String?           @map("target_app_name")
+  author        String            @default("developer")
+  priority      String            @default("MEDIUM")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  completedAt   DateTime?         @map("completed_at")
+  stand         ProjectariumStand @relation(fields: [standId], references: [id], onDelete: Cascade)
+
+  @@index([standId])
+  @@map("projectarium_todos")
+}
+
+model ProjectariumNoteRecord {
+  id        String            @id
+  standId   String            @map("stand_id")
+  title     String?
+  content   String
+  author    String            @default("developer")
+  tags      String[]          @default([])
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+  stand     ProjectariumStand @relation(fields: [standId], references: [id], onDelete: Cascade)
+
+  @@index([standId, updatedAt])
+  @@map("projectarium_notes")
+}
+
+model ProjectariumEventRecord {
+  id            String            @id
+  standId       String            @map("stand_id")
+  type          String
+  scope         String            @default("PROJECT")
+  targetAppName String?           @map("target_app_name")
+  description   String
+  author        String            @default("system")
+  metadata      Json?
+  timestamp     DateTime          @default(now())
+  stand         ProjectariumStand @relation(fields: [standId], references: [id], onDelete: Cascade)
+
+  @@index([standId, timestamp])
+  @@map("projectarium_events")
+}

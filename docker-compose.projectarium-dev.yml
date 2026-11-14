@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: lemon-projectarium-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lemon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-lemon_projectarium_db}
+    ports:
+      - "${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - lemon_projectarium_dev_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lemon} -d ${POSTGRES_DB:-lemon_projectarium_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: lemon-projectarium-api:dev
+    container_name: lemon-projectarium-dev-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-3100}:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lemon}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${POSTGRES_DB:-lemon_projectarium_db}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      AUTO_SEED: ${AUTO_SEED:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        BUILD_CONFIG: ${WEB_BUILD_CONFIG:-projectarium-dev}
+    image: lemon-projectarium-web:dev
+    container_name: lemon-projectarium-dev-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-4203}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  lemon_projectarium_dev_pgdata:

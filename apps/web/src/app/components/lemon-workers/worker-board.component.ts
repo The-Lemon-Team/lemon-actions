@@ -305,12 +305,13 @@ type ActiveTab = 'stands' | 'workers' | 'chronicle' | 'todos' | 'health';
                     (envFilterChange)="standService.setActiveEnvironment($event.standId, $event.env)"
                     (openAddApp)="onOpenAddApp($event)"
                     (removeApp)="standService.removeAppFromStand($event.standId, $event.appId)"
-                    (simulateFailure)="standService.simulateAppFailure($event.standId, $event.appId)"
-                    (heartbeatApp)="standService.heartbeatApp($event.standId, $event.appId)"
                     (addChronicle)="standService.addChronicleEntry($event.standId, $event.entry)"
                     (toggleTodo)="standService.toggleTodoItem($event.standId, $event.todoId)"
                     (addTodo)="standService.addTodoItem($event.standId, $event.item)"
                     (deleteTodo)="standService.deleteTodoItem($event.standId, $event.todoId)"
+                    (addNote)="standService.addNoteItem($event.standId, $event.note)"
+                    (updateNote)="standService.updateNoteItem($event.standId, $event.noteId, $event.patch)"
+                    (deleteNote)="standService.deleteNoteItem($event.standId, $event.noteId)"
                   />
                 }
               </div>
@@ -338,12 +339,13 @@ type ActiveTab = 'stands' | 'workers' | 'chronicle' | 'todos' | 'health';
                     (envFilterChange)="standService.setActiveEnvironment($event.standId, $event.env)"
                     (openAddApp)="onOpenAddApp($event)"
                     (removeApp)="standService.removeAppFromStand($event.standId, $event.appId)"
-                    (simulateFailure)="standService.simulateAppFailure($event.standId, $event.appId)"
-                    (heartbeatApp)="standService.heartbeatApp($event.standId, $event.appId)"
                     (addChronicle)="standService.addChronicleEntry($event.standId, $event.entry)"
                     (toggleTodo)="standService.toggleTodoItem($event.standId, $event.todoId)"
                     (addTodo)="standService.addTodoItem($event.standId, $event.item)"
                     (deleteTodo)="standService.deleteTodoItem($event.standId, $event.todoId)"
+                    (addNote)="standService.addNoteItem($event.standId, $event.note)"
+                    (updateNote)="standService.updateNoteItem($event.standId, $event.noteId, $event.patch)"
+                    (deleteNote)="standService.deleteNoteItem($event.standId, $event.noteId)"
                   />
                 }
               </div>

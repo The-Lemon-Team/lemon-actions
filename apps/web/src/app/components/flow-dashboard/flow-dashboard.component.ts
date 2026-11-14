@@ -1,5 +1,6 @@
 import { AsyncPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
@@ -18,6 +19,7 @@ import { FlowTableComponent } from '../flow-table/flow-table.component';
   standalone: true,
   imports: [
     AsyncPipe,
+    FormsModule,
     TranslatePipe,
     FlowMetricsComponent,
     CommandRibbonComponent,
@@ -78,16 +80,26 @@ import { FlowTableComponent } from '../flow-table/flow-table.component';
                   {{ 'projects.title' | trans }}
                 </span>
               </div>
-              @if (selectedProjectId$ | async; as selectedPrj) {
+              <div class="flex items-center gap-2">
+                @if (selectedProjectId$ | async) {
+                  <button
+                    type="button"
+                    (click)="onSelectProject(null)"
+                    class="text-[11px] font-label-ui text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <span class="material-symbols-rounded text-xs">close</span>
+                    <span>{{ 'projects.allProjects' | trans }}</span>
+                  </button>
+                }
                 <button
                   type="button"
-                  (click)="onSelectProject(null)"
-                  class="text-[11px] font-label-ui text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                  (click)="showCreateProjectForm = !showCreateProjectForm"
+                  class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-label-code-sm text-xs bg-surface-container-low hover:bg-surface-container-high text-on-surface transition-colors"
                 >
-                  <span class="material-symbols-rounded text-xs">close</span>
-                  <span>{{ 'projects.allProjects' | trans }}</span>
+                  <span class="material-symbols-rounded text-sm">add</span>
+                  <span>{{ 'projects.newProject' | trans }}</span>
                 </button>
-              }
+              </div>
             </div>
 
             <div class="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 select-none">
@@ -139,18 +151,49 @@ import { FlowTableComponent } from '../flow-table/flow-table.component';
                 </button>
               }
             </div>
+
+            @if (showCreateProjectForm) {
+              <div class="mt-1 pt-2 border-t border-outline-variant/30 flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  [(ngModel)]="newProjectName"
+                  (keydown.enter)="submitCreateProject()"
+                  [placeholder]="'projects.newProjectPlaceholder' | trans"
+                  class="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg bg-surface-container-low text-on-surface text-xs font-body-sm focus:outline-none focus:ring-2 focus:ring-primary-container"
+                />
+                <button
+                  type="button"
+                  (click)="submitCreateProject()"
+                  [disabled]="!newProjectName.trim()"
+                  class="px-3 py-1.5 rounded-lg bg-primary-container hover:bg-primary-fixed-dim disabled:opacity-50 text-on-primary-container font-label-ui text-xs font-bold transition-all"
+                >
+                  {{ 'projects.saveProject' | trans }}
+                </button>
+                <button
+                  type="button"
+                  (click)="showCreateProjectForm = false; newProjectName = ''"
+                  class="px-2.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface font-label-ui text-xs"
+                >
+                  {{ 'commandRibbon.cancel' | trans }}
+                </button>
+              </div>
+            }
           </div>
         }
       }
 
-      <!-- Command Ribbon: Neurons & Folders directly above table -->
-      <app-command-ribbon
-        [folderNodes]="(folderTree$ | async) ?? []"
-        [selectedFolderId]="selectedFolderId$ | async"
-        [totalCount]="(total$ | async) ?? 0"
-        (select)="onSelectFolder($event)"
-        (create)="onCreateFolder($event)"
-      />
+      <!-- Command Ribbon: Sub-Neurons of the selected project (hidden when All Projects is active) -->
+      @if (selectedProject$ | async; as selectedProject) {
+        <app-command-ribbon
+          [projectId]="selectedProject.id"
+          [projectName]="selectedProject.name"
+          [folderNodes]="(folderTree$ | async) ?? []"
+          [selectedFolderId]="selectedFolderId$ | async"
+          [totalCount]="selectedProject.flowCount"
+          (select)="onSelectFolder($event)"
+          (create)="onCreateFolder($event)"
+        />
+      }
 
       <!-- Search and filter toolbar -->
       <div class="bg-surface-container-lowest rounded-xl p-2.5 shadow-sm border border-outline-variant/30 flex items-center gap-3">
@@ -204,7 +247,7 @@ import { FlowTableComponent } from '../flow-table/flow-table.component';
       @if (showCreateModal) {
         <app-create-flow-modal
           [folders]="(folders$ | async) ?? []"
-          [initialFolderId]="selectedFolderId$ | async"
+          [initialFolderId]="(selectedFolderId$ | async) ?? (selectedProjectId$ | async)"
           [isSubmitting]="isCreatingFlow"
           (close)="showCreateModal = false"
           (submitFlow)="onCreateFlow($event)"
@@ -227,11 +270,22 @@ export class FlowDashboardComponent {
   readonly folders$ = this.orchestrator.folders$;
   readonly selectedFolderId$ = this.orchestrator.selectedFolderId$;
   readonly projects$ = this.orchestrator.projects$;
+  readonly selectedProject$ = this.orchestrator.selectedProject$;
   readonly selectedProjectId$ = this.orchestrator.selectedProjectId$;
 
   showCreateModal = false;
+  showCreateProjectForm = false;
+  newProjectName = '';
   isCreatingFlow = false;
   managedFlow: Flow | null = null;
+
+  submitCreateProject(): void {
+    const name = this.newProjectName.trim();
+    if (!name) return;
+    this.orchestrator.createFolder(name, null);
+    this.newProjectName = '';
+    this.showCreateProjectForm = false;
+  }
 
   onSelectProject(id: string | null): void {
     this.orchestrator.selectProject(id);

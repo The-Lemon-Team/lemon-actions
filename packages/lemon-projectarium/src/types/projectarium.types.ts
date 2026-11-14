@@ -7,13 +7,14 @@
 
 export type ProjectariumAppStatus = 'ONLINE' | 'DEGRADED' | 'CHECKING' | 'EVICTED';
 export type ProjectariumEnvironment = 'dev' | 'staging' | 'production';
-export type ProjectariumNetworkMode = 'local' | 'tailscale-lan' | 'tailscale-funnel';
+export type ProjectariumNetworkMode = 'local' | 'lan' | 'tailscale-lan' | 'tailscale-funnel';
 export type ProjectariumScope = 'PROJECT' | 'APP';
 export type ProjectariumPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface ProjectariumApp {
   id: string;
   appName: string;
+  host?: string;
   port: number;
   instanceId: string;
   leaseToken: string;
@@ -40,6 +41,16 @@ export interface ProjectariumTodoItem {
   priority: ProjectariumPriority;
 }
 
+export interface ProjectariumNoteItem {
+  id: string;
+  title?: string;
+  content: string;
+  author: string;
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ProjectariumEventType =
   | 'PROJECT_CREATED'
   | 'APP_REGISTERED'
@@ -49,6 +60,9 @@ export type ProjectariumEventType =
   | 'APP_RELEASED'
   | 'TODO_ADDED'
   | 'TODO_TOGGLED'
+  | 'NOTE_ADDED'
+  | 'NOTE_UPDATED'
+  | 'NOTE_DELETED'
   | 'MANUAL_NOTE';
 
 export interface ProjectariumEvent {
@@ -71,6 +85,7 @@ export interface ProjectariumProject {
   context: Record<string, any>;
   apps: ProjectariumApp[];
   todos: ProjectariumTodoItem[];
+  notes: ProjectariumNoteItem[];
   chronicle: ProjectariumEvent[];
   createdAt: string;
   updatedAt: string;
@@ -81,6 +96,7 @@ export interface ProjectariumRegisterPayload {
   projectName?: string;
   projectToken?: string;
   appName?: string;
+  host?: string;
   preferredPort?: number;
   environment?: ProjectariumEnvironment;
   networkMode?: ProjectariumNetworkMode;

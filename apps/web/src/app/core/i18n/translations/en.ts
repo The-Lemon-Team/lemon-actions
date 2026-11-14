@@ -78,11 +78,15 @@ export const en: Translations = {
     inFolder: 'In: {{name}}',
     saveFolder: 'Save Neuron',
     cancel: 'Cancel',
+    noSubNeurons: 'No sub-neurons yet',
   },
   projects: {
     allProjects: 'All Projects',
     title: 'Projects',
     filterBy: 'Filter by project: {{name}}',
+    newProject: 'New Project',
+    newProjectPlaceholder: 'New project name...',
+    saveProject: 'Create Project',
   },
   metrics: {
     registered: 'Registered',
