@@ -39,7 +39,7 @@ describe('LayoutComponent', () => {
     expect(links.length).toBe(FULL_NAV_ITEMS.length);
   });
 
-  it('renders only Projectarium navigation item and hides sidebar when hideSidebar is true', async () => {
+  it('renders Projectarium shell navigation items and hides sidebar when hideSidebar is true', async () => {
     await TestBed.configureTestingModule({
       imports: [LayoutComponent],
       providers: [provideRouter([])],
@@ -53,8 +53,9 @@ describe('LayoutComponent', () => {
     fixture.detectChanges();
 
     const links = fixture.nativeElement.querySelectorAll('nav[aria-label="Apps Navigation"] a');
-    expect(links.length).toBe(1);
+    expect(links.length).toBe(PROJECTARIUM_NAV_ITEMS.length);
     expect(links[0].textContent).toContain('Projectarium');
+    expect(links[1].textContent).toContain('Seasons Map');
     expect(fixture.nativeElement.textContent).toContain('Projectarium · Dev Stand');
     expect(fixture.nativeElement.querySelector('.xl\\:col-span-3')).toBeNull();
   });

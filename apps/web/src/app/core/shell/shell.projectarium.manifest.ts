@@ -13,6 +13,13 @@ export const PROJECTARIUM_NAV_ITEMS: readonly AppNavItem[] = [
     icon: 'domain',
     badge: { text: 'Dev Stand', variant: 'success' },
   },
+  {
+    id: 'seasons',
+    route: '/seasons',
+    label: 'Seasons Map',
+    icon: 'bubble_chart',
+    badge: { text: 'Bubbles', variant: 'primary' },
+  },
 ];
 
 export const PROJECTARIUM_ROUTES: Routes = [
@@ -23,6 +30,14 @@ export const PROJECTARIUM_ROUTES: Routes = [
         (m) => m.ProjectariumCockpitComponent,
       ),
     title: 'Lemon Projectarium | Dev Stand',
+  },
+  {
+    path: 'seasons',
+    loadComponent: () =>
+      import('../../components/seasons-bubbles/seasons-explorer.component').then(
+        (m) => m.SeasonsExplorerComponent,
+      ),
+    title: 'Lemon Seasons | Streams & Feeds Bubbles',
   },
   {
     path: '',

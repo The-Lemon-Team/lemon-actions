@@ -114,7 +114,7 @@ export class LayoutComponent {
   @Output() modeChange = new EventEmitter<AppMode>();
 
   get showSidebar(): boolean {
-    return !this.hideSidebar && this.appMode !== 'arena';
+    return !this.hideSidebar && this.appMode !== 'arena' && this.appMode !== 'seasons';
   }
 
   get mainContainerClass(): string {

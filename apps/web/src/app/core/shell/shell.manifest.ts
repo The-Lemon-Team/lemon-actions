@@ -46,6 +46,13 @@ export const FULL_NAV_ITEMS: readonly AppNavItem[] = [
     label: 'Neuron Arena',
     icon: 'diversity_3',
   },
+  {
+    id: 'seasons',
+    route: '/seasons',
+    label: 'Seasons Map',
+    icon: 'bubble_chart',
+    badge: { text: 'Live', variant: 'primary' },
+  },
 ];
 
 export const FULL_ROUTES: Routes = [
@@ -104,6 +111,14 @@ export const FULL_ROUTES: Routes = [
         (m) => m.NeuronArenaComponent,
       ),
     title: 'Neuron Arena | Lemon Actions',
+  },
+  {
+    path: 'seasons',
+    loadComponent: () =>
+      import('../../components/seasons-bubbles/seasons-explorer.component').then(
+        (m) => m.SeasonsExplorerComponent,
+      ),
+    title: 'Lemon Seasons | Streams & Feeds Bubbles',
   },
   {
     path: '',

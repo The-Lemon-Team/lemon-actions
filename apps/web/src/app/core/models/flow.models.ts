@@ -1,6 +1,15 @@
 import { Observable } from 'rxjs';
 
-export type AppMode = 'party' | 'arena' | 'home' | 'code' | 'core' | 'actions' | 'registrar' | 'projectarium';
+export type AppMode =
+  | 'party'
+  | 'arena'
+  | 'home'
+  | 'code'
+  | 'core'
+  | 'actions'
+  | 'registrar'
+  | 'projectarium'
+  | 'seasons';
 
 export interface Profile {
   id: string;
