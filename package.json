@@ -9,7 +9,6 @@
   ],
   "scripts": {
     "build:core": "npm run --prefix packages/core-combinator build",
-    "build:registrar": "npx --prefix packages/core-combinator tsc --project packages/lemon-app-registrar/tsconfig.json",
     "build:projectarium": "npx --prefix packages/core-combinator tsc --project packages/lemon-projectarium/tsconfig.json",
     "build:sdk": "npm run --prefix packages/core-combinator-sdk build",
     "build:neurons": "npm run --prefix packages/lemon-seasons-neurons build",
@@ -19,13 +18,13 @@
     "build:web:projectarium": "npm run --prefix apps/web build:projectarium",
     "build:agent": "npm run --prefix apps/web build:agent",
     "test:web": "npm run --prefix apps/web test:ci",
-    "build:all": "npm run build:core && npm run build:registrar && npm run build:projectarium && npm run build:sdk && npm run build:neurons && npm run build:api && npm run build:web",
+    "build:all": "npm run build:core && npm run build:projectarium && npm run build:sdk && npm run build:neurons && npm run build:api && npm run build:web",
     "dev:up": "powershell -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
     "dev:projectarium": "powershell -ExecutionPolicy Bypass -File ./scripts/start-projectarium-dev.ps1",
     "start:api": "npm run --prefix apps/api start:dev",
     "start:web": "npm run --prefix apps/web start",
     "start:projectarium": "npm run --prefix apps/web start:projectarium",
-    "start:registrar-mcp": "node packages/lemon-app-registrar/dist/mcp/registrar-mcp.server.js",
+    "start:projectarium-mcp": "node packages/lemon-projectarium/dist/mcp/projectarium-mcp.server.js",
     "start:agent": "npm run --prefix apps/web start:agent",
     "migrate:data": "ts-node -r tsconfig-paths/register apps/api/src/migrations/agent-data-migration.ts"
   },

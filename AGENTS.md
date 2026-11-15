@@ -12,10 +12,10 @@ All modal dialogs in this repository must comply with the rule defined in [`.age
 ## Application Registration & Port Shield Rule
 All autonomous agents starting background servers, preview listeners, or microservices must comply with [`.agents/rules/port-allocation.md`](./.agents/rules/port-allocation.md):
 - **Root Infrastructure Anchors (Zero-Deadlock)**: Core stack (PostgreSQL `:5433`, Backend API `:3000`, Angular Web `:4201`) are root anchors. The API is the host of Port Shield itself and does NOT register through HTTP to start.
-- **Dynamic Pre-Registration (Ports 4301+)**: Call `lemon_register_app` (MCP) or `POST /api/registry/register` before starting any dynamic agent microservice or listener.
-- **Port Compliance**: Bind strictly to the returned `allocatedPort` (4301+). Never bind to hardcoded ports.
-- **Lease & Heartbeat**: Maintain lease tokens; 5 consecutive failed pings trigger automatic eviction and port reclaim.
-- **Clean Release**: Call `lemon_release_app` or `POST /api/registry/release` upon task completion.
+- **Dynamic Pre-Registration (Ports 4320+)**: Call `lemon_register_app` (MCP) or `POST /api/projectarium/register` before starting any dynamic agent microservice or listener.
+- **Port Compliance**: Bind strictly to the returned `allocatedApp.port` (4320+). Never bind to hardcoded ports.
+- **Lease & Heartbeat**: Maintain lease tokens (`lemon_heartbeat` / `POST /api/projectarium/heartbeat`); 5 consecutive failed probes trigger automatic eviction and port reclaim.
+- **Clean Release**: Call `lemon_release_app` or `POST /api/projectarium/release` upon task completion.
 
 ## Angular & SOLID Clean Architecture Rule
 All Angular code in this repository must comply with [`.agents/rules/angular-solid-architecture.md`](./.agents/rules/angular-solid-architecture.md):

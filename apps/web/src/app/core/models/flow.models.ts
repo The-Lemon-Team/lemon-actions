@@ -7,7 +7,6 @@ export type AppMode =
   | 'code'
   | 'core'
   | 'actions'
-  | 'registrar'
   | 'projectarium'
   | 'seasons';
 

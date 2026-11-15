@@ -12,7 +12,6 @@ import {
 } from '../models/todo-card.models';
 import { LemonCardColor } from '../models/worker.models';
 import { LemonWorkerService } from './lemon-worker.service';
-import { ServiceHealthService } from './service-health.service';
 
 const CHRONICLE_STORAGE_KEY = 'lemon_actions_chronicle_v1';
 const TODOS_STORAGE_KEY = 'lemon_actions_todos_v1';
@@ -157,7 +156,7 @@ const INITIAL_CHRONICLE_SEEDS: ProjectChronicleCard[] = [
         timestamp: new Date(Date.now() - 3600000 * 1.5).toISOString(),
         type: 'DEPLOY',
         author: 'Agent-Antigravity',
-        title: 'Запущен MCP сервер lemon-app-registrar-mcp',
+        title: 'Запущен MCP сервер lemon-projectarium-mcp',
         details: 'Инструменты: lemon_register_app, lemon_heartbeat, lemon_release_app, lemon_list_apps',
         latencyMs: 24,
         badge: 'MCP_ACTIVE',
@@ -298,7 +297,6 @@ const INITIAL_TODO_SEEDS: ReactiveTodoListCard[] = [
 @Injectable({ providedIn: 'root' })
 export class LemonChronicleService {
   private readonly workerService = inject(LemonWorkerService);
-  private readonly healthService = inject(ServiceHealthService);
 
   private readonly chronicleCards$ = new BehaviorSubject<ProjectChronicleCard[]>(
     this.loadChronicleCards(),
@@ -390,60 +388,6 @@ export class LemonChronicleService {
         latencyMs: execution.durationMs,
         badge: worker.rule.trigger.kind,
       });
-    });
-
-    // 2. Service Health Events: Auto-completes SERVICE_REGISTERED, HEALTHCHECK_PING, CIRCUIT_BREAKER
-    this.healthService.healthEvent$.subscribe((ev) => {
-      if (ev.type === 'REGISTERED') {
-        const ctx = ev.data;
-        this.dispatchReactiveImpulse(
-          'SERVICE_REGISTERED',
-          `Сервис «${ctx.appName}» зарегистрирован на :${ctx.port} [${ctx.environment.toUpperCase()}]`,
-        );
-
-        this.addLogToProject('workspace.core', {
-          id: 'log-' + Math.random().toString(36).substring(2, 7),
-          timestamp: new Date().toISOString(),
-          type: 'SERVICE_EVENT',
-          author: 'Port-Shield-Engine',
-          title: `Регистрация сервиса: ${ctx.appName}`,
-          details: `Выделен порт :${ctx.port}, режим: ${ctx.networkMode}, токен: ${ctx.leaseToken}`,
-          latencyMs: 14,
-          badge: ctx.environment.toUpperCase(),
-        });
-      } else if (ev.type === 'PING_ALL') {
-        this.dispatchReactiveImpulse(
-          'HEALTHCHECK_PING',
-          `Раунд проверки здоровья PROJECTION завершён для всех узлов`,
-        );
-
-        this.addLogToProject('workspace.core', {
-          id: 'log-' + Math.random().toString(36).substring(2, 7),
-          timestamp: new Date().toISOString(),
-          type: 'MILESTONE',
-          author: 'Health-Projection',
-          title: 'Опрос здоровья сети (PROJECTION)',
-          details: `Все живые сервисы опрошены, задержка в пределах нормы`,
-          latencyMs: 28,
-          badge: 'HEALTH_OK',
-        });
-      } else if (ev.type === 'EVICTED') {
-        const evicted = ev.data;
-        this.dispatchReactiveImpulse(
-          'CIRCUIT_BREAKER',
-          `Circuit Breaker: Сервис «${evicted.context.appName}» вытеснен из пула после 5 сбоев`,
-        );
-
-        this.addLogToProject('workspace.core', {
-          id: 'log-' + Math.random().toString(36).substring(2, 7),
-          timestamp: new Date().toISOString(),
-          type: 'CIRCUIT_BREAKER',
-          author: 'Circuit-Breaker',
-          title: `Авто-вытеснение: ${evicted.context.appName}`,
-          details: `Превышен порог сбоев (${evicted.consecutiveFailures}/5). Порт :${evicted.context.port} освобождён.`,
-          badge: 'EVICTED',
-        });
-      }
     });
   }
 

@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Observable, Subject } from 'rxjs';
 import {
@@ -8,11 +8,14 @@ import {
   ProjectariumEnvironment,
   ProjectariumEvent,
   ProjectariumEventType,
+  ProjectariumHeartbeatResponse,
   ProjectariumNetworkMode,
   ProjectariumNoteItem,
+  ProjectariumPoolItem,
   ProjectariumPriority,
   ProjectariumProject,
   ProjectariumRegisterResponse,
+  ProjectariumReleaseResponse,
   ProjectariumScope,
   ProjectariumAppStatus,
   ProjectariumTodoItem,
@@ -27,7 +30,9 @@ import {
   AddProjectNoteDto,
   AddProjectTodoDto,
   CreateProjectStandDto,
+  ProjectariumHeartbeatDto,
   ProjectariumRegisterDto,
+  ProjectariumReleaseDto,
   UpdateProjectNoteDto,
 } from './projectarium.dto';
 
@@ -164,6 +169,38 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     }
     await this.persistProject(project);
     return { success: true };
+  }
+
+  async heartbeat(dto: ProjectariumHeartbeatDto): Promise<ProjectariumHeartbeatResponse> {
+    const outcome = this.engine.heartbeat(dto.instanceId, dto.leaseToken);
+    if (!outcome.ok) {
+      if (outcome.reason === 'NOT_FOUND') {
+        throw new NotFoundException(`Application instance '${dto.instanceId}' not found in active pool`);
+      }
+      throw new UnauthorizedException(`Invalid lease token for instance '${dto.instanceId}'`);
+    }
+    await this.safePersistProject(outcome.project);
+    return outcome.result;
+  }
+
+  async releaseByLease(dto: ProjectariumReleaseDto): Promise<ProjectariumReleaseResponse> {
+    const outcome = this.engine.releaseByLease(dto.instanceId, dto.leaseToken, dto.author || 'agent');
+    if (!outcome.ok) {
+      if (outcome.reason === 'NOT_FOUND') {
+        throw new NotFoundException(`Application instance '${dto.instanceId}' not found in active pool`);
+      }
+      throw new UnauthorizedException(`Invalid lease token for instance '${dto.instanceId}'`);
+    }
+    await this.safePersistProject(outcome.project);
+    return outcome.result;
+  }
+
+  getPool(
+    environment?: ProjectariumEnvironment,
+    networkMode?: ProjectariumNetworkMode,
+    includeEvicted = false,
+  ): ProjectariumPoolItem[] {
+    return this.engine.listPool({ environment, networkMode, includeEvicted });
   }
 
   async deleteProject(slugOrToken: string): Promise<{ success: boolean }> {

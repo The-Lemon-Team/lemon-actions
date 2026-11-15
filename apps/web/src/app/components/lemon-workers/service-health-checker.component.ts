@@ -30,10 +30,10 @@ import {
               </div>
               <div>
                 <h3 class="font-headline-sm text-sm font-bold text-on-surface">
-                  Регистратор приложений агента (Live Registrar)
+                  Регистрация сервиса в Projectarium Port Shield
                 </h3>
                 <p class="font-body-sm text-xs text-on-surface-variant">
-                  Выдаёт свободный порт, токен инстанса и регистрирует окружение (Dev, Staging, Prod) и сеть (Local, Tailscale LAN, Funnel)
+                  Выдаёт свободный порт (4320+), токен инстанса и регистрирует окружение (Dev, Staging, Prod) и сеть (Local, Tailscale LAN, Funnel)
                 </p>
               </div>
             </div>
@@ -57,11 +57,11 @@ import {
 
             <!-- Custom Port (Optional) -->
             <div>
-              <label class="block text-[11px] font-medium text-on-surface-variant mb-1">Порт (авто: 4301+)</label>
+              <label class="block text-[11px] font-medium text-on-surface-variant mb-1">Порт (авто: 4320+)</label>
               <input
                 type="number"
                 [(ngModel)]="newAppPort"
-                placeholder="4301+"
+                placeholder="4320+"
                 class="w-full px-3.5 py-2 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-xs font-label-code-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
@@ -365,7 +365,7 @@ import {
                     {{ svc.lastLatencyMs }}ms
                   </div>
 
-                  <!-- Interactive Buttons: Ping / Test Failure / Release -->
+                  <!-- Interactive Buttons: Ping / Release -->
                   <div class="flex items-center gap-1">
                     <!-- Quick Ping -->
                     <button
@@ -373,21 +373,11 @@ import {
                       (click)="healthService.pingSingle(svc.context.id)"
                       [disabled]="svc.currentStatus === 'CHECKING'"
                       class="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-                      title="Проверить / Продлить аренду"
+                      title="Проверить доступность (HTTP/TCP Ping)"
                     >
                       <span class="material-symbols-rounded text-sm" [class.animate-spin]="svc.currentStatus === 'CHECKING'">
                         refresh
                       </span>
-                    </button>
-
-                    <!-- Simulate Failure (To test circuit breaker & eviction) -->
-                    <button
-                      type="button"
-                      (click)="healthService.simulateFailure(svc.context.id)"
-                      class="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                      title="Имитировать сбой (увеличить счётчик ошибок)"
-                    >
-                      <span class="material-symbols-rounded text-sm">flash_off</span>
                     </button>
 
                     <!-- Graceful Agent Shutdown (Release port & token) -->

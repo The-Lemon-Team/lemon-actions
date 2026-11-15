@@ -9,11 +9,14 @@ import {
   ProjectariumApp,
   ProjectariumEnvironment,
   ProjectariumEvent,
+  ProjectariumHeartbeatResponse,
   ProjectariumNetworkMode,
   ProjectariumNoteItem,
+  ProjectariumPoolItem,
   ProjectariumProject,
   ProjectariumRegisterPayload,
   ProjectariumRegisterResponse,
+  ProjectariumReleaseResponse,
   ProjectariumScope,
   ProjectariumTodoItem,
   ProjectShieldStats,
@@ -340,18 +343,40 @@ export class ProjectariumEngine {
   }
 
   /**
+   * Find an application instance across all project stands by instanceId or app id
+   */
+  public findAppByInstanceId(
+    instanceId: string,
+  ): { project: ProjectariumProject; app: ProjectariumApp } | undefined {
+    for (const project of this.projects.values()) {
+      const app = project.apps.find((a) => a.instanceId === instanceId || a.id === instanceId);
+      if (app) {
+        return { project, app };
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * Release an app instance from a project
    */
   public releaseApp(tokenOrSlug: string, instanceId: string, author = 'user'): boolean {
     const project = this.findProject(tokenOrSlug);
     if (!project) return false;
+    return this.removeAppFromProject(project, instanceId, author) !== undefined;
+  }
 
+  private removeAppFromProject(
+    project: ProjectariumProject,
+    instanceId: string,
+    author: string,
+  ): ProjectariumApp | undefined {
     const index = project.apps.findIndex((a) => a.instanceId === instanceId || a.id === instanceId);
-    if (index === -1) return false;
+    if (index === -1) return undefined;
 
-    const app = project.apps[index];
-    project.apps.splice(index, 1);
-    project.updatedAt = new Date().toISOString();
+    const [app] = project.apps.splice(index, 1);
+    const now = new Date().toISOString();
+    project.updatedAt = now;
 
     project.chronicle.unshift({
       id: `ev-rel-${Date.now().toString(36)}`,
@@ -359,11 +384,124 @@ export class ProjectariumEngine {
       scope: 'APP',
       targetAppName: app.appName,
       description: `Приложение ${app.appName} (порт :${app.port}) освобождено и удалено из пула`,
-      timestamp: new Date().toISOString(),
+      timestamp: now,
       author,
     });
 
-    return true;
+    return app;
+  }
+
+  /**
+   * Renew lease for an active application instance using instanceId + leaseToken
+   */
+  public heartbeat(
+    instanceId: string,
+    leaseToken: string,
+  ):
+    | { ok: true; project: ProjectariumProject; result: ProjectariumHeartbeatResponse }
+    | { ok: false; reason: 'NOT_FOUND' | 'INVALID_TOKEN' } {
+    const match = this.findAppByInstanceId(instanceId);
+    if (!match) {
+      return { ok: false, reason: 'NOT_FOUND' };
+    }
+
+    const { project, app } = match;
+    if (app.leaseToken !== leaseToken) {
+      return { ok: false, reason: 'INVALID_TOKEN' };
+    }
+
+    const now = new Date().toISOString();
+    const prevStatus = app.status;
+    app.lastPingAt = now;
+    app.consecutiveFailures = 0;
+    app.status = 'ONLINE';
+    project.updatedAt = now;
+
+    if (prevStatus !== 'ONLINE') {
+      project.chronicle.unshift({
+        id: `ev-hb-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 5)}`,
+        type: 'APP_HEARTBEAT',
+        scope: 'APP',
+        targetAppName: app.appName,
+        description: `Lease-токен подтверждён (heartbeat) для ${app.appName} на порту :${app.port}`,
+        timestamp: now,
+        author: 'lease-heartbeat',
+      });
+    }
+
+    return {
+      ok: true,
+      project,
+      result: {
+        status: 'HEARTBEAT_ACK',
+        projectSlug: project.slug,
+        instanceId: app.instanceId,
+        port: app.port,
+        renewedAt: now,
+      },
+    };
+  }
+
+  /**
+   * Gracefully release an application instance using instanceId + leaseToken
+   */
+  public releaseByLease(
+    instanceId: string,
+    leaseToken: string,
+    author = 'agent',
+  ):
+    | { ok: true; project: ProjectariumProject; result: ProjectariumReleaseResponse }
+    | { ok: false; reason: 'NOT_FOUND' | 'INVALID_TOKEN' } {
+    const match = this.findAppByInstanceId(instanceId);
+    if (!match) {
+      return { ok: false, reason: 'NOT_FOUND' };
+    }
+
+    const { project, app } = match;
+    if (app.leaseToken !== leaseToken) {
+      return { ok: false, reason: 'INVALID_TOKEN' };
+    }
+
+    const removed = this.removeAppFromProject(project, app.instanceId, author);
+    const releasedAt = new Date().toISOString();
+
+    return {
+      ok: true,
+      project,
+      result: {
+        status: 'RELEASED',
+        projectSlug: project.slug,
+        instanceId: (removed ?? app).instanceId,
+        port: (removed ?? app).port,
+        releasedAt,
+      },
+    };
+  }
+
+  /**
+   * Flat pool view across all stands with optional environment/networkMode filters
+   */
+  public listPool(filter?: {
+    environment?: ProjectariumEnvironment;
+    networkMode?: ProjectariumNetworkMode;
+    includeEvicted?: boolean;
+  }): ProjectariumPoolItem[] {
+    const items: ProjectariumPoolItem[] = [];
+    for (const project of this.projects.values()) {
+      for (const app of project.apps) {
+        if (!filter?.includeEvicted && app.status === 'EVICTED') continue;
+        if (filter?.environment && app.environment !== filter.environment) continue;
+        if (filter?.networkMode && app.networkMode !== filter.networkMode) continue;
+        items.push({
+          projectId: project.id,
+          projectSlug: project.slug,
+          projectName: project.name,
+          projectToken: project.projectToken,
+          app,
+        });
+      }
+    }
+    return items;
   }
 
   /**

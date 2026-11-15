@@ -124,3 +124,27 @@ export interface ProjectShieldStats {
   zeroDeadlockRootCount: number;
   averageLatencyMs: number;
 }
+
+export interface ProjectariumPoolItem {
+  projectId: string;
+  projectSlug: string;
+  projectName: string;
+  projectToken: string;
+  app: ProjectariumApp;
+}
+
+export interface ProjectariumHeartbeatResponse {
+  status: 'HEARTBEAT_ACK';
+  projectSlug: string;
+  instanceId: string;
+  port: number;
+  renewedAt: string;
+}
+
+export interface ProjectariumReleaseResponse {
+  status: 'RELEASED';
+  projectSlug: string;
+  instanceId: string;
+  port: number;
+  releasedAt: string;
+}

@@ -4,15 +4,18 @@
   "description": "Lemon-Projectarium - Project Stand Engine, Smart Upsert Handler, Multi-App Infrastructure & Dual-Level Reactive Todos",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": "dist/server.js",
+  "bin": {
+    "lemon-projectarium": "dist/server.js",
+    "lemon-projectarium-mcp": "dist/mcp/projectarium-mcp.server.js"
+  },
   "scripts": {
     "start": "tsc && node dist/server.js",
+    "start:mcp": "node dist/mcp/projectarium-mcp.server.js",
     "build": "tsc",
     "dev": "tsc --watch",
     "watch": "tsc --watch"
   },
   "dependencies": {
-    "@lemon/app-registrar": "0.1.0",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {

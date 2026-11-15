@@ -16,7 +16,6 @@ if (-not $pgRunning) {
 # 2. Собираем workspace-пакеты (если dist отсутствует или устарел)
 Write-Host "🔨 Сборка @lemon/projectarium и зависимых пакетов..." -ForegroundColor Yellow
 npm run build:core
-npm run build:registrar
 npm run build:projectarium
 
 # 3. Применяем Prisma-миграции к локальной БД

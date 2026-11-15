@@ -16,13 +16,6 @@ export const FULL_NAV_ITEMS: readonly AppNavItem[] = [
     icon: 'style',
   },
   {
-    id: 'registrar',
-    route: '/registrar',
-    label: 'Port Shield',
-    icon: 'verified_user',
-    badge: { text: 'Live', variant: 'success' },
-  },
-  {
     id: 'home',
     route: '/home',
     label: 'Lemon Home',
@@ -71,14 +64,6 @@ export const FULL_ROUTES: Routes = [
         (m) => m.WorkerBoardComponent,
       ),
     title: 'Lemon Actions | Worker Cards & Streams',
-  },
-  {
-    path: 'registrar',
-    loadComponent: () =>
-      import('../../components/app-registrar/app-registrar.component').then(
-        (m) => m.AppRegistrarComponent,
-      ),
-    title: 'Lemon Registrar | Live Service Mesh & Port Shield',
   },
   {
     path: 'core',

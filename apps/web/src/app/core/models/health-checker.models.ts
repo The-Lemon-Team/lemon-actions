@@ -1,9 +1,9 @@
 /**
- * Lemon Actions — Application Registrar & Live Service Mesh Models
+ * Lemon Actions — Projectarium Port Shield & Live Service Mesh Models
  *
  * Types for dynamic agent app registration, port allocation, lease tokens,
  * environment scoping (dev/staging/production), network routing modes
- * (localhost, Tailscale LAN, Tailscale Funnel), consecutive failure eviction,
+ * (localhost, LAN, Tailscale LAN, Tailscale Funnel), consecutive failure eviction,
  * and History Neuron chronicles.
  */
 

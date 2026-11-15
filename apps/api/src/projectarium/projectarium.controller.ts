@@ -3,10 +3,14 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
+import { ProjectariumEnvironment, ProjectariumNetworkMode } from '@lemon/projectarium';
 import { ProjectariumService } from './projectarium.service';
 import {
   AddAppToProjectDto,
@@ -14,7 +18,9 @@ import {
   AddProjectNoteDto,
   AddProjectTodoDto,
   CreateProjectStandDto,
+  ProjectariumHeartbeatDto,
   ProjectariumRegisterDto,
+  ProjectariumReleaseDto,
   UpdateProjectNoteDto,
 } from './projectarium.dto';
 
@@ -30,6 +36,36 @@ export class ProjectariumController {
   @Post('register')
   register(@Body() dto: ProjectariumRegisterDto) {
     return this.projectariumService.registerOrAttach(dto);
+  }
+
+  /**
+   * Heartbeat endpoint for active instances to renew their lease token.
+   */
+  @Post('heartbeat')
+  @HttpCode(HttpStatus.OK)
+  heartbeat(@Body() dto: ProjectariumHeartbeatDto) {
+    return this.projectariumService.heartbeat(dto);
+  }
+
+  /**
+   * Graceful lease-authenticated release of an allocated application port.
+   */
+  @Post('release')
+  @HttpCode(HttpStatus.OK)
+  releaseByLease(@Body() dto: ProjectariumReleaseDto) {
+    return this.projectariumService.releaseByLease(dto);
+  }
+
+  /**
+   * Flat pool view across all stands with optional environment/networkMode filters.
+   */
+  @Get('pool')
+  getPool(
+    @Query('environment') environment?: ProjectariumEnvironment,
+    @Query('networkMode') networkMode?: ProjectariumNetworkMode,
+    @Query('includeEvicted') includeEvicted?: string,
+  ) {
+    return this.projectariumService.getPool(environment, networkMode, includeEvicted === 'true');
   }
 
   /**

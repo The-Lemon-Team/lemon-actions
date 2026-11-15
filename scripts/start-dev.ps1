@@ -12,17 +12,17 @@ if (-not $pgRunning) {
 }
 
 # 2. Проверяем сборку зависимых пакетов
-if (-not (Test-Path "packages/core-combinator/dist/index.js") -or -not (Test-Path "packages/lemon-app-registrar/dist/index.js")) {
-    Write-Host "🔨 Сборка базовых пакетов (@lemon/core-combinator, @lemon/app-registrar)..." -ForegroundColor Yellow
+if (-not (Test-Path "packages/core-combinator/dist/index.js") -or -not (Test-Path "packages/lemon-projectarium/dist/index.js")) {
+    Write-Host "🔨 Сборка базовых пакетов (@lemon/core-combinator, @lemon/projectarium)..." -ForegroundColor Yellow
     npm run build:core
-    npm run build:registrar
+    npm run build:projectarium
 } else {
     Write-Host "✓ Пакеты ядра уже собраны" -ForegroundColor Green
 }
 
 # 3. Запуск Backend API и Angular Frontend
 Write-Host "⚡ Запуск серверов в фоне:" -ForegroundColor Cyan
-Write-Host "   - API & Port Shield: http://localhost:3000 (Swagger/Health/Registry)" -ForegroundColor Gray
+Write-Host "   - API & Port Shield: http://localhost:3000 (Swagger/Health/Projectarium)" -ForegroundColor Gray
 Write-Host "   - Web Frontend:      http://localhost:4201 (Lemon Actions UI)" -ForegroundColor Gray
 
 Start-Process -NoNewWindow -FilePath "npm" -ArgumentList "run", "start:api"

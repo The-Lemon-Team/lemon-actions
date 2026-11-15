@@ -1,7 +1,8 @@
-import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, Subject, Subscription, interval } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import { BehaviorSubject, Observable, Subscription, combineLatest, interval, map } from 'rxjs';
 import {
   AppEnvironment,
+  AppHealthStatus,
   AppNetworkMode,
   HealthMeshProjection,
   RegistryChronicleEvent,
@@ -9,520 +10,256 @@ import {
   ServiceHealthItemState,
   ServicePingRecord,
 } from '../models/health-checker.models';
+import { ProjectStand, StandAppItem } from '../models/project-stand.models';
+import { ProjectStandService } from './project-stand.service';
 
-const INITIAL_CONTEXT_CHECKPOINTS: ServiceCheckpointContext[] = [
-  {
-    id: 'svc-api',
-    appName: 'Backend API Gateway',
-    url: 'http://localhost:3000/api',
-    port: 3000,
-    instanceId: 'inst-core-01',
-    leaseToken: 'tok-lemon-core-01',
-    environment: 'dev',
-    networkMode: 'local',
-    method: 'GET',
-    expectedStatus: 200,
-    timeoutMs: 3000,
-    group: 'Core Infrastructure',
-    icon: 'dns',
-    registeredAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: 'svc-web',
-    appName: 'Angular Web Frontend',
-    url: 'http://localhost:4201',
-    port: 4201,
-    instanceId: 'inst-core-02',
-    leaseToken: 'tok-lemon-core-02',
-    environment: 'dev',
-    networkMode: 'local',
-    method: 'GET',
-    expectedStatus: 200,
-    timeoutMs: 2000,
-    group: 'Core Infrastructure',
-    icon: 'web',
-    registeredAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: 'svc-db',
-    appName: 'PostgreSQL Database Port',
-    url: 'http://localhost:5433',
-    port: 5433,
-    instanceId: 'inst-core-03',
-    leaseToken: 'tok-lemon-core-03',
-    environment: 'dev',
-    networkMode: 'local',
-    method: 'HEAD',
-    expectedStatus: 200,
-    timeoutMs: 2000,
-    group: 'Core Infrastructure',
-    icon: 'database',
-    registeredAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: 'svc-ai-relay',
-    appName: 'Production AI Funnel Relay',
-    url: 'https://lemon-ai.tailnet.ts.net/health',
-    port: 443,
-    instanceId: 'inst-prod-04',
-    leaseToken: 'tok-lemon-prod-04',
-    environment: 'production',
-    networkMode: 'tailscale-funnel',
-    method: 'GET',
-    expectedStatus: 200,
-    timeoutMs: 5000,
-    group: 'External APIs',
-    icon: 'cloud_done',
-    registeredAt: new Date(Date.now() - 3600000 * 3).toISOString(),
-  },
-  {
-    id: 'svc-staging-mesh',
-    appName: 'Staging Mesh Node',
-    url: 'http://100.64.0.22:8080/health',
-    port: 8080,
-    instanceId: 'inst-stg-05',
-    leaseToken: 'tok-lemon-stg-05',
-    environment: 'staging',
-    networkMode: 'tailscale-lan',
-    method: 'GET',
-    expectedStatus: 200,
-    timeoutMs: 4000,
-    group: 'Core Infrastructure',
-    icon: 'hub',
-    registeredAt: new Date(Date.now() - 3600000 * 1.5).toISOString(),
-  },
-];
-
-const INITIAL_CHRONICLE: RegistryChronicleEvent[] = [
-  {
-    id: 'ev-1',
-    timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-    type: 'ALLOCATED',
-    appName: 'Backend API Gateway',
-    port: 3000,
-    instanceId: 'inst-core-01',
-    environment: 'dev',
-    networkMode: 'local',
-    message: '[DEV | Localhost] Зарегистрирован с токеном tok-lemon-core-01 на :3000',
-  },
-  {
-    id: 'ev-2',
-    timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-    type: 'ALLOCATED',
-    appName: 'Production AI Funnel Relay',
-    port: 443,
-    instanceId: 'inst-prod-04',
-    environment: 'production',
-    networkMode: 'tailscale-funnel',
-    message: '[PROD | Tailscale Funnel] Общедоступный туннель https://lemon-ai.tailnet.ts.net подключён',
-  },
-  {
-    id: 'ev-3',
-    timestamp: new Date(Date.now() - 3600000).toISOString(),
-    type: 'ALLOCATED',
-    appName: 'Staging Mesh Node',
-    port: 8080,
-    instanceId: 'inst-stg-05',
-    environment: 'staging',
-    networkMode: 'tailscale-lan',
-    message: '[STAGING | Tailscale LAN] Защищённый узел сети 100.64.0.22:8080 взят на мониторинг',
-  },
-];
-
-function generateInitialHistory(baseLatency: number): ServicePingRecord[] {
-  const history: ServicePingRecord[] = [];
-  const now = Date.now();
-  for (let i = 4; i >= 0; i--) {
-    const variance = Math.floor(Math.random() * 14) - 7;
-    const latency = Math.max(8, baseLatency + variance);
-    history.push({
-      id: 'ping-' + Math.random().toString(36).substring(2, 7),
-      timestamp: new Date(now - i * 30000).toISOString(),
-      status: 'UP',
-      statusCode: 200,
-      latencyMs: latency,
-    });
-  }
-  return history;
-}
-
+/**
+ * Projects Lemon-Projectarium stands & applications into a flat live service pool view.
+ */
 @Injectable({ providedIn: 'root' })
 export class ServiceHealthService {
+  private readonly standService = inject(ProjectStandService);
   private autoRefreshSub: Subscription | null = null;
   private readonly isPingingAll$ = new BehaviorSubject<boolean>(false);
-  private nextDynamicPort = 4301;
+  private readonly isAutoRefreshActive$ = new BehaviorSubject<boolean>(false);
 
-  private readonly projectionSubject = new BehaviorSubject<HealthMeshProjection>({
-    id: 'proj-health-mesh-1',
-    neuronPath: 'workspace.core.health',
-    historyNeuronPath: 'workspace.core.registry.history',
-    title: 'Регистратор приложений и Живой пул сервисов',
-    totalServices: INITIAL_CONTEXT_CHECKPOINTS.length,
-    healthyCount: INITIAL_CONTEXT_CHECKPOINTS.length,
-    averageLatencyMs: 34,
-    lastRunAt: new Date().toISOString(),
-    autoRefreshIntervalSec: 30,
-    isAutoRefreshActive: false,
-    services: INITIAL_CONTEXT_CHECKPOINTS.map((ctx, idx) => {
-      const baseLatency = idx === 0 ? 14 : idx === 1 ? 18 : idx === 2 ? 10 : idx === 3 ? 56 : 32;
-      const history = generateInitialHistory(baseLatency);
-      const last = history[history.length - 1];
-      return {
-        context: ctx,
-        currentStatus: 'HEALTHY',
-        consecutiveFailures: 0,
-        maxFailuresBeforeEviction: 5,
-        lastLatencyMs: last.latencyMs,
-        lastCheckedAt: last.timestamp,
-        history,
-      };
-    }),
-    evictedServices: [],
-    chronicle: INITIAL_CHRONICLE,
-  });
+  private readonly appStandMap = new Map<string, { standId: string; app: StandAppItem }>();
 
-  readonly projection$: Observable<HealthMeshProjection> = this.projectionSubject.asObservable();
+  readonly projection$: Observable<HealthMeshProjection> = combineLatest([
+    this.standService.allStands$,
+    this.isAutoRefreshActive$,
+  ]).pipe(map(([stands, isAutoRefreshActive]) => this.buildProjection(stands, isAutoRefreshActive)));
+
   readonly isPinging$: Observable<boolean> = this.isPingingAll$.asObservable();
-  readonly healthEvent$ = new Subject<{ type: 'REGISTERED' | 'PING_ALL' | 'EVICTED' | 'RELEASED'; data: any }>();
 
   /**
-   * Registers a new dynamic agent app, allocates port, assigns environment & networkMode, and generates lease token.
+   * Registers a new dynamic agent app into Projectarium ("Agent Dynamic Apps" stand by default).
    */
   registerApp(
     appName: string,
     customPort?: number,
     environment: AppEnvironment = 'dev',
     networkMode: AppNetworkMode = 'local',
-    group: 'Agent Dynamic Apps' | 'External APIs' = 'Agent Dynamic Apps',
-  ): ServiceCheckpointContext {
-    const current = this.projectionSubject.getValue();
-    const port = customPort && customPort > 0 ? customPort : this.nextDynamicPort++;
-    const instanceId = 'inst-' + Math.random().toString(36).substring(2, 8);
-    const leaseToken =
-      'tok-' +
-      appName.toLowerCase().replace(/[^a-z0-9]/g, '-') +
-      '-' +
-      Math.random().toString(36).substring(2, 6);
+    projectName = 'Agent Dynamic Apps',
+  ): void {
+    const host =
+      networkMode === 'tailscale-funnel'
+        ? `${appName.toLowerCase().replace(/[^a-z0-9]/g, '-')}.ts.net`
+        : networkMode === 'tailscale-lan'
+          ? '100.64.0.10'
+          : networkMode === 'lan'
+            ? '192.168.1.100'
+            : 'localhost';
 
-    let url = `http://localhost:${port}/health`;
-    if (networkMode === 'tailscale-funnel') {
-      url = `https://${appName.toLowerCase().replace(/[^a-z0-9]/g, '-')}.ts.net/health`;
-    } else if (networkMode === 'tailscale-lan') {
-      url = `http://100.64.0.${(port % 100) + 10}:${port}/health`;
-    }
+    this.standService
+      .smartRegister({
+        projectName,
+        appName,
+        host,
+        preferredPort: customPort && customPort > 0 ? customPort : undefined,
+        environment,
+        networkMode,
+        author: 'projectarium-pool-ui',
+      })
+      .subscribe({
+        error: () => {
+          // Offline fallback: register inside local stand store
+          let targetStand: ProjectStand | undefined;
+          this.standService.allStands$
+            .subscribe((stands) => {
+              targetStand = stands.find(
+                (s) => s.slug === 'agent-dynamic-apps' || s.name === projectName,
+              );
+            })
+            .unsubscribe();
 
-    const newContext: ServiceCheckpointContext = {
-      id: 'svc-' + Math.random().toString(36).substring(2, 8),
-      appName,
-      url,
-      port,
-      instanceId,
-      leaseToken,
-      environment,
-      networkMode,
-      method: 'GET',
-      expectedStatus: 200,
-      timeoutMs: 3000,
-      group,
-      icon: networkMode === 'tailscale-funnel' ? 'public' : networkMode === 'tailscale-lan' ? 'lock' : 'terminal',
-      registeredAt: new Date().toISOString(),
-    };
+          if (!targetStand) {
+            targetStand = this.standService.registerStand({
+              name: projectName,
+              slug: 'agent-dynamic-apps',
+              description: 'Динамические приложения автономных агентов',
+              neuronPath: 'workspace.agent-dynamic-apps',
+            });
+          }
 
-    const newRecord: ServicePingRecord = {
-      id: 'ping-init',
-      timestamp: new Date().toISOString(),
-      status: 'UP',
-      statusCode: 200,
-      latencyMs: networkMode === 'tailscale-funnel' ? 45 : 14,
-    };
-
-    const newService: ServiceHealthItemState = {
-      context: newContext,
-      currentStatus: 'HEALTHY',
-      consecutiveFailures: 0,
-      maxFailuresBeforeEviction: 5,
-      lastLatencyMs: newRecord.latencyMs,
-      lastCheckedAt: new Date().toISOString(),
-      history: [newRecord],
-    };
-
-    const envLabel = environment.toUpperCase();
-    const netLabel = networkMode === 'tailscale-funnel' ? 'Funnel' : networkMode === 'tailscale-lan' ? 'TS-LAN' : 'Local';
-
-    const chronicleEvent: RegistryChronicleEvent = {
-      id: 'ev-' + Math.random().toString(36).substring(2, 7),
-      timestamp: new Date().toISOString(),
-      type: 'ALLOCATED',
-      appName,
-      port,
-      instanceId,
-      environment,
-      networkMode,
-      message: `[${envLabel} | ${netLabel}] ${appName} зарегистрирован с токеном ${leaseToken} на ${url}`,
-    };
-
-    const updatedServices = [newService, ...current.services];
-
-    this.projectionSubject.next({
-      ...current,
-      totalServices: updatedServices.length,
-      healthyCount: updatedServices.filter((s) => s.currentStatus === 'HEALTHY').length,
-      services: updatedServices,
-      chronicle: [chronicleEvent, ...current.chronicle],
-    });
-
-    this.healthEvent$.next({ type: 'REGISTERED', data: newContext });
-
-    return newContext;
+          this.standService.addAppToStand(targetStand.id, {
+            appName,
+            role: 'Динамический сервис агента',
+            host,
+            desiredPort: customPort,
+            environment,
+            networkMode,
+          });
+        },
+      });
   }
 
   /**
-   * Simulates a failure on an app (to test the 5 consecutive failure counter and eviction).
-   */
-  simulateFailure(serviceId: string): void {
-    const current = this.projectionSubject.getValue();
-    const svc = current.services.find((s) => s.context.id === serviceId);
-    if (!svc) return;
-
-    const nextFailures = svc.consecutiveFailures + 1;
-    const now = new Date().toISOString();
-
-    if (nextFailures >= svc.maxFailuresBeforeEviction) {
-      // EVICTION TRIGGERED: Circuit breaker trips, service is removed from active pool!
-      const evictedService: ServiceHealthItemState = {
-        ...svc,
-        currentStatus: 'EVICTED',
-        consecutiveFailures: nextFailures,
-        lastCheckedAt: now,
-      };
-
-      const chronicleEvent: RegistryChronicleEvent = {
-        id: 'ev-' + Math.random().toString(36).substring(2, 7),
-        timestamp: now,
-        type: 'EVICTED',
-        appName: svc.context.appName,
-        port: svc.context.port,
-        instanceId: svc.context.instanceId,
-        environment: svc.context.environment,
-        networkMode: svc.context.networkMode,
-        message: `🔴 EVICTED [${svc.context.environment.toUpperCase()}]: Сервис не ответил ${nextFailures} раз(а) подряд. Порт :${svc.context.port} освобождён.`,
-      };
-
-      const remainingServices = current.services.filter((s) => s.context.id !== serviceId);
-
-      this.projectionSubject.next({
-        ...current,
-        totalServices: remainingServices.length,
-        healthyCount: remainingServices.filter((s) => s.currentStatus === 'HEALTHY').length,
-        services: remainingServices,
-        evictedServices: [evictedService, ...current.evictedServices],
-        chronicle: [chronicleEvent, ...current.chronicle],
-      });
-      this.healthEvent$.next({ type: 'EVICTED', data: evictedService });
-    } else {
-      // DEGRADED: Increment failure count (1/5 ... 4/5)
-      const degradedService: ServiceHealthItemState = {
-        ...svc,
-        currentStatus: 'DEGRADED',
-        consecutiveFailures: nextFailures,
-        lastCheckedAt: now,
-        history: [
-          ...svc.history.slice(-4),
-          {
-            id: 'ping-' + Math.random().toString(36).substring(2, 7),
-            timestamp: now,
-            status: 'DOWN',
-            statusCode: 504,
-            latencyMs: 3000,
-            error: 'Connection timeout',
-          },
-        ],
-      };
-
-      const chronicleEvent: RegistryChronicleEvent = {
-        id: 'ev-' + Math.random().toString(36).substring(2, 7),
-        timestamp: now,
-        type: 'DEGRADED',
-        appName: svc.context.appName,
-        port: svc.context.port,
-        instanceId: svc.context.instanceId,
-        environment: svc.context.environment,
-        networkMode: svc.context.networkMode,
-        message: `🟡 DEGRADED: Сбой ${nextFailures}/${svc.maxFailuresBeforeEviction} для [${svc.context.environment}] ${svc.context.appName}`,
-      };
-
-      const updated = current.services.map((s) => (s.context.id === serviceId ? degradedService : s));
-
-      this.projectionSubject.next({
-        ...current,
-        healthyCount: updated.filter((s) => s.currentStatus === 'HEALTHY').length,
-        services: updated,
-        chronicle: [chronicleEvent, ...current.chronicle],
-      });
-    }
-  }
-
-  /**
-   * Graceful release by agent.
+   * Gracefully releases an allocated app port and instance from its owning Projectarium stand.
    */
   releaseApp(serviceId: string): void {
-    const current = this.projectionSubject.getValue();
-    const svc = current.services.find((s) => s.context.id === serviceId);
-    if (!svc) return;
-
-    const chronicleEvent: RegistryChronicleEvent = {
-      id: 'ev-' + Math.random().toString(36).substring(2, 7),
-      timestamp: new Date().toISOString(),
-      type: 'RELEASED',
-      appName: svc.context.appName,
-      port: svc.context.port,
-      instanceId: svc.context.instanceId,
-      environment: svc.context.environment,
-      networkMode: svc.context.networkMode,
-      message: `🟢 RELEASED: Агент штатно завершил работу для [${svc.context.environment}] ${svc.context.appName}.`,
-    };
-
-    const remainingServices = current.services.filter((s) => s.context.id !== serviceId);
-
-    this.projectionSubject.next({
-      ...current,
-      totalServices: remainingServices.length,
-      healthyCount: remainingServices.filter((s) => s.currentStatus === 'HEALTHY').length,
-      services: remainingServices,
-      chronicle: [chronicleEvent, ...current.chronicle],
-    });
-
-    this.healthEvent$.next({ type: 'RELEASED', data: svc.context });
+    const entry = this.appStandMap.get(serviceId);
+    if (!entry) return;
+    this.standService.removeAppFromStand(entry.standId, entry.app.instanceId || entry.app.id);
   }
 
+  /**
+   * Triggers a real healthcheck round across all Projectarium stands.
+   */
   pingAll(): void {
     this.isPingingAll$.next(true);
-
-    const current = this.projectionSubject.getValue();
-    const updatedServices = current.services.map((s) => ({
-      ...s,
-      currentStatus: 'CHECKING' as const,
-    }));
-    this.projectionSubject.next({ ...current, services: updatedServices });
-
-    setTimeout(() => {
-      const finishedServices: ServiceHealthItemState[] = current.services.map((svc) => {
-        let simulatedLatency = Math.floor(Math.random() * 15) + 10;
-        if (svc.context.networkMode === 'tailscale-funnel') {
-          simulatedLatency = Math.floor(Math.random() * 30) + 40;
-        } else if (svc.context.networkMode === 'tailscale-lan') {
-          simulatedLatency = Math.floor(Math.random() * 20) + 20;
-        }
-
-        const newRecord: ServicePingRecord = {
-          id: 'ping-' + Math.random().toString(36).substring(2, 7),
-          timestamp: new Date().toISOString(),
-          status: 'UP',
-          statusCode: 200,
-          latencyMs: simulatedLatency,
-        };
-
-        const newHistory = [...svc.history.slice(-4), newRecord];
-        return {
-          ...svc,
-          currentStatus: 'HEALTHY' as const,
-          consecutiveFailures: 0,
-          lastLatencyMs: simulatedLatency,
-          lastCheckedAt: newRecord.timestamp,
-          history: newHistory,
-        };
-      });
-
-      const avgLat = Math.round(
-        finishedServices.reduce((acc, s) => acc + s.lastLatencyMs, 0) / finishedServices.length,
-      );
-
-      this.projectionSubject.next({
-        ...current,
-        totalServices: finishedServices.length,
-        healthyCount: finishedServices.filter((s) => s.currentStatus === 'HEALTHY').length,
-        averageLatencyMs: avgLat,
-        lastRunAt: new Date().toISOString(),
-        services: finishedServices,
-      });
-
-      this.isPingingAll$.next(false);
-      this.healthEvent$.next({ type: 'PING_ALL', data: finishedServices });
-    }, 400);
+    let stands: ProjectStand[] = [];
+    this.standService.allStands$.subscribe((list) => (stands = list)).unsubscribe();
+    for (const stand of stands) {
+      this.standService.pingStandApps(stand.id);
+    }
+    setTimeout(() => this.isPingingAll$.next(false), 600);
   }
 
+  /**
+   * Triggers a real healthcheck for a single application instance.
+   */
   pingSingle(serviceId: string): void {
-    const current = this.projectionSubject.getValue();
-    const target = current.services.find((s) => s.context.id === serviceId);
-    if (!target) return;
-
-    const updatedServices = current.services.map((s) =>
-      s.context.id === serviceId ? { ...s, currentStatus: 'CHECKING' as const } : s,
-    );
-    this.projectionSubject.next({ ...current, services: updatedServices });
-
-    setTimeout(() => {
-      let simulatedLatency = Math.floor(Math.random() * 12) + 8;
-      if (target.context.networkMode === 'tailscale-funnel') {
-        simulatedLatency = Math.floor(Math.random() * 25) + 38;
-      } else if (target.context.networkMode === 'tailscale-lan') {
-        simulatedLatency = Math.floor(Math.random() * 15) + 22;
-      }
-
-      const newRecord: ServicePingRecord = {
-        id: 'ping-' + Math.random().toString(36).substring(2, 7),
-        timestamp: new Date().toISOString(),
-        status: 'UP',
-        statusCode: 200,
-        latencyMs: simulatedLatency,
-      };
-
-      const finalServices = current.services.map((s) => {
-        if (s.context.id !== serviceId) return s;
-        return {
-          ...s,
-          currentStatus: 'HEALTHY' as const,
-          consecutiveFailures: 0,
-          lastLatencyMs: simulatedLatency,
-          lastCheckedAt: newRecord.timestamp,
-          history: [...s.history.slice(-4), newRecord],
-        };
-      });
-
-      const avgLat = Math.round(
-        finalServices.reduce((acc, s) => acc + s.lastLatencyMs, 0) / finalServices.length,
-      );
-
-      this.projectionSubject.next({
-        ...current,
-        averageLatencyMs: avgLat,
-        healthyCount: finalServices.filter((s) => s.currentStatus === 'HEALTHY').length,
-        services: finalServices,
-      });
-    }, 250);
+    const entry = this.appStandMap.get(serviceId);
+    if (!entry) return;
+    this.standService.pingSingleApp(entry.standId, entry.app.instanceId || entry.app.id);
   }
 
   toggleAutoRefresh(): void {
-    const current = this.projectionSubject.getValue();
-    const nextActive = !current.isAutoRefreshActive;
-
+    const nextActive = !this.isAutoRefreshActive$.getValue();
     if (nextActive) {
-      this.autoRefreshSub = interval(current.autoRefreshIntervalSec * 1000).subscribe(() => {
-        this.pingAll();
-      });
+      this.autoRefreshSub = interval(30_000).subscribe(() => this.pingAll());
     } else {
       this.autoRefreshSub?.unsubscribe();
       this.autoRefreshSub = null;
     }
-
-    this.projectionSubject.next({
-      ...current,
-      isAutoRefreshActive: nextActive,
-    });
+    this.isAutoRefreshActive$.next(nextActive);
   }
 
   getContextJson(): string {
-    const services = this.projectionSubject.getValue().services.map((s) => s.context);
-    return JSON.stringify({ checkpoints: services }, null, 2);
+    const checkpoints = Array.from(this.appStandMap.values()).map(({ app }) =>
+      this.mapToCheckpointContext(app),
+    );
+    return JSON.stringify({ checkpoints }, null, 2);
+  }
+
+  private buildProjection(
+    stands: ProjectStand[],
+    isAutoRefreshActive: boolean,
+  ): HealthMeshProjection {
+    this.appStandMap.clear();
+
+    const activeServices: ServiceHealthItemState[] = [];
+    const evictedServices: ServiceHealthItemState[] = [];
+    const chronicle: RegistryChronicleEvent[] = [];
+
+    for (const stand of stands) {
+      for (const app of stand.apps) {
+        const svcId = app.instanceId || app.id;
+        this.appStandMap.set(svcId, { standId: stand.id, app });
+        const item = this.mapAppToHealthItem(app);
+        if (item.currentStatus === 'EVICTED') {
+          evictedServices.push(item);
+        } else {
+          activeServices.push(item);
+        }
+      }
+
+      for (const ev of stand.chronicle.slice(0, 10)) {
+        const badge = ev.badge || '';
+        const type: RegistryChronicleEvent['type'] =
+          badge === 'APP_EVICTED' || badge === 'EVICTED'
+            ? 'EVICTED'
+            : badge === 'APP_DEGRADED' || badge === 'DEGRADED'
+              ? 'DEGRADED'
+              : badge === 'APP_RELEASED' || badge === 'RELEASED'
+                ? 'RELEASED'
+                : badge === 'APP_HEARTBEAT' || badge === 'HEALTHCHECK_PING'
+                  ? 'HEARTBEAT'
+                  : 'ALLOCATED';
+        chronicle.push({
+          id: ev.id,
+          timestamp: ev.timestamp,
+          type,
+          appName: stand.name,
+          port: stand.apps[0]?.port || 4320,
+          instanceId: stand.slug,
+          environment: 'dev',
+          networkMode: 'local',
+          message: `[${stand.name}] ${ev.title}${ev.details ? ` — ${ev.details}` : ''}`,
+        });
+      }
+    }
+
+    chronicle.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+    const healthyCount = activeServices.filter((s) => s.currentStatus === 'HEALTHY').length;
+    const latencyValues = activeServices
+      .map((s) => s.lastLatencyMs)
+      .filter((ms) => ms > 0);
+    const averageLatencyMs =
+      latencyValues.length > 0
+        ? Math.round(latencyValues.reduce((sum, ms) => sum + ms, 0) / latencyValues.length)
+        : 0;
+
+    return {
+      id: 'proj-health-mesh-projectarium',
+      neuronPath: 'workspace.projectarium.pool',
+      historyNeuronPath: 'workspace.projectarium.chronicle',
+      title: 'Projectarium Port Shield & Живой пул сервисов',
+      totalServices: activeServices.length,
+      healthyCount,
+      averageLatencyMs,
+      lastRunAt: new Date().toISOString(),
+      autoRefreshIntervalSec: 30,
+      isAutoRefreshActive,
+      services: activeServices,
+      evictedServices,
+      chronicle: chronicle.slice(0, 50),
+    };
+  }
+
+  private mapToCheckpointContext(app: StandAppItem): ServiceCheckpointContext {
+    return {
+      id: app.instanceId || app.id,
+      appName: app.appName,
+      url: app.url,
+      port: app.port,
+      instanceId: app.instanceId,
+      leaseToken: app.leaseToken,
+      environment: app.environment,
+      networkMode: app.networkMode,
+      method: 'GET',
+      expectedStatus: 200,
+      timeoutMs: 2500,
+      group: 'Agent Dynamic Apps',
+      icon: app.icon,
+      registeredAt: app.lastCheckedAt,
+    };
+  }
+
+  private mapAppToHealthItem(app: StandAppItem): ServiceHealthItemState {
+    const status: AppHealthStatus =
+      app.status === 'OFFLINE' ? 'DEGRADED' : (app.status as AppHealthStatus);
+    const pingStatus: ServicePingRecord['status'] =
+      status === 'HEALTHY' ? 'UP' : status === 'DEGRADED' ? 'DEGRADED' : 'DOWN';
+
+    return {
+      context: this.mapToCheckpointContext(app),
+      currentStatus: status,
+      consecutiveFailures: app.consecutiveFailures,
+      maxFailuresBeforeEviction: 5,
+      lastLatencyMs: app.lastLatencyMs,
+      lastCheckedAt: app.lastCheckedAt,
+      history: [
+        {
+          id: `ping-${app.id}`,
+          timestamp: app.lastCheckedAt,
+          status: pingStatus,
+          statusCode: status === 'HEALTHY' ? 200 : 503,
+          latencyMs: app.lastLatencyMs,
+        },
+      ],
+    };
   }
 }

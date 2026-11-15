@@ -200,3 +200,23 @@ export class AddChronicleEventDto {
   @IsString()
   author?: string;
 }
+
+export class ProjectariumHeartbeatDto {
+  @IsString()
+  instanceId!: string;
+
+  @IsString()
+  leaseToken!: string;
+}
+
+export class ProjectariumReleaseDto {
+  @IsString()
+  instanceId!: string;
+
+  @IsString()
+  leaseToken!: string;
+
+  @IsOptional()
+  @IsString()
+  author?: string;
+}

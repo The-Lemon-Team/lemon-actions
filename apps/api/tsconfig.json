@@ -15,7 +15,6 @@
       "@lemon/core-combinator": ["../../packages/core-combinator/dist"],
       "@lemon/core-combinator-sdk": ["../../packages/core-combinator-sdk/dist"],
       "@lemon/seasons-neurons": ["../../packages/lemon-seasons-neurons/dist"],
-      "@lemon/app-registrar": ["../../packages/lemon-app-registrar/dist"],
       "@lemon/projectarium": ["../../packages/lemon-projectarium/dist"]
     },
     "incremental": true,

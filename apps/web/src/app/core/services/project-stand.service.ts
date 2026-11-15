@@ -12,7 +12,6 @@ import { LemonCardColor } from '../models/worker.models';
 import { ProjectSessionLogEntry } from '../models/chronicle-card.models';
 import { ReactiveTodoItem, ReactiveTriggerType } from '../models/todo-card.models';
 import { LemonChronicleService } from './lemon-chronicle.service';
-import { ServiceHealthService } from './service-health.service';
 import { LemonWorkerService } from './lemon-worker.service';
 import { buildAppUrl, extractHostFromUrl, inferAppIcon, resolveAppHost } from './project-stand.helpers';
 import { INITIAL_PROJECT_STANDS } from './project-stand.seeds';
@@ -25,7 +24,6 @@ const PROJECTARIUM_API_BASE = '/api/projectarium';
 export class ProjectStandService {
   private readonly http = inject(HttpClient);
   private readonly chronicleService = inject(LemonChronicleService);
-  private readonly healthService = inject(ServiceHealthService);
   private readonly workerService = inject(LemonWorkerService);
 
   private readonly stands$ = new BehaviorSubject<ProjectStand[]>(this.loadStands());
@@ -189,25 +187,6 @@ export class ProjectStandService {
         execution.durationMs,
         'Lemon Actions',
       );
-    });
-
-    // 2. Health & Port Shield Events
-    this.healthService.healthEvent$.subscribe((ev) => {
-      if (ev.type === 'REGISTERED') {
-        const ctx = ev.data;
-        this.dispatchReactiveToStands(
-          'SERVICE_REGISTERED',
-          `Сервис «${ctx.appName}» зарегистрирован на :${ctx.port}`,
-          14,
-          ctx.projectName,
-        );
-      } else if (ev.type === 'PING_ALL') {
-        this.dispatchReactiveToStands(
-          'HEALTHCHECK_PING',
-          'Раунд проверки здоровья сервисов завершён',
-          24,
-        );
-      }
     });
   }
 
@@ -562,6 +541,42 @@ export class ProjectStandService {
         this.persist(reverted);
       },
     });
+  }
+
+  /**
+   * Executes a real server-side healthcheck for a single app instance in a project stand.
+   */
+  pingSingleApp(standId: string, instanceId: string): void {
+    const stands = this.stands$.getValue();
+    const stand = stands.find((s) => s.id === standId);
+    if (!stand) return;
+
+    const checkingStands = stands.map((s) =>
+      s.id === standId
+        ? {
+            ...s,
+            apps: s.apps.map((app) =>
+              app.instanceId === instanceId || app.id === instanceId
+                ? { ...app, status: 'CHECKING' as StandAppStatus }
+                : app,
+            ),
+          }
+        : s,
+    );
+    this.persist(checkingStands);
+
+    this.http
+      .post<any>(`${PROJECTARIUM_API_BASE}/projects/${stand.slug}/apps/${instanceId}/ping`, {})
+      .subscribe({
+        next: () => this.fetchFromBackend(),
+        error: () => {
+          const current = this.stands$.getValue();
+          const reverted = current.map((s) =>
+            s.id === standId ? { ...s, apps: stand.apps } : s,
+          );
+          this.persist(reverted);
+        },
+      });
   }
 
   addChronicleEntry(standId: string, entry: Omit<ProjectSessionLogEntry, 'id' | 'timestamp'>): void {

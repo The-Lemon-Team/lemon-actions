@@ -10,8 +10,8 @@ All modal dialog components must implement:
 4. Proper accessibility attributes (`role="dialog"`, `aria-modal="true"`, `aria-labelledby`).
 5. The `ModalOverlayDirective` (`appModalOverlay`).
 
-### Port Allocation & Application Registrar
-Autonomous agents starting servers must pre-register via `POST /api/registry/register` or the MCP server (`lemon_register_app`) and bind strictly to the allocated port according to [`.agents/rules/port-allocation.md`](./.agents/rules/port-allocation.md).
+### Port Allocation & Lemon-Projectarium Port Shield
+Autonomous agents starting servers must pre-register via `POST /api/projectarium/register` or the MCP server (`lemon_register_app`) and bind strictly to the allocated port according to [`.agents/rules/port-allocation.md`](./.agents/rules/port-allocation.md).
 Root anchors (`:5433` DB, `:3000` API, `:4201` Web) are exempt from HTTP pre-registration to prevent circular bootstrap deadlocks.
 
 ### Angular & SOLID Standards

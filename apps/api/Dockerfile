@@ -12,19 +12,16 @@ RUN npm ci --prefix apps/api \
 COPY packages ./packages
 RUN /workspace/apps/api/node_modules/.bin/tsc -p packages/core-combinator/tsconfig.json \
  && /workspace/apps/api/node_modules/.bin/tsc -p packages/core-combinator-sdk/tsconfig.json \
- && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-app-registrar/tsconfig.json \
  && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-projectarium/tsconfig.json \
  && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-seasons-neurons/tsconfig.json
 
 # Populate @lemon/* inside apps/api/node_modules for runtime resolution
 RUN mkdir -p /workspace/apps/api/node_modules/@lemon/core-combinator \
              /workspace/apps/api/node_modules/@lemon/core-combinator-sdk \
-             /workspace/apps/api/node_modules/@lemon/app-registrar \
              /workspace/apps/api/node_modules/@lemon/projectarium \
              /workspace/apps/api/node_modules/@lemon/seasons-neurons \
  && cp -r packages/core-combinator/package.json packages/core-combinator/dist /workspace/apps/api/node_modules/@lemon/core-combinator/ \
  && cp -r packages/core-combinator-sdk/package.json packages/core-combinator-sdk/dist /workspace/apps/api/node_modules/@lemon/core-combinator-sdk/ \
- && cp -r packages/lemon-app-registrar/package.json packages/lemon-app-registrar/dist /workspace/apps/api/node_modules/@lemon/app-registrar/ \
  && cp -r packages/lemon-projectarium/package.json packages/lemon-projectarium/dist /workspace/apps/api/node_modules/@lemon/projectarium/ \
  && cp -r packages/lemon-seasons-neurons/package.json packages/lemon-seasons-neurons/dist /workspace/apps/api/node_modules/@lemon/seasons-neurons/
 

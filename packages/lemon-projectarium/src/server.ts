@@ -66,6 +66,48 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 4b. Lease Heartbeat
+  if (pathname === '/api/projectarium/heartbeat' && req.method === 'POST') {
+    readBody((body) => {
+      const outcome = engine.heartbeat(body?.instanceId, body?.leaseToken);
+      if (!outcome.ok) {
+        sendJson(outcome.reason === 'NOT_FOUND' ? 404 : 401, { error: outcome.reason });
+        return;
+      }
+      sendJson(200, outcome.result);
+    });
+    return;
+  }
+
+  // 4c. Lease Release
+  if (pathname === '/api/projectarium/release' && req.method === 'POST') {
+    readBody((body) => {
+      const outcome = engine.releaseByLease(body?.instanceId, body?.leaseToken, body?.author || 'agent');
+      if (!outcome.ok) {
+        sendJson(outcome.reason === 'NOT_FOUND' ? 404 : 401, { error: outcome.reason });
+        return;
+      }
+      sendJson(200, outcome.result);
+    });
+    return;
+  }
+
+  // 4d. Flat Pool Listing
+  if (pathname === '/api/projectarium/pool' && req.method === 'GET') {
+    const environment = url.searchParams.get('environment') || undefined;
+    const networkMode = url.searchParams.get('networkMode') || undefined;
+    const includeEvicted = url.searchParams.get('includeEvicted') === 'true';
+    sendJson(
+      200,
+      engine.listPool({
+        environment: environment as any,
+        networkMode: networkMode as any,
+        includeEvicted,
+      }),
+    );
+    return;
+  }
+
   // 5. HTML Dashboard
   if (pathname === '/' || pathname === '/dashboard') {
     const stats = engine.getStats();
