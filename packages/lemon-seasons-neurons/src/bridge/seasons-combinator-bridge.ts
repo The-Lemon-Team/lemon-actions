@@ -1,7 +1,12 @@
 import { CoreCombinatorClient, FlowImpulsePacket } from '@lemon/core-combinator-sdk';
 import { SeasonsApiClient } from '../client/seasons-api.client';
 import { SeasonsSseBus } from '../client/seasons-sse.bus';
-import { IngestSeasonNoteInput, NotesPageQuery, PaginatedNotesWindow } from '../types/seasons.types';
+import {
+  IngestSeasonNoteInput,
+  NotesPageQuery,
+  NoteTodoItem,
+  PaginatedNotesWindow,
+} from '../types/seasons.types';
 
 export interface SeasonsCombinatorBridgeOptions {
   combinator: CoreCombinatorClient;
@@ -37,28 +42,37 @@ export class SeasonsCombinatorBridge {
   }
 
   /**
-   * Pre-creates or verifies the Stream and Feeds topology in Lemon Seasons.
+   * Pre-creates or verifies the Stream and Feeds topology in Lemon Seasons,
+   * attaching any missing feeds to the target stream.
    */
   async ensureTopology(input: {
     streamSlug?: string;
     streamTitle?: string;
+    streamIcon?: string;
+    streamColor?: string;
+    privacy?: 'public' | 'private';
     feeds: Array<{
       slug: string;
       title: string;
+      description?: string;
       icon?: string;
+      color?: string;
       privacy?: 'public' | 'private';
       hashtags?: string[];
     }>;
   }): Promise<{ streamId: string; feedIds: string[] }> {
     const streamSlug = input.streamSlug || this.defaultStreamSlug;
+    const streamPrivacy = input.privacy || this.defaultPrivacy;
     const feedIds: string[] = [];
 
     for (const f of input.feeds) {
       const feedRes = await this.seasons.ensureFeed({
         slug: f.slug,
         title: f.title,
+        description: f.description,
         icon: f.icon || '📝',
-        privacy: f.privacy || this.defaultPrivacy,
+        color: f.color,
+        privacy: f.privacy || streamPrivacy,
         hashtags: f.hashtags,
       });
       if (feedRes?.id) feedIds.push(feedRes.id);
@@ -67,12 +81,25 @@ export class SeasonsCombinatorBridge {
     const streamRes = await this.seasons.ensureStream({
       slug: streamSlug,
       title: input.streamTitle || 'Core Combinator Stream',
-      privacy: this.defaultPrivacy,
+      icon: input.streamIcon,
+      color: input.streamColor,
+      privacy: streamPrivacy,
       feedIds,
     });
 
+    const streamId = streamRes?.id || streamSlug;
+    const existingFeedIds: string[] = Array.isArray(streamRes?.feedIds)
+      ? streamRes.feedIds
+      : [];
+
+    for (const feedId of feedIds) {
+      if (!existingFeedIds.includes(feedId)) {
+        await this.seasons.attachFeedToStream(streamId, feedId);
+      }
+    }
+
     return {
-      streamId: streamRes?.id || streamSlug,
+      streamId,
       feedIds,
     };
   }
@@ -109,6 +136,44 @@ export class SeasonsCombinatorBridge {
     }
 
     return { noteId: res.noteId, action: res.action };
+  }
+
+  /**
+   * Idempotently projects a structured TodoList into a Note inside Lemon Seasons.
+   */
+  async syncTodoListNote(input: {
+    externalId: string;
+    title: string;
+    streamSlug?: string;
+    feedSlug: string;
+    privacy?: 'public' | 'private';
+    todoList: NoteTodoItem[];
+    description?: string;
+    tags?: string[];
+    author?: string;
+    origin?: string;
+    metadata?: Record<string, any>;
+    flowId?: string;
+  }): Promise<{ noteId: string; action: 'CREATED' | 'UPDATED' }> {
+    return this.ingestNote(
+      {
+        externalId: input.externalId,
+        title: input.title,
+        content: input.description || input.title,
+        type: 'PERIOD',
+        status: 'PUBLISHED',
+        privacy: input.privacy || this.defaultPrivacy,
+        streamSlug: input.streamSlug || this.defaultStreamSlug,
+        feedSlug: input.feedSlug,
+        icon: '✅',
+        author: input.author,
+        tags: input.tags || ['todolist'],
+        origin: input.origin || 'PROJECTARIUM_SYNC',
+        todoList: input.todoList,
+        metadata: input.metadata,
+      },
+      input.flowId,
+    );
   }
 
   /**

@@ -1,4 +1,9 @@
-import { SeasonsApiClient } from '../src/client/seasons-api.client';
+import {
+  SeasonsApiClient,
+  computeTodoStats,
+  extractTodoListFromNote,
+} from '../src/client/seasons-api.client';
+import { SeasonsSseBus } from '../src/client/seasons-sse.bus';
 import { SeasonsCombinatorBridge } from '../src/bridge/seasons-combinator-bridge';
 import { CodingMemoryAxon } from '../src/axons/coding-memory.axon';
 import { DailyTimelineAxon } from '../src/axons/daily-timeline.axon';
@@ -21,15 +26,29 @@ async function runSeasonsBridgeTests() {
   const mockSeasonsApi = {
     baseUrl: 'http://localhost:5000',
     ensureStream: async (input: any) => {
-      seasonsDb.streams.set(input.slug, input);
-      return { id: `stream-${input.slug}`, ...input };
+      const existing = seasonsDb.streams.get(input.slug);
+      if (existing) return existing;
+      const created = { id: `stream-${input.slug}`, ...input };
+      seasonsDb.streams.set(input.slug, created);
+      return created;
     },
     ensureFeed: async (input: any) => {
-      seasonsDb.feeds.set(input.slug, input);
-      return { id: `feed-${input.slug}`, ...input };
+      const created = { id: `feed-${input.slug}`, ...input };
+      seasonsDb.feeds.set(input.slug, created);
+      return created;
+    },
+    attachFeedToStream: async (streamId: string, feedId: string) => {
+      for (const s of seasonsDb.streams.values()) {
+        if (s.id === streamId && !s.feedIds?.includes(feedId)) {
+          s.feedIds = [...(s.feedIds || []), feedId];
+        }
+      }
+      return { success: true };
     },
     ingestNote: async (input: any) => {
-      const note = { id: `note-${seasonsDb.notes.length + 1}`, ...input, createdAt: new Date().toISOString() };
+      const apiHelper = new SeasonsApiClient({ baseUrl: 'http://localhost:5000' });
+      const prepared = (apiHelper as any).prepareIngestPayload(input);
+      const note = { id: `note-${seasonsDb.notes.length + 1}`, ...prepared, createdAt: new Date().toISOString() };
       seasonsDb.notes.push(note);
       return { success: true, action: 'CREATED' as const, isNew: true, noteId: note.id, note };
     },
@@ -190,6 +209,33 @@ async function runSeasonsBridgeTests() {
     throw new Error('Expected DailyTimelineAxon to configure composite neuron with BATCH and TIMER');
   }
   console.log('  ✓ DailyTimelineAxon сконфигурировал композитный нейрон в Core Combinator и фид истории в Seasons!');
+
+  // 6. Проверка syncTodoListNote и SSE URL (/api/v1/events/stream)
+  console.log('\nTest 6: Note TodoList Projection & SeasonsSseBus URL');
+  await bridge.syncTodoListNote({
+    externalId: 'todos:projectarium:stand-1',
+    title: 'Projectarium Todo List',
+    streamSlug: 'projectarium',
+    feedSlug: 'projectarium-todos',
+    todoList: [
+      { id: 't1', title: 'Wire Seasons Proxy', completed: true, priority: 'HIGH' },
+      { id: 't2', title: 'Build Bubble UI', completed: false, priority: 'MEDIUM' },
+    ],
+  });
+
+  const todoNote = seasonsDb.notes.find((n) => n.externalId === 'todos:projectarium:stand-1');
+  const extractedTodos = extractTodoListFromNote(todoNote);
+  const stats = computeTodoStats(extractedTodos);
+  if (extractedTodos.length !== 2 || stats.completed !== 1 || !todoNote.content.includes('- [x] Wire Seasons Proxy')) {
+    throw new Error('Expected todoList to be stored in metadata and rendered as markdown checklist');
+  }
+
+  const sseBus = new SeasonsSseBus({ baseUrl: 'http://127.0.0.1:3002', token: 'tok-123' });
+  const streamUrl = sseBus.buildStreamUrl({ streamSlug: 'projectarium' });
+  if (!streamUrl.includes('/api/v1/events/stream') || !streamUrl.includes('token=tok-123') || !streamUrl.includes('streams=projectarium')) {
+    throw new Error(`Unexpected SSE stream URL: ${streamUrl}`);
+  }
+  console.log('  ✓ TodoList корректно упакован в Note.metadata + Markdown checklist, SSE URL исправлен на /api/v1/events/stream!');
 
   console.log('\n=== All Lemon-Seasons-Neurons Bridge Tests Passed! ===');
 }
