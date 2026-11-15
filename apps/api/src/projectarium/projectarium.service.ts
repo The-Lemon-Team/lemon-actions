@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { Observable, Subject } from 'rxjs';
 import {
   HealthProbeResult,
   ProjectariumApp,
@@ -34,15 +35,28 @@ const MAX_PERSISTED_CHRONICLE_EVENTS = 100;
 const AUTO_PROBE_INTERVAL_MS = 30_000;
 const PROBE_TIMEOUT_MS = 2_500;
 
+export interface ProjectariumChangeEvent {
+  kind: 'STAND_CREATED' | 'TODO_CHANGED' | 'NOTE_CHANGED' | 'CHRONICLE_ADDED';
+  project: ProjectariumProject;
+  note?: ProjectariumNoteItem;
+  todo?: ProjectariumTodoItem;
+  event?: ProjectariumEvent;
+}
+
 @Injectable()
 export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ProjectariumService.name);
   private readonly engine: ProjectariumEngine;
+  private readonly changesSubject$ = new Subject<ProjectariumChangeEvent>();
   private probeTimer: NodeJS.Timeout | null = null;
   private isProbingAll = false;
 
   constructor(private readonly prisma: PrismaService) {
     this.engine = new ProjectariumEngine();
+  }
+
+  changes$(): Observable<ProjectariumChangeEvent> {
+    return this.changesSubject$.asObservable();
   }
 
   async onModuleInit(): Promise<void> {
@@ -80,6 +94,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       author: dto.author,
     });
     await this.persistProject(project);
+    this.changesSubject$.next({ kind: 'STAND_CREATED', project });
     return project;
   }
 
@@ -104,6 +119,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       author: dto.author,
     });
     await this.persistProject(response.project);
+    this.changesSubject$.next({ kind: 'CHRONICLE_ADDED', project: response.project });
     return response;
   }
 
@@ -251,6 +267,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException(`Project stand '${slugOrToken}' not found`);
     }
     await this.persistProject(project);
+    this.changesSubject$.next({ kind: 'TODO_CHANGED', project, todo });
     return todo;
   }
 
@@ -261,6 +278,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException(`Todo '${todoId}' not found in project '${slugOrToken}'`);
     }
     await this.persistProject(project);
+    this.changesSubject$.next({ kind: 'TODO_CHANGED', project, todo });
     return todo;
   }
 
@@ -276,6 +294,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException(`Project stand '${slugOrToken}' not found`);
     }
     await this.persistProject(project);
+    this.changesSubject$.next({ kind: 'NOTE_CHANGED', project, note });
     return note;
   }
 
@@ -295,6 +314,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException(`Note '${noteId}' not found in project '${slugOrToken}'`);
     }
     await this.persistProject(project);
+    this.changesSubject$.next({ kind: 'NOTE_CHANGED', project, note });
     return note;
   }
 
@@ -320,6 +340,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException(`Project stand '${slugOrToken}' not found`);
     }
     await this.persistProject(project);
+    this.changesSubject$.next({ kind: 'CHRONICLE_ADDED', project, event });
     return event;
   }
 

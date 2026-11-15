@@ -8,6 +8,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProfilesModule } from './profiles/profiles.module';
 import { RegistryModule } from './registry/registry.module';
 import { ProjectariumModule } from './projectarium/projectarium.module';
+import { SeasonsModule } from './seasons/seasons.module';
 import { TagsModule } from './tags/tags.module';
 
 @Module({
@@ -21,6 +22,7 @@ import { TagsModule } from './tags/tags.module';
     CodeTasksModule,
     RegistryModule,
     ProjectariumModule,
+    SeasonsModule,
   ],
   controllers: [HealthController],
 })
