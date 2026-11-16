@@ -206,4 +206,20 @@ export interface Translations {
     createFlowFailed: string;
     deleteFlowFailed: string;
   };
+  pwa: {
+    installBtn: string;
+    installTitle: string;
+    modalTitle: string;
+    modalSubtitle: string;
+    closeAria: string;
+    closeBtn: string;
+    quickMethodTitle: string;
+    quickMethodChrome: string;
+    quickMethodEdge: string;
+    lanTipTitle: string;
+    lanTipDesc: string;
+    copyUrl: string;
+    copyFlag: string;
+    copied: string;
+  };
 }

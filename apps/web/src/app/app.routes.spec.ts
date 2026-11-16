@@ -1,12 +1,14 @@
 import { routes } from './app.routes';
 
 describe('App Routes', () => {
-  it('should define high-level routes for core, home, code, and arena', () => {
+  it('should define high-level routes for core, projectarium, actions, seasons, and media', () => {
     const paths = routes.map((r) => r.path);
     expect(paths).toContain('core');
-    expect(paths).toContain('home');
-    expect(paths).toContain('code');
-    expect(paths).toContain('arena');
+    expect(paths).toContain('projectarium');
+    expect(paths).toContain('actions');
+    expect(paths).toContain('seasons');
+    expect(paths).toContain('media');
+    expect(paths).toContain('ai');
   });
 
   it('should redirect root path to core', () => {
@@ -24,23 +26,31 @@ describe('App Routes', () => {
 
   it('should lazily resolve components for all main routes', async () => {
     const coreRoute = routes.find((r) => r.path === 'core');
-    const homeRoute = routes.find((r) => r.path === 'home');
-    const codeRoute = routes.find((r) => r.path === 'code');
-    const arenaRoute = routes.find((r) => r.path === 'arena');
+    const projectariumRoute = routes.find((r) => r.path === 'projectarium');
+    const actionsRoute = routes.find((r) => r.path === 'actions');
+    const seasonsRoute = routes.find((r) => r.path === 'seasons');
+    const mediaRoute = routes.find((r) => r.path === 'media');
+    const aiRoute = routes.find((r) => r.path === 'ai');
 
     expect(coreRoute?.loadComponent).toBeDefined();
-    expect(homeRoute?.loadComponent).toBeDefined();
-    expect(codeRoute?.loadComponent).toBeDefined();
-    expect(arenaRoute?.loadComponent).toBeDefined();
+    expect(projectariumRoute?.loadComponent).toBeDefined();
+    expect(actionsRoute?.loadComponent).toBeDefined();
+    expect(seasonsRoute?.loadComponent).toBeDefined();
+    expect(mediaRoute?.loadComponent).toBeDefined();
+    expect(aiRoute?.loadComponent).toBeDefined();
 
     const coreComponent = await (coreRoute!.loadComponent as () => Promise<unknown>)();
-    const homeComponent = await (homeRoute!.loadComponent as () => Promise<unknown>)();
-    const codeComponent = await (codeRoute!.loadComponent as () => Promise<unknown>)();
-    const arenaComponent = await (arenaRoute!.loadComponent as () => Promise<unknown>)();
+    const projectariumComponent = await (projectariumRoute!.loadComponent as () => Promise<unknown>)();
+    const actionsComponent = await (actionsRoute!.loadComponent as () => Promise<unknown>)();
+    const seasonsComponent = await (seasonsRoute!.loadComponent as () => Promise<unknown>)();
+    const mediaComponent = await (mediaRoute!.loadComponent as () => Promise<unknown>)();
+    const aiComponent = await (aiRoute!.loadComponent as () => Promise<unknown>)();
 
     expect(coreComponent).toBeTruthy();
-    expect(homeComponent).toBeTruthy();
-    expect(codeComponent).toBeTruthy();
-    expect(arenaComponent).toBeTruthy();
+    expect(projectariumComponent).toBeTruthy();
+    expect(actionsComponent).toBeTruthy();
+    expect(seasonsComponent).toBeTruthy();
+    expect(mediaComponent).toBeTruthy();
+    expect(aiComponent).toBeTruthy();
   });
 });

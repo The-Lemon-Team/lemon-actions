@@ -1,0 +1,54 @@
+{
+  "id": "/",
+  "name": "Lemon Actions",
+  "short_name": "Lemon Actions",
+  "description": "Reactive Flow Orchestration, Projectarium & Seasons",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#282c34",
+  "theme_color": "#e5c07b",
+  "categories": ["developer", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/actions.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/actions-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/actions-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/actions-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Core Console",
+      "short_name": "Core",
+      "url": "/core",
+      "icons": [{ "src": "/icons/core-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Projectarium",
+      "short_name": "Projectarium",
+      "url": "/projectarium",
+      "icons": [{ "src": "/icons/projectarium-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

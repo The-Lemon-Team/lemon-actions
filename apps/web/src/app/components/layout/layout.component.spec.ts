@@ -55,8 +55,31 @@ describe('LayoutComponent', () => {
     const links = fixture.nativeElement.querySelectorAll('nav[aria-label="Apps Navigation"] a');
     expect(links.length).toBe(PROJECTARIUM_NAV_ITEMS.length);
     expect(links[0].textContent).toContain('Projectarium');
-    expect(links[1].textContent).toContain('Seasons Map');
+    expect(links[1].textContent).toContain('Seasons Neurons');
     expect(fixture.nativeElement.textContent).toContain('Projectarium · Dev Stand');
     expect(fixture.nativeElement.querySelector('.xl\\:col-span-3')).toBeNull();
+  });
+
+  it('renders custom appTitle, appIcon, and install app button when showInstallApp is true', async () => {
+    await TestBed.configureTestingModule({
+      imports: [LayoutComponent],
+      providers: [provideRouter([])],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(LayoutComponent);
+    fixture.componentRef.setInput('appTitle', 'Lemon Projectarium');
+    fixture.componentRef.setInput('appIcon', 'domain');
+    fixture.componentRef.setInput('showInstallApp', true);
+    fixture.componentRef.setInput('canNativeInstall', true);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Lemon Projectarium');
+    const installBtn = fixture.nativeElement.querySelector('button[aria-label*="PWA"]') as HTMLButtonElement | null;
+    expect(installBtn).toBeTruthy();
+
+    const installSpy = jasmine.createSpy('installApp');
+    fixture.componentInstance.installApp.subscribe(installSpy);
+    installBtn?.click();
+    expect(installSpy).toHaveBeenCalledTimes(1);
   });
 });

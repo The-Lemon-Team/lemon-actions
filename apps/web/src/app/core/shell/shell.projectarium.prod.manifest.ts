@@ -38,6 +38,8 @@ export const PROJECTARIUM_PROD_ROUTES: Routes = [
 export const APP_SHELL_MANIFEST_DATA: AppShellManifest = {
   shellId: 'projectarium',
   defaultMode: 'projectarium',
+  appTitle: 'Lemon Projectarium',
+  appIcon: 'domain',
   clusterLabel: 'Projectarium · Production',
   hideSidebar: true,
   navItems: PROJECTARIUM_PROD_NAV_ITEMS,

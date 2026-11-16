@@ -1,0 +1,48 @@
+{
+  "id": "/core",
+  "name": "Lemon Core Console",
+  "short_name": "Lemon Core",
+  "description": "Reactive Flow Combinator Console & Telemetry",
+  "start_url": "/core",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#282c34",
+  "theme_color": "#4078f2",
+  "categories": ["developer", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/core.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/core-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/core-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/core-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Core Console",
+      "short_name": "Core",
+      "url": "/core",
+      "icons": [{ "src": "/icons/core-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

@@ -22,6 +22,8 @@ export interface AppNavItem {
 export interface AppShellManifest {
   readonly shellId: 'full' | 'core' | 'projectarium';
   readonly defaultMode: AppMode;
+  readonly appTitle?: string;
+  readonly appIcon?: string;
   readonly clusterLabel?: string;
   readonly hideSidebar?: boolean;
   readonly navItems: readonly AppNavItem[];

@@ -37,9 +37,9 @@ describe('AppComponent', () => {
     spyOn(router, 'navigate');
     spyOn(profileService, 'setAppMode');
 
-    component.onModeChange('home');
+    component.onModeChange('actions');
 
-    expect(profileService.setAppMode).toHaveBeenCalledWith('home');
-    expect(router.navigate).toHaveBeenCalledWith(['/home']);
+    expect(profileService.setAppMode).toHaveBeenCalledWith('actions');
+    expect(router.navigate).toHaveBeenCalledWith(['/actions']);
   });
 });

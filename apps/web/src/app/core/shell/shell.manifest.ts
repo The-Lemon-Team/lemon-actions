@@ -16,35 +16,31 @@ export const FULL_NAV_ITEMS: readonly AppNavItem[] = [
     icon: 'style',
   },
   {
-    id: 'home',
-    route: '/home',
-    label: 'Lemon Home',
-    icon: 'home',
-  },
-  {
-    id: 'code',
-    route: '/code',
-    label: 'Lemon Code',
-    icon: 'terminal',
-  },
-  {
     id: 'core',
     route: '/core',
     label: 'Core Console',
     icon: 'hub',
   },
   {
-    id: 'arena',
-    route: '/arena',
-    label: 'Neuron Arena',
-    icon: 'diversity_3',
-  },
-  {
     id: 'seasons',
     route: '/seasons',
-    label: 'Seasons Map',
+    label: 'Seasons Neurons',
     icon: 'bubble_chart',
     badge: { text: 'Live', variant: 'primary' },
+  },
+  {
+    id: 'media',
+    route: '/media',
+    label: 'Media Neurons',
+    icon: 'perm_media',
+    badge: { text: 'Admin', variant: 'success' },
+  },
+  {
+    id: 'ai',
+    route: '/ai',
+    label: 'AI-neurons',
+    icon: 'auto_awesome',
+    badge: { text: 'Umniy', variant: 'primary' },
   },
 ];
 
@@ -74,36 +70,28 @@ export const FULL_ROUTES: Routes = [
     title: 'Flow Combinator Console | Lemon Actions',
   },
   {
-    path: 'home',
-    loadComponent: () =>
-      import('../../components/home-tracker/home-tracker.component').then(
-        (m) => m.HomeTrackerComponent,
-      ),
-    title: 'Lemon Home | Lemon Actions',
-  },
-  {
-    path: 'code',
-    loadComponent: () =>
-      import('../../components/code-lab/code-lab.component').then(
-        (m) => m.CodeLabComponent,
-      ),
-    title: 'Lemon Code Lab | Lemon Actions',
-  },
-  {
-    path: 'arena',
-    loadComponent: () =>
-      import('../../components/neuron-arena/neuron-arena.component').then(
-        (m) => m.NeuronArenaComponent,
-      ),
-    title: 'Neuron Arena | Lemon Actions',
-  },
-  {
     path: 'seasons',
     loadComponent: () =>
       import('../../components/seasons-bubbles/seasons-explorer.component').then(
         (m) => m.SeasonsExplorerComponent,
       ),
     title: 'Lemon Seasons | Streams & Feeds Bubbles',
+  },
+  {
+    path: 'media',
+    loadComponent: () =>
+      import('../../components/media-neurons/media-admin.component').then(
+        (m) => m.MediaAdminComponent,
+      ),
+    title: 'Media Neurons | Content Moderation Admin',
+  },
+  {
+    path: 'ai',
+    loadComponent: () =>
+      import('../../components/ai-neurons/ai-neurons.component').then(
+        (m) => m.AiNeuronsComponent,
+      ),
+    title: 'AI-neurons | Umniy Lemon Studio',
   },
   {
     path: '',
@@ -119,6 +107,7 @@ export const FULL_ROUTES: Routes = [
 export const APP_SHELL_MANIFEST_DATA: AppShellManifest = {
   shellId: 'full',
   defaultMode: 'core',
+  clusterLabel: 'Lemon Shield · Production',
   navItems: FULL_NAV_ITEMS,
   routes: FULL_ROUTES,
 };

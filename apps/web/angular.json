@@ -27,6 +27,11 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "manifest.webmanifest",
+                "input": "pwa/full",
+                "output": "/"
               }
             ],
             "styles": [
@@ -67,6 +72,21 @@
               }
             },
             "core-production": {
+              "index": {
+                "input": "src/index.core.html",
+                "output": "index.html"
+              },
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "public"
+                },
+                {
+                  "glob": "manifest.webmanifest",
+                  "input": "pwa/core",
+                  "output": "/"
+                }
+              ],
               "fileReplacements": [
                 {
                   "replace": "src/environments/environment.ts",
@@ -102,6 +122,21 @@
               }
             },
             "projectarium-dev": {
+              "index": {
+                "input": "src/index.projectarium.html",
+                "output": "index.html"
+              },
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "public"
+                },
+                {
+                  "glob": "manifest.webmanifest",
+                  "input": "pwa/projectarium-dev",
+                  "output": "/"
+                }
+              ],
               "fileReplacements": [
                 {
                   "replace": "src/environments/environment.ts",
@@ -138,6 +173,21 @@
               "sourceMap": true
             },
             "projectarium-production": {
+              "index": {
+                "input": "src/index.projectarium.html",
+                "output": "index.html"
+              },
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "public"
+                },
+                {
+                  "glob": "manifest.webmanifest",
+                  "input": "pwa/projectarium",
+                  "output": "/"
+                }
+              ],
               "fileReplacements": [
                 {
                   "replace": "src/environments/environment.ts",
@@ -179,6 +229,21 @@
               "sourceMap": true
             },
             "projectarium-local": {
+              "index": {
+                "input": "src/index.projectarium.html",
+                "output": "index.html"
+              },
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "public"
+                },
+                {
+                  "glob": "manifest.webmanifest",
+                  "input": "pwa/projectarium-dev",
+                  "output": "/"
+                }
+              ],
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true,
@@ -225,6 +290,11 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "manifest.webmanifest",
+                "input": "pwa/full",
+                "output": "/"
               }
             ],
             "styles": [

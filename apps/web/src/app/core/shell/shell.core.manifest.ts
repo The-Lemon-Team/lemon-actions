@@ -38,6 +38,8 @@ export const CORE_ROUTES: Routes = [
 export const APP_SHELL_MANIFEST_DATA: AppShellManifest = {
   shellId: 'core',
   defaultMode: 'core',
+  appTitle: 'Lemon Core',
+  appIcon: 'hub',
   clusterLabel: 'Core Combinator · LAN',
   navItems: CORE_NAV_ITEMS,
   routes: CORE_ROUTES,

@@ -16,7 +16,7 @@ export const PROJECTARIUM_NAV_ITEMS: readonly AppNavItem[] = [
   {
     id: 'seasons',
     route: '/seasons',
-    label: 'Seasons Map',
+    label: 'Seasons Neurons',
     icon: 'bubble_chart',
     badge: { text: 'Bubbles', variant: 'primary' },
   },
@@ -53,6 +53,8 @@ export const PROJECTARIUM_ROUTES: Routes = [
 export const APP_SHELL_MANIFEST_DATA: AppShellManifest = {
   shellId: 'projectarium',
   defaultMode: 'projectarium',
+  appTitle: 'Lemon Projectarium',
+  appIcon: 'domain',
   clusterLabel: 'Projectarium · Dev Stand',
   hideSidebar: true,
   navItems: PROJECTARIUM_NAV_ITEMS,

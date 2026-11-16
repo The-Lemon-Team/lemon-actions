@@ -13,25 +13,25 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
   template: `
     <header class="fixed top-0 w-full z-50 bg-surface/90 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
       <div class="h-16 w-full px-margin flex items-center justify-between gap-gutter">
-        <div class="flex items-center gap-space-lg flex-shrink-0">
-          <div class="flex items-center gap-space-sm">
+        <div class="flex items-center gap-space-md lg:gap-space-lg min-w-0 flex-1">
+          <div class="flex items-center gap-space-sm flex-shrink-0">
             <div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container">
-              <span class="material-symbols-rounded text-lg" style="font-variation-settings: 'FILL' 1">nutrition</span>
+              <span class="material-symbols-rounded text-lg" style="font-variation-settings: 'FILL' 1">{{ appIcon }}</span>
             </div>
-            <span class="font-headline-sm text-headline-sm text-on-surface tracking-tight">{{ 'app.title' | trans }}</span>
+            <span class="font-headline-sm text-headline-sm text-on-surface tracking-tight whitespace-nowrap">{{ appTitle || ('app.title' | trans) }}</span>
             <span class="font-label-code-sm text-label-code-sm px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">{{ 'app.version' | trans }}</span>
           </div>
 
           <!-- Data-driven App Header Navigation (delivered via APP_SHELL_MANIFEST) -->
           @if (navItems.length > 0) {
-            <nav aria-label="Apps Navigation" class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-low border border-outline-variant/25">
+            <nav aria-label="Apps Navigation" class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-low border border-outline-variant/25 overflow-x-auto min-w-0">
               @for (item of navItems; track item.id) {
                 <a
                   [routerLink]="item.route"
                   routerLinkActive="bg-primary-container text-on-primary-container shadow-xs"
                   [routerLinkActiveOptions]="{ exact: false }"
                   (click)="modeChange.emit(item.id)"
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-label-ui text-xs font-bold no-underline cursor-pointer whitespace-nowrap flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   [class]="navItemClass(item.id)"
                 >
                   <span class="material-symbols-rounded text-base">{{ item.icon }}</span>
@@ -53,6 +53,20 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
 
           <!-- Language Switcher (RU / EN) -->
           <app-language-switcher />
+
+          @if (showInstallApp) {
+            <button
+              type="button"
+              (click)="installApp.emit()"
+              [attr.aria-label]="'pwa.installTitle' | trans"
+              [title]="'pwa.installTitle' | trans"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-label-ui text-xs font-semibold transition-colors"
+              [class]="canNativeInstall ? 'bg-primary-container text-on-primary-container hover:opacity-90' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'"
+            >
+              <span class="material-symbols-rounded text-lg">install_desktop</span>
+              <span class="hidden lg:inline">{{ 'pwa.installBtn' | trans }}</span>
+            </button>
+          }
 
           <button
             type="button"
@@ -106,21 +120,29 @@ import { LanguageSwitcherComponent } from '../language-switcher/language-switche
 export class LayoutComponent {
   @Input() isDark = false;
   @Input() appMode: AppMode = 'core';
+  @Input() appTitle?: string;
+  @Input() appIcon = 'nutrition';
   @Input() profileName = 'Мой Дом';
   @Input() navItems: readonly AppNavItem[] = [];
   @Input() clusterLabel?: string;
   @Input() hideSidebar = false;
+  @Input() showInstallApp = false;
+  @Input() canNativeInstall = false;
   @Output() themeToggle = new EventEmitter<void>();
   @Output() modeChange = new EventEmitter<AppMode>();
+  @Output() installApp = new EventEmitter<void>();
 
   get showSidebar(): boolean {
-    return !this.hideSidebar && this.appMode !== 'arena' && this.appMode !== 'seasons';
+    return (
+      !this.hideSidebar &&
+      this.appMode !== 'projectarium' &&
+      this.appMode !== 'seasons' &&
+      this.appMode !== 'media' &&
+      this.appMode !== 'ai'
+    );
   }
 
   get mainContainerClass(): string {
-    if (this.appMode === 'arena') {
-      return 'px-3 sm:px-6 max-w-[1800px]';
-    }
     return 'max-w-[1440px] px-margin';
   }
 

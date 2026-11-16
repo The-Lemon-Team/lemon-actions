@@ -1,0 +1,54 @@
+{
+  "id": "/projectarium-dev",
+  "name": "Lemon Projectarium Dev",
+  "short_name": "Projectarium Dev",
+  "description": "Dev Stand Cockpit, Port Shield & Seasons Map",
+  "start_url": "/projectarium",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#282c34",
+  "theme_color": "#e5c07b",
+  "categories": ["developer", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/projectarium.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/projectarium-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/projectarium-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/projectarium-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Stand Cockpit",
+      "short_name": "Cockpit",
+      "url": "/projectarium",
+      "icons": [{ "src": "/icons/projectarium-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Seasons Map",
+      "short_name": "Seasons",
+      "url": "/seasons",
+      "icons": [{ "src": "/icons/projectarium-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

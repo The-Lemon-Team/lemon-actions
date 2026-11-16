@@ -4,10 +4,12 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map, switchMap, take, timer } from 'rxjs';
 import { LayoutComponent } from './components/layout/layout.component';
+import { PwaInstallModalComponent } from './components/pwa-install-modal/pwa-install-modal.component';
 import { SidebarComponent } from './components/sidebar/sidebar.component';
 import { AppMode } from './core/models/flow.models';
 import { FlowOrchestratorService } from './core/services/flow-orchestrator.service';
 import { ProfileService } from './core/services/profile.service';
+import { PwaService } from './core/services/pwa.service';
 import { ThemeService } from './core/services/theme.service';
 import { APP_SHELL_MANIFEST } from './core/shell/app-shell.models';
 import { APP_SHELL_MANIFEST_DATA } from './core/shell/shell.manifest';
@@ -15,18 +17,23 @@ import { APP_SHELL_MANIFEST_DATA } from './core/shell/shell.manifest';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [AsyncPipe, RouterOutlet, LayoutComponent, SidebarComponent],
+  imports: [AsyncPipe, RouterOutlet, LayoutComponent, SidebarComponent, PwaInstallModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-layout
       [isDark]="(theme.theme$ | async) === 'dark'"
       [appMode]="(profileService.appMode$ | async) ?? shellManifest.defaultMode"
+      [appTitle]="shellManifest.appTitle"
+      [appIcon]="shellManifest.appIcon ?? 'nutrition'"
       [profileName]="(profileService.activeProfile$ | async)?.displayName ?? 'Мой Дом'"
       [navItems]="shellManifest.navItems"
       [clusterLabel]="shellManifest.clusterLabel"
       [hideSidebar]="shellManifest.hideSidebar ?? false"
+      [showInstallApp]="pwa.showInstallButton()"
+      [canNativeInstall]="pwa.canNativeInstall()"
       (themeToggle)="theme.toggle()"
       (modeChange)="onModeChange($event)"
+      (installApp)="pwa.triggerInstall()"
     >
       @if (!shellManifest.hideSidebar) {
         <app-sidebar
@@ -43,6 +50,16 @@ import { APP_SHELL_MANIFEST_DATA } from './core/shell/shell.manifest';
       <router-outlet />
     </app-layout>
 
+    @if (pwa.showInstallGuide()) {
+      <app-pwa-install-modal
+        [appTitle]="shellManifest.appTitle ?? 'Lemon Actions'"
+        [appIcon]="shellManifest.appIcon ?? 'install_desktop'"
+        [originUrl]="pwa.currentOrigin"
+        [isSecureContext]="pwa.isSecureContext"
+        (closed)="pwa.closeInstallGuide()"
+      />
+    }
+
     @if (toast$ | async; as message) {
       <div
         role="alert"
@@ -57,6 +74,7 @@ import { APP_SHELL_MANIFEST_DATA } from './core/shell/shell.manifest';
 export class AppComponent implements OnInit {
   protected readonly orchestrator = inject(FlowOrchestratorService);
   protected readonly profileService = inject(ProfileService);
+  protected readonly pwa = inject(PwaService);
   protected readonly theme = inject(ThemeService);
   protected readonly shellManifest =
     inject(APP_SHELL_MANIFEST, { optional: true }) ?? APP_SHELL_MANIFEST_DATA;
@@ -74,6 +92,7 @@ export class AppComponent implements OnInit {
   );
 
   ngOnInit(): void {
+    this.pwa.init();
     this.syncModeFromUrl(this.router.url);
 
     this.router.events
