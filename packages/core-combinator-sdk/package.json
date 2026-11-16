@@ -9,6 +9,9 @@
     "dev": "tsc --watch",
     "watch": "tsc --watch"
   },
+  "dependencies": {
+    "@lemon/core-combinator": "file:../core-combinator"
+  },
   "devDependencies": {
     "typescript": "^5.5.0",
     "@types/node": "^20.14.0"

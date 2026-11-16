@@ -29,6 +29,7 @@ import {
 } from './seasons.dto';
 
 export const PROJECTARIUM_STREAM_SLUG = 'projectarium';
+export const PROJECTARIUM_PROJECTS_FEED_SLUG = 'projectarium-projects';
 export const PROJECTARIUM_TODOS_FEED_SLUG = 'projectarium-todos';
 export const PROJECTARIUM_NOTES_FEED_SLUG = 'projectarium-notes';
 export const PROJECTARIUM_CHRONICLE_FEED_SLUG = 'projectarium-chronicle';
@@ -307,6 +308,16 @@ export class SeasonsService implements OnModuleInit, OnModuleDestroy {
   async ensureProjectariumNamespace(): Promise<{ streamId: string; feedIds: string[] }> {
     const feedConfigs = [
       {
+        slug: PROJECTARIUM_PROJECTS_FEED_SLUG,
+        title: 'Projectarium Projects',
+        description:
+          'Единая лента ведения проектов и межпроектных изменений под эгидой Lemon Projectarium',
+        icon: '🚀',
+        color: '#3b82f6',
+        privacy: 'private' as const,
+        hashtags: ['projectarium', 'projects'],
+      },
+      {
         slug: PROJECTARIUM_TODOS_FEED_SLUG,
         title: 'Projectarium Todo Lists',
         icon: '✅',
@@ -372,6 +383,7 @@ export class SeasonsService implements OnModuleInit, OnModuleDestroy {
       await this.ensureProjectariumNamespace();
     }
 
+    const projectRes = await this.projectStandOverview(project);
     const todosRes = await this.projectStandTodoList(project);
     let notesSynced = 0;
     for (const note of project.notes || []) {
@@ -384,6 +396,7 @@ export class SeasonsService implements OnModuleInit, OnModuleDestroy {
       success: true,
       projectSlug: project.slug,
       streamSlug: PROJECTARIUM_STREAM_SLUG,
+      projectNoteId: projectRes.noteId,
       todosNoteId: todosRes.noteId,
       notesSynced,
       chronicleNoteId: chronicleRes?.noteId || null,
@@ -394,6 +407,9 @@ export class SeasonsService implements OnModuleInit, OnModuleDestroy {
     try {
       if (!this.namespaceEnsured) {
         await this.ensureProjectariumNamespace();
+      }
+      if (change.kind === 'STAND_CREATED') {
+        await this.projectStandOverview(change.project);
       }
       if (change.kind === 'TODO_CHANGED' || change.kind === 'STAND_CREATED') {
         await this.projectStandTodoList(change.project);
@@ -411,6 +427,42 @@ export class SeasonsService implements OnModuleInit, OnModuleDestroy {
         }`,
       );
     }
+  }
+
+  private async projectStandOverview(project: ProjectariumProject) {
+    const stack = project.context?.stack?.length ? project.context.stack.join(', ') : '—';
+    const appsCount = project.apps?.length || 0;
+    const todosCount = project.todos?.length || 0;
+    const lines = [
+      project.context?.description || `Стенд проекта **${project.name}** (\`${project.slug}\`).`,
+      '',
+      `- **Slug**: \`${project.slug}\``,
+      `- **Neuron Workspace**: \`${project.neuronWorkspace}\``,
+      `- **Стек**: ${stack}`,
+      `- **Сервисов / портов**: ${appsCount}`,
+      `- **Задач в чек-листе**: ${todosCount}`,
+    ];
+
+    return this.client.ingestNote({
+      externalId: `projectarium:project:${project.slug}`,
+      title: `🚀 ${project.name}`,
+      content: lines.join('\n'),
+      summary: project.context?.description || `Стенд ${project.name} (${appsCount} сервисов)`,
+      type: 'SINGLE',
+      privacy: 'private',
+      status: 'PUBLISHED',
+      streamSlug: PROJECTARIUM_STREAM_SLUG,
+      feedSlug: PROJECTARIUM_PROJECTS_FEED_SLUG,
+      icon: '🚀',
+      author: 'projectarium-sync',
+      tags: ['projectarium', 'projects', `stand:${project.slug}`, `project:${project.slug}`],
+      origin: 'PROJECTARIUM_SYNC',
+      metadata: {
+        projectSlug: project.slug,
+        projectName: project.name,
+        neuronWorkspace: project.neuronWorkspace,
+      },
+    });
   }
 
   private async projectStandTodoList(project: ProjectariumProject) {

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@lemon/core-combinator-sdk": ["../core-combinator-sdk/dist"],
+      "rxjs": ["../../apps/api/node_modules/rxjs"],
+      "rxjs/*": ["../../apps/api/node_modules/rxjs/*"]
+    }
+  },
+  "include": ["src/**/*"]
+}
