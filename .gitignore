@@ -5,6 +5,7 @@ node_modules/
 
 # Production / build output
 dist/
+dist-test/
 out-tsc/
 bazel-out/
 *.tsbuildinfo
