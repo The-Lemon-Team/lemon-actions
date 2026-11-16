@@ -14,7 +14,7 @@ Lemon-Projectarium consolidates distributed projects, dynamic microservices, por
    - Core stack (`PostgreSQL: 5433`, `API: 3000`, `Angular Web: 4201`) are immune from dynamic pre-registration deadlocks.
    - Dynamic agent apps and stand microservices are dynamically assigned collision-free ports starting at `4320+`.
 3. **Three Permanent Default Stands**:
-   - **Lemon Seasons** (`workspace.seasons`): Calendar app (:5173), Admin CMS (:3002), Seasons Backend (:3001), Feed app (:8081).
+   - **Lemon Seasons** (`workspace.seasons`): Gateway (:8090 / local :8080), Seasons Backend (:3001 / dev :3002), Admin CMS (:5173), Calendar app (:5174), Feed app (:5175), PostgreSQL (:5435 / local :5434).
    - **Lemon Actions** (`workspace.actions`): Core combinator (:5433), Lemon actions (:4201), Port Shield (:3000), Lemon Watchers (:4301).
    - **Sportdrop** (`workspace.sportdrop`): Dev env (:4310), Lan port (:4311), Media gateway port (:4312), Funnel tunnel (:443), Prod port (:8443).
 4. **Dual-Level Reactive Todo Lists**:

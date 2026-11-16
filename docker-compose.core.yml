@@ -24,6 +24,8 @@ services:
     image: lemon-core-api:latest
     container_name: lemon-core-api
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${API_PORT:-3000}:3000"
     environment:
@@ -32,6 +34,12 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-lemon}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${POSTGRES_DB:-lemon_db}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       AUTO_SEED: ${AUTO_SEED:-true}
+      PROJECTARIUM_LOCALHOST_ALIAS: ${PROJECTARIUM_LOCALHOST_ALIAS:-host.docker.internal}
+      LEMON_SEASONS_URL: ${LEMON_SEASONS_URL:-http://host.docker.internal:3001}
+      LEMON_MEDIA_HUB_URL: ${LEMON_MEDIA_HUB_URL:-http://host.docker.internal:3005}
+      LEMON_AI_SERVICE_URL: ${LEMON_AI_SERVICE_URL:-http://host.docker.internal:3006}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,host.docker.internal,192.168.1.100}
+      no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,host.docker.internal,192.168.1.100}
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,7 +55,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        BUILD_CONFIG: ${WEB_BUILD_CONFIG:-core-production}
+        BUILD_CONFIG: ${WEB_BUILD_CONFIG:-production}
     image: lemon-core-web:latest
     container_name: lemon-core-web
     restart: unless-stopped
@@ -57,6 +65,12 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   lemon_core_pgdata:

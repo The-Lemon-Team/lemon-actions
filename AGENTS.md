@@ -23,3 +23,12 @@ All Angular code in this repository must comply with [`.agents/rules/angular-sol
 - **SOLID Compliance**: Strict Smart/Dumb component separation (SRP), directive-based extension (OCP), contract-first interfaces (LSP), focused models (ISP), and reactive bus decoupling (DIP).
 - **Template Safety**: Never use `/` in template class bindings (e.g. `[class.bg-black/5]`); use string expressions or helper methods.
 
+## Cross-Repo Rule: Obsidian Work Deferred
+- In `lemon-calendarium` / `lemon-seasons`, all Obsidian-related work (`packages/obsidian-plugin`, `packages/obsidian-containers`, `container-sync-server` `:3031`, and Obsidian sync UI/endpoints) is **deferred ("оставляем на потом")** per `lemon-calendarium/.agents/rules/obsidian_deferred.md`. Neglect/skip Obsidian tasks and checks unless the user explicitly asks for Obsidian work.
+
+## Unified Projectarium Workspace Rule (Lemon Seasons)
+All project-management changes across all projects must comply with [`.agents/rules/projectarium-workspace.md`](./.agents/rules/projectarium-workspace.md):
+- **No Per-Project Feeds/Streams**: Do NOT create separate Lemon Seasons feeds or streams for individual projects (such as `lemon-actions`, `lemon-watchers`, etc.).
+- **Single Umbrella**: All project updates, decisions, roadmaps, and new project-management features live under **Lemon Projectarium** inside the private `projectarium` stream (**Projectarium Workspace**, `http://192.168.1.100:5175/projectarium`), using its functional feeds (`projectarium-projects`, `projectarium-todos`, `projectarium-notes`, `projectarium-chronicle`).
+- **Tagging Over Siloing**: Identify specific projects via tags/metadata (`stand:<slug>`, `project:<slug>`), never separate feeds.
+

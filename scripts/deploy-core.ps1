@@ -1,6 +1,6 @@
 ﻿param(
   [string]$DockerHost = "tcp://192.168.1.100:2375",
-  [string]$BuildConfig = "core-production"
+  [string]$BuildConfig = "production"
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,14 +24,33 @@ function Invoke-DockerCompose {
   }
 }
 
-Write-Host "🚀 Building Core Combinator API image on $DockerHost ..." -ForegroundColor Cyan
+Write-Host "🚀 Building Unified Core & Shield API image on $DockerHost ..." -ForegroundColor Cyan
 Invoke-DockerCompose @("build", "api")
 
-Write-Host "🌐 Building Core Console App Shell ($BuildConfig) image on $DockerHost ..." -ForegroundColor Cyan
+Write-Host "🌐 Building Unified Lemon App Shell ($BuildConfig) image on $DockerHost ..." -ForegroundColor Cyan
 Invoke-DockerCompose @("build", "web")
 
-Write-Host "📦 Starting Core Combinator stack (postgres, api, web) on $DockerHost ..." -ForegroundColor Cyan
+Write-Host "📦 Starting Unified Lemon Stack (postgres, api, web) on $DockerHost ..." -ForegroundColor Cyan
 Invoke-DockerCompose @("up", "-d", "--remove-orphans")
 
 Write-Host "✅ Active containers on ${DockerHost}:" -ForegroundColor Green
 Invoke-DockerCompose @("ps")
+
+Write-Host "==> Verifying unified HTTP endpoints on $hostIp ..." -ForegroundColor Cyan
+foreach ($ep in @("health", "seasons/status", "media/status", "ai/status")) {
+  try {
+    $resp = Invoke-RestMethod -Uri "http://$($hostIp):3000/api/$ep" -TimeoutSec 10
+    Write-Host "    API /api/${ep}: $($resp | ConvertTo-Json -Compress)" -ForegroundColor Green
+  } catch {
+    Write-Warning "API /api/$ep probe failed: $_"
+  }
+}
+
+foreach ($port in @(80, 4201)) {
+  try {
+    $webResp = Invoke-WebRequest -Uri "http://$($hostIp):$($port)/" -UseBasicParsing -TimeoutSec 10
+    Write-Host "    Web :${port}/ status: $($webResp.StatusCode)" -ForegroundColor Green
+  } catch {
+    Write-Warning "Web :${port} probe failed: $_"
+  }
+}

@@ -19,3 +19,8 @@ All Angular components must follow [`.agents/rules/angular-solid-architecture.md
 - Standalone components only, native `@if`/`@for`, `inject()`, `ChangeDetectionStrategy.OnPush`.
 - Strict SOLID decomposition, Smart/Dumb architecture, safe template class syntax (no `/` in property bindings).
 
+### Unified Projectarium Workspace (Lemon Seasons)
+All project-management tracking across all projects must follow [`.agents/rules/projectarium-workspace.md`](./.agents/rules/projectarium-workspace.md):
+- Do NOT create separate Lemon Seasons feeds/streams per project (`lemon-actions`, `lemon-watchers`, etc.).
+- Route all project changes, overviews, todos, notes, and chronicles into the unified `projectarium` stream (**Projectarium Workspace**) using `projectarium-projects`, `projectarium-todos`, `projectarium-notes`, and `projectarium-chronicle`, distinguishing projects via tags/metadata.
+
