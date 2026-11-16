@@ -20,6 +20,8 @@ export interface ProjectariumApp {
   leaseToken: string;
   environment: ProjectariumEnvironment;
   networkMode: ProjectariumNetworkMode;
+  machineId?: string;
+  machineName?: string;
   status: ProjectariumAppStatus;
   healthUrl?: string;
   lastPingAt?: string;
@@ -100,6 +102,8 @@ export interface ProjectariumRegisterPayload {
   preferredPort?: number;
   environment?: ProjectariumEnvironment;
   networkMode?: ProjectariumNetworkMode;
+  machineId?: string;
+  machineName?: string;
   healthUrl?: string;
   context?: Record<string, any>;
   initialTodos?: string[];
@@ -123,6 +127,75 @@ export interface ProjectShieldStats {
   evictedApps: number;
   zeroDeadlockRootCount: number;
   averageLatencyMs: number;
+  publicAppsCount?: number;
+  localAppsCount?: number;
+  activeMachinesCount?: number;
+}
+
+export type ProjectariumRunEndReason = 'ACTIVE' | 'RELEASED' | 'TTL_EXPIRED' | 'EVICTED';
+
+export interface ProjectariumMachineSummary {
+  machineId: string;
+  machineName: string;
+  activeLocalCount: number;
+  activePublicCount: number;
+  lastSeenAt: string;
+}
+
+export interface ProjectariumMachineAppBreakdown {
+  appName: string;
+  standSlug: string;
+  standName: string;
+  runs: number;
+  activeCount: number;
+  totalDurationSec: number;
+}
+
+export interface ProjectariumMachineStats {
+  machineId: string;
+  machineName: string;
+  activeCount: number;
+  totalRuns: number;
+  totalDurationSec: number;
+  lastActiveAt?: string;
+  topApps: ProjectariumMachineAppBreakdown[];
+}
+
+export interface ProjectariumAppRunSummary {
+  id: string;
+  standSlug: string;
+  standName: string;
+  appName: string;
+  host: string;
+  port: number;
+  environment: ProjectariumEnvironment;
+  networkMode: ProjectariumNetworkMode;
+  machineId: string;
+  machineName: string;
+  startedAt: string;
+  lastHeartbeatAt: string;
+  endedAt?: string;
+  durationSec: number;
+  endReason: ProjectariumRunEndReason;
+}
+
+export interface ProjectariumAnalytics {
+  windowDays: number;
+  generatedAt: string;
+  totalRuns: number;
+  activeRuns: number;
+  totalDurationSec: number;
+  machines: ProjectariumMachineStats[];
+  topApps: Array<{
+    appName: string;
+    standSlug: string;
+    standName: string;
+    totalRuns: number;
+    activeCount: number;
+    totalDurationSec: number;
+    machines: string[];
+  }>;
+  recentRuns: ProjectariumAppRunSummary[];
 }
 
 export interface ProjectariumPoolItem {

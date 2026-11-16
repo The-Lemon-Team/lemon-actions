@@ -21,7 +21,7 @@ import {
   ProjectariumTodoItem,
   ProjectShieldStats,
 } from '../types/projectarium.types';
-import { buildDefaultHealthUrl, resolveAppHost } from '../utils/address.utils';
+import { buildDefaultHealthUrl, resolveAppHost, resolveMachineIdentity } from '../utils/address.utils';
 import { createDefaultProjectariumStands } from '../seeds/default-stands.seed';
 
 export class ProjectariumEngine {
@@ -30,6 +30,7 @@ export class ProjectariumEngine {
   private readonly reservedPorts = new Set<number>([
     5433, // PostgreSQL (Local Dev)
     5436, // PostgreSQL (Projectarium Prod)
+    5437, // PostgreSQL (Projectarium Dev)
     3000, // API Gateway (Core)
     3200, // API Gateway (Projectarium Prod)
     4201, // Angular Web (Core)
@@ -40,6 +41,27 @@ export class ProjectariumEngine {
 
   constructor() {
     this.seedDefaultStands();
+  }
+
+  private normalizeHostKey(host?: string): string {
+    const clean = (host || 'localhost').trim().toLowerCase();
+    if (clean === '127.0.0.1' || clean === '::1' || clean === '0.0.0.0' || clean === '') {
+      return 'localhost';
+    }
+    return clean;
+  }
+
+  private buildPortScopeKey(
+    host?: string,
+    networkMode: ProjectariumNetworkMode = 'local',
+    machineId?: string,
+  ): string {
+    const normalizedHost = this.normalizeHostKey(host);
+    if (networkMode === 'local' || normalizedHost === 'localhost') {
+      const resolvedMachine = (machineId || 'local-default').trim().toLowerCase();
+      return `local::${resolvedMachine}`;
+    }
+    return `remote::${normalizedHost}`;
   }
 
   /**
@@ -55,27 +77,41 @@ export class ProjectariumEngine {
   }
 
   /**
-   * Allocate a unique network port
+   * Allocate a unique network port scoped by (machineId, localhost) for local apps
+   * or by remote host for shared network apps, so PC-1 and PC-2 never collide.
    */
-  private allocatePort(preferredPort?: number): number {
-    const activePorts = new Set<number>();
+  private allocatePort(
+    preferredPort?: number,
+    targetHost = 'localhost',
+    networkMode: ProjectariumNetworkMode = 'local',
+    machineId = 'local-default',
+  ): number {
+    const targetScope = this.buildPortScopeKey(targetHost, networkMode, machineId);
+    const activePortsInScope = new Set<number>();
+
     for (const project of this.projects.values()) {
       for (const app of project.apps) {
         if (app.status !== 'EVICTED') {
-          activePorts.add(app.port);
+          const appHost = app.host || (app.metadata?.['host'] as string | undefined);
+          const appMachineId =
+            app.machineId || (app.metadata?.['machineId'] as string | undefined) || 'local-default';
+          const appScope = this.buildPortScopeKey(appHost, app.networkMode, appMachineId);
+          if (appScope === targetScope) {
+            activePortsInScope.add(app.port);
+          }
         }
       }
     }
 
-    if (preferredPort && !activePorts.has(preferredPort)) {
+    if (preferredPort && !activePortsInScope.has(preferredPort)) {
       return preferredPort;
     }
 
-    let candidate = Math.max(this.nextDynamicPort, 4320);
-    while (activePorts.has(candidate) || this.reservedPorts.has(candidate)) {
+    let candidate = 4320;
+    while (activePortsInScope.has(candidate) || this.reservedPorts.has(candidate)) {
       candidate++;
     }
-    this.nextDynamicPort = candidate + 1;
+    this.nextDynamicPort = Math.max(this.nextDynamicPort, candidate + 1);
     return candidate;
   }
 
@@ -239,9 +275,15 @@ export class ProjectariumEngine {
 
     // 3. Allocate port & create application instance
     const appName = payload.appName || `${project.slug}-core`;
-    const allocatedPort = this.allocatePort(payload.preferredPort);
     const networkMode: ProjectariumNetworkMode = payload.networkMode || 'local';
     const host = resolveAppHost(payload.host, payload.healthUrl);
+    const machine = resolveMachineIdentity({
+      machineId: payload.machineId || (payload.context?.['machineId'] as string | undefined),
+      machineName: payload.machineName || (payload.context?.['machineName'] as string | undefined),
+      networkMode,
+      host,
+    });
+    const allocatedPort = this.allocatePort(payload.preferredPort, host, networkMode, machine.machineId);
     const healthUrl = payload.healthUrl || buildDefaultHealthUrl(host, allocatedPort, networkMode);
     const instanceId = `inst_${project.slug}_${appName.toLowerCase().replace(/[^a-z0-9]/g, '')}_${Date.now().toString(36)}`;
     const leaseToken = `lease_${Math.random().toString(36).substring(2, 12)}`;
@@ -255,6 +297,8 @@ export class ProjectariumEngine {
       leaseToken: leaseToken,
       environment: payload.environment || 'dev',
       networkMode,
+      machineId: machine.machineId,
+      machineName: machine.machineName,
       status: 'ONLINE',
       healthUrl,
       lastPingAt: now,
@@ -264,6 +308,8 @@ export class ProjectariumEngine {
       metadata: {
         ...(payload.context ?? {}),
         host,
+        machineId: machine.machineId,
+        machineName: machine.machineName,
       },
     };
 
@@ -276,7 +322,7 @@ export class ProjectariumEngine {
       type: 'APP_REGISTERED',
       scope: 'APP',
       targetAppName: newApp.appName,
-      description: `Приложение ${newApp.appName} — ${host}:${allocatedPort} [${newApp.networkMode}]`,
+      description: `Приложение ${newApp.appName} — ${host}:${allocatedPort} [${newApp.networkMode} · ${machine.machineName}]`,
       timestamp: now,
       author: payload.author || 'autonomous-agent',
       metadata: {
@@ -284,6 +330,8 @@ export class ProjectariumEngine {
         host,
         port: newApp.port,
         leaseToken: newApp.leaseToken,
+        machineId: machine.machineId,
+        machineName: machine.machineName,
       },
     };
     project.chronicle.unshift(event);
@@ -301,10 +349,45 @@ export class ProjectariumEngine {
   }
 
   /**
-   * List all projects
+   * List all projects (unfiltered internal state)
    */
   public listProjects(): ProjectariumProject[] {
     return Array.from(this.projects.values());
+  }
+
+  /**
+   * List projects filtered for a specific viewer:
+   * - Public / shared apps (networkMode !== 'local') are always included.
+   * - Localhost apps (networkMode === 'local') are only included for the matching machineId
+   *   (or when includeAllLocal is true).
+   */
+  public listProjectsForViewer(options?: {
+    machineId?: string;
+    includeAllLocal?: boolean;
+  }): ProjectariumProject[] {
+    const normalizedViewerMachine = options?.machineId?.trim().toLowerCase();
+    return Array.from(this.projects.values()).map((project) => ({
+      ...project,
+      apps: project.apps.filter((app) => {
+        if (app.networkMode !== 'local') {
+          return true;
+        }
+        if (options?.includeAllLocal) {
+          return true;
+        }
+        if (!normalizedViewerMachine) {
+          return false;
+        }
+        const appMachine = (
+          app.machineId ||
+          (app.metadata?.['machineId'] as string | undefined) ||
+          'local-default'
+        )
+          .trim()
+          .toLowerCase();
+        return appMachine === normalizedViewerMachine;
+      }),
+    }));
   }
 
   /**
@@ -317,6 +400,14 @@ export class ProjectariumEngine {
       project.notes = Array.isArray(project.notes) ? project.notes : [];
       for (const app of project.apps) {
         app.host = resolveAppHost(app.host || (app.metadata?.['host'] as string | undefined), app.healthUrl);
+        const machine = resolveMachineIdentity({
+          machineId: app.machineId || (app.metadata?.['machineId'] as string | undefined),
+          machineName: app.machineName || (app.metadata?.['machineName'] as string | undefined),
+          networkMode: app.networkMode,
+          host: app.host,
+        });
+        app.machineId = machine.machineId;
+        app.machineName = machine.machineName;
         if (app.port >= maxPort && !this.reservedPorts.has(app.port)) {
           maxPort = app.port;
         }
@@ -479,19 +570,25 @@ export class ProjectariumEngine {
   }
 
   /**
-   * Flat pool view across all stands with optional environment/networkMode filters
+   * Flat pool view across all stands with optional environment/networkMode/machineId filters
    */
   public listPool(filter?: {
     environment?: ProjectariumEnvironment;
     networkMode?: ProjectariumNetworkMode;
+    machineId?: string;
     includeEvicted?: boolean;
   }): ProjectariumPoolItem[] {
+    const targetMachine = filter?.machineId?.trim().toLowerCase();
     const items: ProjectariumPoolItem[] = [];
     for (const project of this.projects.values()) {
       for (const app of project.apps) {
         if (!filter?.includeEvicted && app.status === 'EVICTED') continue;
         if (filter?.environment && app.environment !== filter.environment) continue;
         if (filter?.networkMode && app.networkMode !== filter.networkMode) continue;
+        if (targetMachine) {
+          const appMachine = (app.machineId || 'local-default').trim().toLowerCase();
+          if (appMachine !== targetMachine) continue;
+        }
         items.push({
           projectId: project.id,
           projectSlug: project.slug,
@@ -502,6 +599,54 @@ export class ProjectariumEngine {
       }
     }
     return items;
+  }
+
+  /**
+   * Expires dynamic local (localhost) leases whose lastPingAt/registeredAt exceeds ttlMs.
+   * Seed anchors (metadata.isSeedAnchor === true) are preserved.
+   */
+  public expireStaleLocalLeases(
+    ttlMs: number,
+    nowMs = Date.now(),
+  ): Array<{ project: ProjectariumProject; app: ProjectariumApp }> {
+    const expired: Array<{ project: ProjectariumProject; app: ProjectariumApp }> = [];
+    const nowIso = new Date(nowMs).toISOString();
+
+    for (const project of this.projects.values()) {
+      const remaining: ProjectariumApp[] = [];
+      for (const app of project.apps) {
+        const isSeedAnchor = Boolean(app.metadata?.['isSeedAnchor']);
+        if (app.networkMode === 'local' && !isSeedAnchor) {
+          const lastSeenIso = app.lastPingAt || app.registeredAt;
+          const lastSeenMs = Date.parse(lastSeenIso);
+          if (Number.isFinite(lastSeenMs) && nowMs - lastSeenMs > ttlMs) {
+            expired.push({ project, app });
+            project.chronicle.unshift({
+              id: `ev-ttl-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 5)}`,
+              type: 'APP_EVICTED',
+              scope: 'APP',
+              targetAppName: app.appName,
+              description: `Локальный сервис ${app.appName} (${app.machineName || app.machineId || 'local'}) завершён по TTL heartbeat`,
+              timestamp: nowIso,
+              author: 'lease-ttl-reaper',
+              metadata: {
+                instanceId: app.instanceId,
+                machineId: app.machineId,
+                port: app.port,
+              },
+            });
+            project.updatedAt = nowIso;
+            continue;
+          }
+        }
+        remaining.push(app);
+      }
+      if (remaining.length !== project.apps.length) {
+        project.apps = remaining;
+      }
+    }
+
+    return expired;
   }
 
   /**
@@ -848,12 +993,23 @@ export class ProjectariumEngine {
     let onlineApps = 0;
     let degradedApps = 0;
     let evictedApps = 0;
+    let publicAppsCount = 0;
+    let localAppsCount = 0;
     let totalLatency = 0;
     let latencyCount = 0;
+    const activeMachines = new Set<string>();
 
     for (const project of this.projects.values()) {
       for (const app of project.apps) {
         totalApps++;
+        if (app.networkMode === 'local') {
+          localAppsCount++;
+        } else {
+          publicAppsCount++;
+        }
+        if (app.status !== 'EVICTED' && app.machineId) {
+          activeMachines.add(app.machineId);
+        }
         if (app.status === 'ONLINE') onlineApps++;
         else if (app.status === 'DEGRADED') degradedApps++;
         else if (app.status === 'EVICTED') evictedApps++;
@@ -873,6 +1029,9 @@ export class ProjectariumEngine {
       evictedApps,
       zeroDeadlockRootCount: this.reservedPorts.size,
       averageLatencyMs: latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0,
+      publicAppsCount,
+      localAppsCount,
+      activeMachinesCount: activeMachines.size,
     };
   }
 }

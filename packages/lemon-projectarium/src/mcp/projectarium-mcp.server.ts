@@ -9,9 +9,23 @@
  * Transports: Standard Input / Output (stdio) JSON-RPC 2.0.
  */
 
+import * as os from 'os';
 import * as readline from 'readline';
 
 const API_BASE_URL = process.env.LEMON_API_URL || 'http://localhost:3000/api';
+
+function resolveLocalMachineIdentity(): { machineId: string; machineName: string } {
+  const hostname = os.hostname() || 'local-pc';
+  const envName = process.env.LEMON_MACHINE_NAME?.trim();
+  const envId = process.env.LEMON_MACHINE_ID?.trim();
+  const machineName = envName || hostname;
+  const rawId = envId || machineName;
+  const machineId = rawId
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'local-pc';
+  return { machineId, machineName };
+}
 
 interface McpTool {
   name: string;
@@ -56,6 +70,14 @@ const TOOLS: McpTool[] = [
           type: 'string',
           enum: ['local', 'lan', 'tailscale-lan', 'tailscale-funnel'],
           description: 'Network routing: "local" (localhost), "lan", "tailscale-lan" (mesh 100.x), or "tailscale-funnel" (public HTTPS)',
+        },
+        machineId: {
+          type: 'string',
+          description: 'Optional machine identifier (defaults to LEMON_MACHINE_ID or os.hostname()) so localhost ports are isolated per workstation.',
+        },
+        machineName: {
+          type: 'string',
+          description: 'Optional human-readable machine name (e.g. "PC-1", "Laptop-Home"). Defaults to LEMON_MACHINE_NAME or os.hostname().',
         },
         preferredPort: {
           type: 'number',
@@ -113,6 +135,10 @@ const TOOLS: McpTool[] = [
           enum: ['local', 'lan', 'tailscale-lan', 'tailscale-funnel'],
           description: 'Filter by network mode',
         },
+        machineId: {
+          type: 'string',
+          description: 'Filter by machineId (defaults to current workstation when omitted if desired)',
+        },
       },
     },
   },
@@ -140,8 +166,11 @@ async function handleToolCall(name: string, args: any) {
   switch (name) {
     case 'lemon_register_app': {
       const hasProjectRef = Boolean(args?.projectToken || args?.projectSlug || args?.projectName);
+      const localMachine = resolveLocalMachineIdentity();
       const payload = {
         ...args,
+        machineId: args?.machineId || localMachine.machineId,
+        machineName: args?.machineName || localMachine.machineName,
         preferredPort: args?.preferredPort ?? args?.desiredPort,
         ...(hasProjectRef
           ? {}
@@ -173,6 +202,7 @@ async function handleToolCall(name: string, args: any) {
       const params = new URLSearchParams();
       if (args?.environment) params.set('environment', String(args.environment));
       if (args?.networkMode) params.set('networkMode', String(args.networkMode));
+      if (args?.machineId) params.set('machineId', String(args.machineId));
       const query = params.toString() ? `?${params.toString()}` : '';
       const result = await callBackend(`projectarium/pool${query}`, 'GET');
       return {

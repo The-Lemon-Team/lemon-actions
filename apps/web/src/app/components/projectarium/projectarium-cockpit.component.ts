@@ -13,6 +13,7 @@ import { AppEnvironment, AppNetworkMode } from '../../core/models/health-checker
 import { ProjectStandCardComponent } from '../lemon-workers/project-stand-card.component';
 import { CreateStandModalComponent } from '../lemon-workers/create-stand-modal.component';
 import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
+import { ProjectariumAnalyticsComponent } from './projectarium-analytics.component';
 
 @Component({
   selector: 'app-projectarium-cockpit',
@@ -23,6 +24,7 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
     ProjectStandCardComponent,
     CreateStandModalComponent,
     AddAppModalComponent,
+    ProjectariumAnalyticsComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -49,6 +51,41 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
 
         <!-- ACTION BUTTONS -->
         <div class="flex items-center gap-2.5 flex-wrap">
+          <div class="flex items-center gap-1 p-1 rounded-xl bg-surface-container-low border border-outline-variant/30">
+            <button
+              type="button"
+              data-testid="cockpit-tab-stands"
+              (click)="switchCockpitView('STANDS')"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+              [class]="getCockpitViewBtnClass(activeCockpitView === 'STANDS')"
+            >
+              <span class="material-symbols-rounded text-sm">domain</span>
+              <span>Стенды</span>
+            </button>
+            <button
+              type="button"
+              data-testid="cockpit-tab-analytics"
+              (click)="switchCockpitView('ANALYTICS')"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+              [class]="getCockpitViewBtnClass(activeCockpitView === 'ANALYTICS')"
+            >
+              <span class="material-symbols-rounded text-sm">monitoring</span>
+              <span>Статистика машин</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            data-testid="toggle-machine-picker"
+            (click)="toggleMachinePicker()"
+            class="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold shadow-2xs transition-all cursor-pointer"
+            [class]="getMachinePickerBtnClass()"
+            title="Привязать этот браузер к конкретному ПК, чтобы видеть свои localhost-адреса"
+          >
+            <span class="material-symbols-rounded text-sm">computer</span>
+            <span>{{ getActiveMachineLabel() }}</span>
+          </button>
+
           <button
             type="button"
             (click)="showSmartTouch = !showSmartTouch"
@@ -69,6 +106,98 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
           </button>
         </div>
       </header>
+
+      <!-- WORKSTATION LOCALHOST BINDING DRAWER -->
+      @if (showMachinePicker) {
+        <section
+          data-testid="machine-picker-panel"
+          class="p-4 rounded-3xl bg-surface-container-low border border-sky-500/30 shadow-xs flex flex-col gap-3"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-rounded text-base text-sky-600 dark:text-sky-400">computer</span>
+              <span class="font-bold text-xs text-on-surface">
+                Привязка локальной машины (для личных localhost-адресов)
+              </span>
+            </div>
+            <button
+              type="button"
+              (click)="showMachinePicker = false"
+              class="w-6 h-6 rounded-md flex items-center justify-center text-on-surface-variant hover:text-on-surface cursor-pointer"
+            >
+              <span class="material-symbols-rounded text-sm">close</span>
+            </button>
+          </div>
+
+          <p class="text-[11px] text-on-surface-variant">
+            По умолчанию Projectarium показывает только общедоступные (production / LAN / Funnel) URL. Выберите ваш компьютер, чтобы видеть и свои локальные dev-сервисы на localhost без показа чужих машин.
+          </p>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              (click)="selectMachine('', '')"
+              class="px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer"
+              [class]="getMachineOptionClass(!(standService.selectedMachineId$ | async))"
+            >
+              Только публичные (без localhost)
+            </button>
+            <button
+              type="button"
+              (click)="selectMachine('pc-1', 'PC-1')"
+              class="px-3 py-1.5 rounded-xl border text-xs font-mono font-bold cursor-pointer"
+              [class]="getMachineOptionClass((standService.selectedMachineId$ | async) === 'pc-1')"
+            >
+              PC-1
+            </button>
+            <button
+              type="button"
+              (click)="selectMachine('pc-2', 'PC-2')"
+              class="px-3 py-1.5 rounded-xl border text-xs font-mono font-bold cursor-pointer"
+              [class]="getMachineOptionClass((standService.selectedMachineId$ | async) === 'pc-2')"
+            >
+              PC-2
+            </button>
+            <button
+              type="button"
+              (click)="selectMachine('local-default', 'Local Machine')"
+              class="px-3 py-1.5 rounded-xl border text-xs font-mono font-bold cursor-pointer"
+              [class]="getMachineOptionClass((standService.selectedMachineId$ | async) === 'local-default')"
+            >
+              Local Machine
+            </button>
+            @for (m of (standService.machines$ | async) || []; track m.machineId) {
+              @if (m.machineId !== 'pc-1' && m.machineId !== 'pc-2' && m.machineId !== 'local-default' && !m.machineId.startsWith('host-')) {
+                <button
+                  type="button"
+                  (click)="selectMachine(m.machineId, m.machineName)"
+                  class="px-3 py-1.5 rounded-xl border text-xs font-mono font-bold cursor-pointer"
+                  [class]="getMachineOptionClass((standService.selectedMachineId$ | async) === m.machineId)"
+                >
+                  {{ m.machineName }} ({{ m.activeLocalCount }})
+                </button>
+              }
+            }
+          </div>
+
+          <div class="flex items-center gap-2 max-w-md">
+            <input
+              type="text"
+              [(ngModel)]="customMachineInput"
+              placeholder="Своё имя ПК (например: Laptop-Home)..."
+              class="flex-1 px-3 py-1.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-xs font-mono text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button
+              type="button"
+              (click)="applyCustomMachine()"
+              [disabled]="!customMachineInput.trim()"
+              class="px-3.5 py-1.5 rounded-xl bg-primary-container text-on-primary-container text-xs font-bold disabled:opacity-40 cursor-pointer"
+            >
+              Привязать ПК
+            </button>
+          </div>
+        </section>
+      }
 
       <!-- SMART TOUCH QUICK DRAWER / FORM -->
       @if (showSmartTouch) {
@@ -138,6 +267,14 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
         </section>
       }
 
+      @if (activeCockpitView === 'ANALYTICS') {
+        <app-projectarium-analytics
+          [analytics]="standService.analytics$ | async"
+          [selectedDays]="analyticsDays"
+          (daysChange)="onAnalyticsDaysChange($event)"
+          (refresh)="standService.fetchAnalytics(analyticsDays)"
+        />
+      } @else {
       <!-- TOP PORT SHIELD HUD BAR -->
       @if (standsVm$ | async; as vm) {
         <div class="p-4 rounded-3xl bg-surface-container-low border border-outline-variant/30 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
@@ -292,6 +429,8 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
               <app-project-stand-card
                 [stand]="stand"
                 [expanded]="vm.activeTab !== 'ALL'"
+                [selectedMachineId]="(standService.selectedMachineId$ | async) || ''"
+                [selectedMachineName]="(standService.selectedMachineName$ | async) || ''"
                 (pinToggle)="standService.togglePinStand($event)"
                 (colorChange)="standService.setStandColor($event.standId, $event.color)"
                 (deleteStand)="standService.deleteStand($event)"
@@ -323,6 +462,7 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
           </div>
         }
       }
+      }
 
       <!-- MODALS -->
       @if (showCreateStandModal) {
@@ -335,6 +475,7 @@ import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
       @if (showAddAppModal && selectedStandIdForAddApp) {
         <app-add-app-modal
           [standId]="selectedStandIdForAddApp"
+          [defaultMachineName]="(standService.selectedMachineName$ | async) || ''"
           (close)="showAddAppModal = false; selectedStandIdForAddApp = null"
           (add)="onAddAppToStand($event)"
         />
@@ -348,6 +489,11 @@ export class ProjectariumCockpitComponent {
   showCreateStandModal = false;
   showAddAppModal = false;
   selectedStandIdForAddApp: string | null = null;
+
+  activeCockpitView: 'STANDS' | 'ANALYTICS' = 'STANDS';
+  analyticsDays = 30;
+  showMachinePicker = false;
+  customMachineInput = '';
 
   showSmartTouch = false;
   smartProjectName = '';
@@ -488,12 +634,73 @@ export class ProjectariumCockpitComponent {
       desiredPort?: number;
       environment: AppEnvironment;
       networkMode: AppNetworkMode;
+      machineId?: string;
+      machineName?: string;
       customUrl?: string;
     };
   }): void {
     this.standService.addAppToStand(payload.standId, payload.appData);
     this.showAddAppModal = false;
     this.selectedStandIdForAddApp = null;
+  }
+
+  switchCockpitView(view: 'STANDS' | 'ANALYTICS'): void {
+    this.activeCockpitView = view;
+    if (view === 'ANALYTICS') {
+      this.standService.fetchAnalytics(this.analyticsDays);
+    }
+  }
+
+  onAnalyticsDaysChange(days: number): void {
+    this.analyticsDays = days;
+    this.standService.fetchAnalytics(days);
+  }
+
+  toggleMachinePicker(): void {
+    this.showMachinePicker = !this.showMachinePicker;
+    if (this.showMachinePicker) {
+      this.standService.fetchMachines();
+    }
+  }
+
+  selectMachine(machineId: string, machineName: string): void {
+    this.standService.setSelectedMachine(machineId, machineName);
+  }
+
+  applyCustomMachine(): void {
+    const raw = this.customMachineInput.trim();
+    if (!raw) return;
+    const id = raw
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    if (!id) return;
+    this.standService.setSelectedMachine(id, raw);
+    this.customMachineInput = '';
+  }
+
+  getActiveMachineLabel(): string {
+    const name = this.standService.getSelectedMachineName() || this.standService.getSelectedMachineId();
+    return name ? `ПК: ${name}` : 'Публичный вид';
+  }
+
+  getCockpitViewBtnClass(isActive: boolean): string {
+    return isActive
+      ? 'bg-primary-container text-on-primary-container shadow-2xs'
+      : 'text-on-surface-variant hover:text-on-surface';
+  }
+
+  getMachinePickerBtnClass(): string {
+    const hasMachine = Boolean(this.standService.getSelectedMachineId());
+    return hasMachine
+      ? 'border-sky-500/40 bg-sky-500/15 text-sky-800 dark:text-sky-300'
+      : 'border-outline-variant/40 bg-surface-container-low hover:bg-surface-container text-on-surface';
+  }
+
+  getMachineOptionClass(isActive: boolean): string {
+    return isActive
+      ? 'bg-primary-container text-on-primary-container border-primary shadow-2xs'
+      : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant/30 hover:text-on-surface';
   }
 
   executeSmartTouch(): void {

@@ -50,6 +50,14 @@ export class ProjectariumRegisterDto {
 
   @IsOptional()
   @IsString()
+  machineId?: string;
+
+  @IsOptional()
+  @IsString()
+  machineName?: string;
+
+  @IsOptional()
+  @IsString()
   healthUrl?: string;
 
   @IsOptional()
@@ -118,6 +126,14 @@ export class AddAppToProjectDto {
   @IsOptional()
   @IsIn(['local', 'lan', 'tailscale-lan', 'tailscale-funnel'])
   networkMode?: ProjectariumNetworkMode;
+
+  @IsOptional()
+  @IsString()
+  machineId?: string;
+
+  @IsOptional()
+  @IsString()
+  machineName?: string;
 
   @IsOptional()
   @IsString()

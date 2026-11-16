@@ -155,6 +155,38 @@ import { AppEnvironment, AppNetworkMode } from '../../core/models/health-checker
             />
           </div>
 
+          @if (networkMode === 'local') {
+            <div class="flex flex-col gap-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <label class="font-label-ui text-xs font-bold text-on-surface">
+                  Компьютер / Рабочая станция (для привязки localhost):
+                </label>
+                <div class="flex items-center gap-1 text-[10px] font-mono">
+                  <button
+                    type="button"
+                    (click)="machineName = 'PC-1'"
+                    class="px-1.5 py-0.5 rounded bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant cursor-pointer"
+                  >
+                    PC-1
+                  </button>
+                  <button
+                    type="button"
+                    (click)="machineName = 'PC-2'"
+                    class="px-1.5 py-0.5 rounded bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant cursor-pointer"
+                  >
+                    PC-2
+                  </button>
+                </div>
+              </div>
+              <input
+                type="text"
+                [(ngModel)]="machineName"
+                [placeholder]="defaultMachineName || 'например: PC-1, PC-2, Laptop-Home'"
+                class="px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 font-mono"
+              />
+            </div>
+          }
+
           <div class="flex flex-col gap-1.5">
             <label class="font-label-ui text-xs font-bold text-on-surface">
               Кастомный URL эндпоинта (опционально):
@@ -192,6 +224,7 @@ import { AppEnvironment, AppNetworkMode } from '../../core/models/health-checker
 })
 export class AddAppModalComponent {
   @Input({ required: true }) standId!: string;
+  @Input() defaultMachineName = '';
 
   @Output() close = new EventEmitter<void>();
   @Output() add = new EventEmitter<{
@@ -203,6 +236,8 @@ export class AddAppModalComponent {
       desiredPort?: number;
       environment: AppEnvironment;
       networkMode: AppNetworkMode;
+      machineId?: string;
+      machineName?: string;
       customUrl?: string;
     };
   }>();
@@ -213,6 +248,7 @@ export class AddAppModalComponent {
   desiredPort?: number;
   environment: AppEnvironment = 'dev';
   networkMode: AppNetworkMode = 'local';
+  machineName = '';
   customUrl = '';
 
   onNetworkModeChange(mode: AppNetworkMode): void {
@@ -230,6 +266,10 @@ export class AddAppModalComponent {
 
   onSubmit(): void {
     if (!this.appName.trim()) return;
+    const resolvedMachineName = (this.machineName.trim() || this.defaultMachineName.trim()) || undefined;
+    const resolvedMachineId = resolvedMachineName
+      ? resolvedMachineName.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
+      : undefined;
 
     this.add.emit({
       standId: this.standId,
@@ -240,6 +280,9 @@ export class AddAppModalComponent {
         desiredPort: this.desiredPort && this.desiredPort > 0 ? this.desiredPort : undefined,
         environment: this.environment,
         networkMode: this.networkMode,
+        ...(this.networkMode === 'local' && resolvedMachineId
+          ? { machineId: resolvedMachineId, machineName: resolvedMachineName }
+          : {}),
         customUrl: this.customUrl.trim() || undefined,
       },
     });
@@ -254,6 +297,7 @@ export class AddAppModalComponent {
     this.desiredPort = undefined;
     this.environment = 'dev';
     this.networkMode = 'local';
+    this.machineName = '';
     this.customUrl = '';
   }
 }

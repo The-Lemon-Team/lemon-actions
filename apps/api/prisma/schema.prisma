@@ -233,6 +233,8 @@ model ProjectariumAppRecord {
   leaseToken          String            @map("lease_token")
   environment         String            @default("dev")
   networkMode         String            @default("local") @map("network_mode")
+  machineId           String?           @map("machine_id")
+  machineName         String?           @map("machine_name")
   status              String            @default("ONLINE")
   healthUrl           String?           @map("health_url")
   lastPingAt          DateTime?         @map("last_ping_at")
@@ -243,7 +245,33 @@ model ProjectariumAppRecord {
   stand               ProjectariumStand @relation(fields: [standId], references: [id], onDelete: Cascade)
 
   @@index([standId])
+  @@index([machineId])
   @@map("projectarium_apps")
+}
+
+model ProjectariumAppRunRecord {
+  id              String    @id
+  standId         String    @map("stand_id")
+  standSlug       String    @map("stand_slug")
+  standName       String    @map("stand_name")
+  appName         String    @map("app_name")
+  host            String    @default("localhost")
+  port            Int
+  instanceId      String    @unique @map("instance_id")
+  environment     String    @default("dev")
+  networkMode     String    @default("local") @map("network_mode")
+  machineId       String    @default("unknown") @map("machine_id")
+  machineName     String    @default("unknown") @map("machine_name")
+  startedAt       DateTime  @default(now()) @map("started_at")
+  lastHeartbeatAt DateTime  @default(now()) @map("last_heartbeat_at")
+  endedAt         DateTime? @map("ended_at")
+  durationSec     Int?      @map("duration_sec")
+  endReason       String    @default("ACTIVE") @map("end_reason")
+
+  @@index([standId, startedAt])
+  @@index([machineId, startedAt])
+  @@index([endReason, startedAt])
+  @@map("projectarium_app_runs")
 }
 
 model ProjectariumTodoRecord {

@@ -57,23 +57,57 @@ export class ProjectariumController {
   }
 
   /**
-   * Flat pool view across all stands with optional environment/networkMode filters.
+   * Flat pool view across all stands with optional environment/networkMode/machineId filters.
    */
   @Get('pool')
   getPool(
     @Query('environment') environment?: ProjectariumEnvironment,
     @Query('networkMode') networkMode?: ProjectariumNetworkMode,
+    @Query('machineId') machineId?: string,
     @Query('includeEvicted') includeEvicted?: string,
   ) {
-    return this.projectariumService.getPool(environment, networkMode, includeEvicted === 'true');
+    return this.projectariumService.getPool(environment, networkMode, machineId, includeEvicted === 'true');
   }
 
   /**
-   * List all project stands
+   * Localhost apps scoped strictly to the specified workstation machineId.
+   */
+  @Get('local')
+  getLocalApps(@Query('machineId') machineId?: string) {
+    return this.projectariumService.getLocalApps(machineId);
+  }
+
+  /**
+   * List known workstations and cluster hosts registered in Projectarium.
+   */
+  @Get('machines')
+  getMachines() {
+    return this.projectariumService.getMachines();
+  }
+
+  /**
+   * Persistent run analytics broken down by workstation (PC-1, PC-2, Prod) and top apps.
+   */
+  @Get('analytics')
+  getAnalytics(@Query('days') days?: string) {
+    const parsedDays = days ? Number(days) : 30;
+    return this.projectariumService.getAnalytics(Number.isFinite(parsedDays) ? parsedDays : 30);
+  }
+
+  /**
+   * List project stands filtered for viewer:
+   * - Always includes public/shared URLs.
+   * - Includes localhost apps only when matching machineId (or includeAllLocal=true).
    */
   @Get('projects')
-  listProjects() {
-    return this.projectariumService.listProjects();
+  listProjects(
+    @Query('machineId') machineId?: string,
+    @Query('includeAllLocal') includeAllLocal?: string,
+  ) {
+    return this.projectariumService.listProjects({
+      machineId,
+      includeAllLocal: includeAllLocal === 'true',
+    });
   }
 
   /**

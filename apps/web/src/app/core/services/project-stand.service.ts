@@ -2,6 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, tap } from 'rxjs';
 import {
+  MachineSummary,
+  ProjectariumAnalytics,
   ProjectStand,
   StandAppItem,
   StandAppStatus,
@@ -18,6 +20,8 @@ import { INITIAL_PROJECT_STANDS } from './project-stand.seeds';
 
 const STANDS_STORAGE_KEY = 'lemon_actions_project_stands_v1';
 const PARTY_STAND_SEEDED_KEY = 'lemon_actions_projectarium_party_seeded_v1';
+const MACHINE_ID_STORAGE_KEY = 'lemon_projectarium_machine_id_v1';
+const MACHINE_NAME_STORAGE_KEY = 'lemon_projectarium_machine_name_v1';
 const PROJECTARIUM_API_BASE = '/api/projectarium';
 
 @Injectable({ providedIn: 'root' })
@@ -27,8 +31,16 @@ export class ProjectStandService {
   private readonly workerService = inject(LemonWorkerService);
 
   private readonly stands$ = new BehaviorSubject<ProjectStand[]>(this.loadStands());
+  private readonly selectedMachineIdSubject$ = new BehaviorSubject<string>(this.loadSavedMachineId());
+  private readonly selectedMachineNameSubject$ = new BehaviorSubject<string>(this.loadSavedMachineName());
+  private readonly machinesSubject$ = new BehaviorSubject<MachineSummary[]>([]);
+  private readonly analyticsSubject$ = new BehaviorSubject<ProjectariumAnalytics | null>(null);
 
   readonly allStands$: Observable<ProjectStand[]> = this.stands$.asObservable();
+  readonly selectedMachineId$: Observable<string> = this.selectedMachineIdSubject$.asObservable();
+  readonly selectedMachineName$: Observable<string> = this.selectedMachineNameSubject$.asObservable();
+  readonly machines$: Observable<MachineSummary[]> = this.machinesSubject$.asObservable();
+  readonly analytics$: Observable<ProjectariumAnalytics | null> = this.analyticsSubject$.asObservable();
 
   private nextDynamicPort = 4320;
 
@@ -37,8 +49,62 @@ export class ProjectStandService {
     this.fetchFromBackend();
   }
 
+  getSelectedMachineId(): string {
+    return this.selectedMachineIdSubject$.getValue();
+  }
+
+  getSelectedMachineName(): string {
+    return this.selectedMachineNameSubject$.getValue();
+  }
+
+  setSelectedMachine(machineId: string, machineName?: string): void {
+    const cleanId = machineId.trim().toLowerCase();
+    const cleanName = (machineName || machineId).trim();
+    this.selectedMachineIdSubject$.next(cleanId);
+    this.selectedMachineNameSubject$.next(cleanId ? cleanName : '');
+    try {
+      if (cleanId) {
+        localStorage.setItem(MACHINE_ID_STORAGE_KEY, cleanId);
+        localStorage.setItem(MACHINE_NAME_STORAGE_KEY, cleanName);
+      } else {
+        localStorage.removeItem(MACHINE_ID_STORAGE_KEY);
+        localStorage.removeItem(MACHINE_NAME_STORAGE_KEY);
+      }
+    } catch {
+      // storage unavailable
+    }
+    this.fetchFromBackend();
+  }
+
+  fetchMachines(): void {
+    this.http.get<MachineSummary[]>(`${PROJECTARIUM_API_BASE}/machines`).subscribe({
+      next: (machines) => {
+        if (Array.isArray(machines)) {
+          this.machinesSubject$.next(machines);
+        }
+      },
+      error: () => {},
+    });
+  }
+
+  fetchAnalytics(days = 30): void {
+    this.http.get<ProjectariumAnalytics>(`${PROJECTARIUM_API_BASE}/analytics?days=${days}`).subscribe({
+      next: (analytics) => {
+        if (analytics) {
+          this.analyticsSubject$.next(analytics);
+        }
+      },
+      error: () => {},
+    });
+  }
+
   fetchFromBackend(): void {
-    this.http.get<any[]>(`${PROJECTARIUM_API_BASE}/projects`).subscribe({
+    const machineId = this.selectedMachineIdSubject$.getValue();
+    const url = machineId
+      ? `${PROJECTARIUM_API_BASE}/projects?machineId=${encodeURIComponent(machineId)}`
+      : `${PROJECTARIUM_API_BASE}/projects`;
+
+    this.http.get<any[]>(url).subscribe({
       next: (projects) => {
         if (projects && Array.isArray(projects) && projects.length > 0) {
           const current = this.stands$.getValue();
@@ -92,6 +158,8 @@ export class ProjectStandService {
           leaseToken: a.leaseToken,
           environment: a.environment || 'dev',
           networkMode,
+          machineId: a.machineId || a.metadata?.machineId || existingApp?.machineId,
+          machineName: a.machineName || a.metadata?.machineName || existingApp?.machineName,
           status: a.status === 'ONLINE' ? 'HEALTHY' : (a.status as StandAppStatus),
           lastLatencyMs: a.pingLatencyMs ?? 0,
           lastCheckedAt: a.lastPingAt || new Date().toISOString(),
@@ -132,6 +200,22 @@ export class ProjectStandService {
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
     };
+  }
+
+  private loadSavedMachineId(): string {
+    try {
+      return localStorage.getItem(MACHINE_ID_STORAGE_KEY) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  private loadSavedMachineName(): string {
+    try {
+      return localStorage.getItem(MACHINE_NAME_STORAGE_KEY) || '';
+    } catch {
+      return '';
+    }
   }
 
   private loadStands(): ProjectStand[] {
@@ -355,6 +439,8 @@ export class ProjectStandService {
       desiredPort?: number;
       environment: AppEnvironment;
       networkMode: AppNetworkMode;
+      machineId?: string;
+      machineName?: string;
       customUrl?: string;
       icon?: string;
     },
@@ -379,6 +465,8 @@ export class ProjectStandService {
     const host = appData.host?.trim() || extractHostFromUrl(appData.customUrl) || fallbackHost;
     const url = appData.customUrl?.trim() || buildAppUrl(host, port, appData.networkMode);
     const defaultIcon = inferAppIcon(appData.appName, appData.networkMode);
+    const activeMachineId = appData.machineId?.trim() || (appData.networkMode === 'local' ? this.getSelectedMachineId() || undefined : undefined);
+    const activeMachineName = appData.machineName?.trim() || (appData.networkMode === 'local' ? this.getSelectedMachineName() || activeMachineId : undefined);
 
     const newApp: StandAppItem = {
       id: 'app-' + Math.random().toString(36).substring(2, 8),
@@ -391,6 +479,8 @@ export class ProjectStandService {
       leaseToken,
       environment: appData.environment,
       networkMode: appData.networkMode,
+      machineId: activeMachineId,
+      machineName: activeMachineName,
       status: 'HEALTHY',
       lastLatencyMs: appData.networkMode === 'tailscale-funnel' ? 42 : 14,
       lastCheckedAt: new Date().toISOString(),
@@ -437,6 +527,8 @@ export class ProjectStandService {
         preferredPort: appData.desiredPort && appData.desiredPort > 0 ? appData.desiredPort : undefined,
         environment: newApp.environment,
         networkMode: newApp.networkMode,
+        machineId: newApp.machineId,
+        machineName: newApp.machineName,
         healthUrl: newApp.url,
         author: 'cockpit-ui',
       })
@@ -890,11 +982,22 @@ export class ProjectStandService {
     preferredPort?: number;
     environment: AppEnvironment;
     networkMode: AppNetworkMode;
+    machineId?: string;
+    machineName?: string;
     author?: string;
   }): Observable<any> {
+    const selectedMachineId = this.getSelectedMachineId();
+    const selectedMachineName = this.getSelectedMachineName();
+    const machineId =
+      payload.machineId?.trim() || (payload.networkMode === 'local' && selectedMachineId ? selectedMachineId : undefined);
+    const machineName =
+      payload.machineName?.trim() || (machineId && selectedMachineName ? selectedMachineName : undefined);
+
     return this.http
       .post<any>(`${PROJECTARIUM_API_BASE}/register`, {
         ...payload,
+        ...(machineId ? { machineId } : {}),
+        ...(machineName ? { machineName } : {}),
         author: payload.author || 'cockpit-ui',
       })
       .pipe(tap(() => this.fetchFromBackend()));

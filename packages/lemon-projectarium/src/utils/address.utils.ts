@@ -42,3 +42,43 @@ export function buildDefaultHealthUrl(
   }
   return `http://${host}:${port}/health`;
 }
+
+/**
+ * Resolves a normalized machine identifier and human-readable display name.
+ */
+export function resolveMachineIdentity(params: {
+  machineId?: string;
+  machineName?: string;
+  networkMode?: ProjectariumNetworkMode;
+  host?: string;
+}): { machineId: string; machineName: string } {
+  const explicitId = params.machineId?.trim();
+  const explicitName = params.machineName?.trim();
+  if (explicitId) {
+    return {
+      machineId: explicitId.toLowerCase(),
+      machineName: explicitName || explicitId,
+    };
+  }
+  if (explicitName) {
+    const normalized = explicitName
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return {
+      machineId: normalized || 'local-default',
+      machineName: explicitName,
+    };
+  }
+
+  const mode = params.networkMode || 'local';
+  const host = (params.host || 'localhost').trim();
+  if (mode === 'local' || host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+    return { machineId: 'local-default', machineName: 'Local Machine' };
+  }
+
+  return {
+    machineId: `host-${host.toLowerCase()}`,
+    machineName: host,
+  };
+}

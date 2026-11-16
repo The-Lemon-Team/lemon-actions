@@ -9,6 +9,8 @@ describe('ProjectariumCockpitComponent', () => {
     localStorage.removeItem('lemon_projectarium_active_tab_v1');
     localStorage.removeItem('lemon_actions_project_stands_v1');
     localStorage.removeItem('lemon_actions_projectarium_party_seeded_v1');
+    localStorage.removeItem('lemon_projectarium_machine_id_v1');
+    localStorage.removeItem('lemon_projectarium_machine_name_v1');
   });
 
   it('renders project tabs and displays only the active project stand by default', async () => {
@@ -162,6 +164,87 @@ describe('ProjectariumCockpitComponent', () => {
     expect(fixture.componentInstance.smartFeedback).toContain('tok-123');
 
     // Drain unrelated FlowStateService bootstrap GETs before verifying no open Projectarium requests remain
+    httpMock.match((req) => !req.url.includes('/api/projectarium/'));
+    httpMock.verify();
+  });
+
+  it('binds a workstation machineId for localhost scoping and displays PC-1 / PC-2 analytics', async () => {
+    await TestBed.configureTestingModule({
+      imports: [ProjectariumCockpitComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const httpMock = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(ProjectariumCockpitComponent);
+    fixture.detectChanges();
+
+    // Drain initial public-only projects request
+    httpMock.match('/api/projectarium/projects').forEach((req) => req.flush([]));
+
+    // Open machine picker -> fetches known machines
+    const pickerBtn = fixture.nativeElement.querySelector('[data-testid="toggle-machine-picker"]') as HTMLButtonElement;
+    pickerBtn.click();
+    fixture.detectChanges();
+
+    const machinesReq = httpMock.expectOne('/api/projectarium/machines');
+    machinesReq.flush([
+      { machineId: 'pc-1', machineName: 'PC-1', activeLocalCount: 2, activePublicCount: 0, lastSeenAt: '2026-11-16T10:00:00.000Z' },
+      { machineId: 'pc-2', machineName: 'PC-2', activeLocalCount: 1, activePublicCount: 0, lastSeenAt: '2026-11-16T09:50:00.000Z' },
+    ]);
+
+    // Select PC-1 -> reloads projects scoped to machineId=pc-1
+    fixture.componentInstance.selectMachine('pc-1', 'PC-1');
+    fixture.detectChanges();
+
+    const scopedProjectsReq = httpMock.expectOne('/api/projectarium/projects?machineId=pc-1');
+    scopedProjectsReq.flush([]);
+    expect(localStorage.getItem('lemon_projectarium_machine_id_v1')).toBe('pc-1');
+
+    // Switch to Analytics view -> fetches /api/projectarium/analytics?days=30
+    const analyticsTab = fixture.nativeElement.querySelector('[data-testid="cockpit-tab-analytics"]') as HTMLButtonElement;
+    analyticsTab.click();
+    fixture.detectChanges();
+
+    const analyticsReq = httpMock.expectOne('/api/projectarium/analytics?days=30');
+    analyticsReq.flush({
+      windowDays: 30,
+      generatedAt: '2026-11-16T10:00:00.000Z',
+      totalRuns: 5,
+      activeRuns: 2,
+      totalDurationSec: 7200,
+      machines: [
+        {
+          machineId: 'pc-1',
+          machineName: 'PC-1',
+          activeCount: 1,
+          totalRuns: 3,
+          totalDurationSec: 4200,
+          lastActiveAt: '2026-11-16T10:00:00.000Z',
+          topApps: [{ appName: 'web-dev', standSlug: 'actions', standName: 'Lemon Actions', runs: 3, activeCount: 1, totalDurationSec: 4200 }],
+        },
+        {
+          machineId: 'pc-2',
+          machineName: 'PC-2',
+          activeCount: 1,
+          totalRuns: 2,
+          totalDurationSec: 3000,
+          lastActiveAt: '2026-11-16T09:55:00.000Z',
+          topApps: [{ appName: 'calendar-dev', standSlug: 'seasons', standName: 'Lemon Seasons', runs: 2, activeCount: 1, totalDurationSec: 3000 }],
+        },
+      ],
+      topApps: [
+        { appName: 'web-dev', standSlug: 'actions', standName: 'Lemon Actions', totalRuns: 3, activeCount: 1, totalDurationSec: 4200, machines: ['PC-1'] },
+      ],
+      recentRuns: [],
+    });
+    fixture.detectChanges();
+
+    const analyticsPanel = fixture.nativeElement.querySelector('[data-testid="projectarium-analytics-panel"]') as HTMLElement;
+    expect(analyticsPanel).not.toBeNull();
+    expect(analyticsPanel.textContent).toContain('PC-1');
+    expect(analyticsPanel.textContent).toContain('PC-2');
+    expect(analyticsPanel.textContent).toContain('web-dev');
+
     httpMock.match((req) => !req.url.includes('/api/projectarium/'));
     httpMock.verify();
   });

@@ -3,12 +3,16 @@ import { Prisma } from '@prisma/client';
 import { Observable, Subject } from 'rxjs';
 import {
   HealthProbeResult,
+  ProjectariumAnalytics,
   ProjectariumApp,
+  ProjectariumAppRunSummary,
   ProjectariumEngine,
   ProjectariumEnvironment,
   ProjectariumEvent,
   ProjectariumEventType,
   ProjectariumHeartbeatResponse,
+  ProjectariumMachineStats,
+  ProjectariumMachineSummary,
   ProjectariumNetworkMode,
   ProjectariumNoteItem,
   ProjectariumPoolItem,
@@ -16,12 +20,14 @@ import {
   ProjectariumProject,
   ProjectariumRegisterResponse,
   ProjectariumReleaseResponse,
+  ProjectariumRunEndReason,
   ProjectariumScope,
   ProjectariumAppStatus,
   ProjectariumTodoItem,
   ProjectShieldStats,
   probeAppHealth,
   resolveAppHost,
+  resolveMachineIdentity,
 } from '@lemon/projectarium';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -39,6 +45,7 @@ import {
 const MAX_PERSISTED_CHRONICLE_EVENTS = 100;
 const AUTO_PROBE_INTERVAL_MS = 30_000;
 const PROBE_TIMEOUT_MS = 2_500;
+const DEFAULT_LOCAL_LEASE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 export interface ProjectariumChangeEvent {
   kind: 'STAND_CREATED' | 'TODO_CHANGED' | 'NOTE_CHANGED' | 'CHRONICLE_ADDED';
@@ -76,10 +83,20 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     if (process.env.PROJECTARIUM_AUTO_PROBE !== 'false') {
       void this.probeAllStands();
       this.probeTimer = setInterval(() => {
-        void this.probeAllStands();
+        void this.reapAndProbeAll();
       }, AUTO_PROBE_INTERVAL_MS);
       this.probeTimer.unref();
     }
+  }
+
+  private getLocalLeaseTtlMs(): number {
+    const raw = Number(process.env.PROJECTARIUM_LOCAL_TTL_MS);
+    return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_LOCAL_LEASE_TTL_MS;
+  }
+
+  private async reapAndProbeAll(): Promise<void> {
+    await this.expireStaleLocalLeases();
+    await this.probeAllStands();
   }
 
   onModuleDestroy(): void {
@@ -118,18 +135,31 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       preferredPort: dto.preferredPort,
       environment: dto.environment,
       networkMode: dto.networkMode,
+      machineId: dto.machineId,
+      machineName: dto.machineName,
       healthUrl: dto.healthUrl,
       context: Object.keys(appContext).length > 0 ? appContext : undefined,
       initialTodos: dto.initialTodos,
       author: dto.author,
     });
     await this.persistProject(response.project);
+    await this.safeRecordAppRunStarted(response.project, response.allocatedApp);
     this.changesSubject$.next({ kind: 'CHRONICLE_ADDED', project: response.project });
     return response;
   }
 
-  listProjects(): ProjectariumProject[] {
-    return this.engine.listProjects();
+  listProjects(options?: { machineId?: string; includeAllLocal?: boolean }): ProjectariumProject[] {
+    return this.engine.listProjectsForViewer(options);
+  }
+
+  getLocalApps(machineId?: string): ProjectariumPoolItem[] {
+    if (!machineId?.trim()) {
+      return [];
+    }
+    return this.engine.listPool({
+      networkMode: 'local',
+      machineId: machineId.trim(),
+    });
   }
 
   getProject(query: string): ProjectariumProject {
@@ -153,21 +183,28 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       preferredPort: dto.preferredPort,
       environment: dto.environment,
       networkMode: dto.networkMode,
+      machineId: dto.machineId,
+      machineName: dto.machineName,
       healthUrl: dto.healthUrl,
       context: Object.keys(appContext).length > 0 ? appContext : undefined,
       author: dto.author,
     });
     await this.persistProject(response.project);
+    await this.safeRecordAppRunStarted(response.project, response.allocatedApp);
     return response;
   }
 
   async releaseApp(slugOrToken: string, instanceId: string, author?: string): Promise<{ success: boolean }> {
     const project = this.getProject(slugOrToken);
+    const targetApp = project.apps.find((a) => a.instanceId === instanceId || a.id === instanceId);
     const success = this.engine.releaseApp(slugOrToken, instanceId, author);
     if (!success) {
       throw new NotFoundException(`App instance '${instanceId}' not found in project '${slugOrToken}'`);
     }
     await this.persistProject(project);
+    if (targetApp) {
+      await this.safeRecordAppRunEnded(targetApp.instanceId, 'RELEASED');
+    }
     return { success: true };
   }
 
@@ -180,6 +217,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       throw new UnauthorizedException(`Invalid lease token for instance '${dto.instanceId}'`);
     }
     await this.safePersistProject(outcome.project);
+    await this.safeRecordAppRunHeartbeat(dto.instanceId, outcome.result.renewedAt);
     return outcome.result;
   }
 
@@ -192,15 +230,17 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       throw new UnauthorizedException(`Invalid lease token for instance '${dto.instanceId}'`);
     }
     await this.safePersistProject(outcome.project);
+    await this.safeRecordAppRunEnded(outcome.result.instanceId, 'RELEASED', outcome.result.releasedAt);
     return outcome.result;
   }
 
   getPool(
     environment?: ProjectariumEnvironment,
     networkMode?: ProjectariumNetworkMode,
+    machineId?: string,
     includeEvicted = false,
   ): ProjectariumPoolItem[] {
-    return this.engine.listPool({ environment, networkMode, includeEvicted });
+    return this.engine.listPool({ environment, networkMode, machineId, includeEvicted });
   }
 
   async deleteProject(slugOrToken: string): Promise<{ success: boolean }> {
@@ -216,18 +256,27 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
   ): Promise<ProjectariumProject> {
     const project = this.getProject(slugOrToken);
     const dockerHostAlias = process.env.PROJECTARIUM_LOCALHOST_ALIAS;
+    const shouldProbeLocal = process.env.PROJECTARIUM_PROBE_LOCAL === 'true';
+
+    const probeTargets = project.apps.filter(
+      (app) => shouldProbeLocal || app.networkMode !== 'local',
+    );
 
     const results = await Promise.all(
-      project.apps.map(async (app) => ({
+      probeTargets.map(async (app) => ({
         app,
         probe: await probeAppHealth(app, { timeoutMs: PROBE_TIMEOUT_MS, dockerHostAlias }),
       })),
     );
 
     for (const { app, probe } of results) {
-      this.engine.recordProbeResult(project.slug, app.instanceId || app.id, probe, {
+      const prevStatus = app.status;
+      const updated = this.engine.recordProbeResult(project.slug, app.instanceId || app.id, probe, {
         recordChronicleOnFailure: Boolean(options.recordSummary),
       });
+      if (updated && prevStatus !== 'EVICTED' && updated.status === 'EVICTED') {
+        await this.safeRecordAppRunEnded(updated.instanceId, 'EVICTED');
+      }
     }
 
     if (options.recordSummary) {
@@ -236,6 +285,23 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
 
     await this.safePersistProject(project);
     return project;
+  }
+
+  async expireStaleLocalLeases(): Promise<void> {
+    const expired = this.engine.expireStaleLocalLeases(this.getLocalLeaseTtlMs());
+    if (expired.length === 0) {
+      return;
+    }
+
+    const touchedProjects = new Map<string, ProjectariumProject>();
+    for (const { project, app } of expired) {
+      touchedProjects.set(project.id, project);
+      await this.safeRecordAppRunEnded(app.instanceId, 'TTL_EXPIRED');
+    }
+
+    for (const project of touchedProjects.values()) {
+      await this.safePersistProject(project);
+    }
   }
 
   async pingApp(
@@ -385,6 +451,356 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     return this.engine.getStats();
   }
 
+  async getMachines(): Promise<ProjectariumMachineSummary[]> {
+    const map = new Map<string, ProjectariumMachineSummary>();
+    const touch = (machineId: string, machineName: string, lastSeenAt: string): ProjectariumMachineSummary => {
+      const existing = map.get(machineId);
+      if (existing) {
+        if (lastSeenAt > existing.lastSeenAt) {
+          existing.lastSeenAt = lastSeenAt;
+        }
+        if (machineName && existing.machineName === existing.machineId) {
+          existing.machineName = machineName;
+        }
+        return existing;
+      }
+      const created: ProjectariumMachineSummary = {
+        machineId,
+        machineName,
+        activeLocalCount: 0,
+        activePublicCount: 0,
+        lastSeenAt,
+      };
+      map.set(machineId, created);
+      return created;
+    };
+
+    for (const project of this.engine.listProjects()) {
+      for (const app of project.apps) {
+        if (app.status === 'EVICTED') continue;
+        const machine = resolveMachineIdentity({
+          machineId: app.machineId,
+          machineName: app.machineName,
+          networkMode: app.networkMode,
+          host: app.host,
+        });
+        const entry = touch(machine.machineId, machine.machineName, app.lastPingAt || app.registeredAt);
+        if (app.networkMode === 'local') {
+          entry.activeLocalCount++;
+        } else {
+          entry.activePublicCount++;
+        }
+      }
+    }
+
+    try {
+      const recentRuns = await this.prisma.projectariumAppRunRecord.findMany({
+        select: {
+          machineId: true,
+          machineName: true,
+          lastHeartbeatAt: true,
+        },
+        orderBy: { lastHeartbeatAt: 'desc' },
+        take: 250,
+      });
+      for (const run of recentRuns) {
+        touch(run.machineId, run.machineName, run.lastHeartbeatAt.toISOString());
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Projectarium machines query skipped (DB unavailable): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt));
+  }
+
+  async getAnalytics(windowDays = 30): Promise<ProjectariumAnalytics> {
+    const days = Math.min(365, Math.max(1, Math.round(windowDays || 30)));
+    const now = new Date();
+    const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+    let runs: ProjectariumAppRunSummary[] = [];
+    try {
+      const dbRuns = await this.prisma.projectariumAppRunRecord.findMany({
+        where: {
+          OR: [{ startedAt: { gte: since } }, { endReason: 'ACTIVE' }],
+        },
+        orderBy: { startedAt: 'desc' },
+        take: 1000,
+      });
+      runs = dbRuns.map((row) => {
+        const isActive = row.endReason === 'ACTIVE' && !row.endedAt;
+        const computedDurationSec = isActive
+          ? Math.max(1, Math.round((now.getTime() - row.startedAt.getTime()) / 1000))
+          : row.durationSec ??
+            Math.max(1, Math.round(((row.endedAt ?? row.lastHeartbeatAt).getTime() - row.startedAt.getTime()) / 1000));
+        return {
+          id: row.id,
+          standSlug: row.standSlug,
+          standName: row.standName,
+          appName: row.appName,
+          host: row.host,
+          port: row.port,
+          environment: row.environment as ProjectariumEnvironment,
+          networkMode: row.networkMode as ProjectariumNetworkMode,
+          machineId: row.machineId,
+          machineName: row.machineName,
+          startedAt: row.startedAt.toISOString(),
+          lastHeartbeatAt: row.lastHeartbeatAt.toISOString(),
+          endedAt: row.endedAt ? row.endedAt.toISOString() : undefined,
+          durationSec: computedDurationSec,
+          endReason: row.endReason as ProjectariumRunEndReason,
+        };
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Projectarium analytics falling back to in-memory snapshot: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      runs = this.buildFallbackRunsFromMemory(now);
+    }
+
+    if (runs.length === 0) {
+      runs = this.buildFallbackRunsFromMemory(now);
+    }
+
+    const machineMap = new Map<
+      string,
+      {
+        machineId: string;
+        machineName: string;
+        activeCount: number;
+        totalRuns: number;
+        totalDurationSec: number;
+        lastActiveAt?: string;
+        apps: Map<string, { appName: string; standSlug: string; standName: string; runs: number; activeCount: number; totalDurationSec: number }>;
+      }
+    >();
+
+    const appMap = new Map<
+      string,
+      {
+        appName: string;
+        standSlug: string;
+        standName: string;
+        totalRuns: number;
+        activeCount: number;
+        totalDurationSec: number;
+        machines: Set<string>;
+      }
+    >();
+
+    let activeRuns = 0;
+    let totalDurationSec = 0;
+
+    for (const run of runs) {
+      const isActive = run.endReason === 'ACTIVE';
+      if (isActive) activeRuns++;
+      totalDurationSec += run.durationSec;
+
+      let mEntry = machineMap.get(run.machineId);
+      if (!mEntry) {
+        mEntry = {
+          machineId: run.machineId,
+          machineName: run.machineName,
+          activeCount: 0,
+          totalRuns: 0,
+          totalDurationSec: 0,
+          lastActiveAt: run.lastHeartbeatAt,
+          apps: new Map(),
+        };
+        machineMap.set(run.machineId, mEntry);
+      }
+      mEntry.totalRuns++;
+      mEntry.totalDurationSec += run.durationSec;
+      if (isActive) mEntry.activeCount++;
+      if (!mEntry.lastActiveAt || run.lastHeartbeatAt > mEntry.lastActiveAt) {
+        mEntry.lastActiveAt = run.lastHeartbeatAt;
+      }
+
+      const mAppKey = `${run.standSlug}::${run.appName}`;
+      const mApp = mEntry.apps.get(mAppKey) ?? {
+        appName: run.appName,
+        standSlug: run.standSlug,
+        standName: run.standName,
+        runs: 0,
+        activeCount: 0,
+        totalDurationSec: 0,
+      };
+      mApp.runs++;
+      mApp.totalDurationSec += run.durationSec;
+      if (isActive) mApp.activeCount++;
+      mEntry.apps.set(mAppKey, mApp);
+
+      const gApp = appMap.get(mAppKey) ?? {
+        appName: run.appName,
+        standSlug: run.standSlug,
+        standName: run.standName,
+        totalRuns: 0,
+        activeCount: 0,
+        totalDurationSec: 0,
+        machines: new Set<string>(),
+      };
+      gApp.totalRuns++;
+      gApp.totalDurationSec += run.durationSec;
+      if (isActive) gApp.activeCount++;
+      gApp.machines.add(run.machineName);
+      appMap.set(mAppKey, gApp);
+    }
+
+    const machines: ProjectariumMachineStats[] = Array.from(machineMap.values())
+      .map((m) => ({
+        machineId: m.machineId,
+        machineName: m.machineName,
+        activeCount: m.activeCount,
+        totalRuns: m.totalRuns,
+        totalDurationSec: m.totalDurationSec,
+        lastActiveAt: m.lastActiveAt,
+        topApps: Array.from(m.apps.values())
+          .sort((a, b) => b.runs - a.runs || b.totalDurationSec - a.totalDurationSec)
+          .slice(0, 6),
+      }))
+      .sort((a, b) => b.activeCount - a.activeCount || b.totalRuns - a.totalRuns);
+
+    const topApps = Array.from(appMap.values())
+      .map((a) => ({
+        appName: a.appName,
+        standSlug: a.standSlug,
+        standName: a.standName,
+        totalRuns: a.totalRuns,
+        activeCount: a.activeCount,
+        totalDurationSec: a.totalDurationSec,
+        machines: Array.from(a.machines),
+      }))
+      .sort((a, b) => b.totalRuns - a.totalRuns || b.totalDurationSec - a.totalDurationSec)
+      .slice(0, 12);
+
+    return {
+      windowDays: days,
+      generatedAt: now.toISOString(),
+      totalRuns: runs.length,
+      activeRuns,
+      totalDurationSec,
+      machines,
+      topApps,
+      recentRuns: runs.slice(0, 30),
+    };
+  }
+
+  private buildFallbackRunsFromMemory(now: Date): ProjectariumAppRunSummary[] {
+    const runs: ProjectariumAppRunSummary[] = [];
+    for (const project of this.engine.listProjects()) {
+      for (const app of project.apps) {
+        const machine = resolveMachineIdentity({
+          machineId: app.machineId,
+          machineName: app.machineName,
+          networkMode: app.networkMode,
+          host: app.host,
+        });
+        const startedMs = Date.parse(app.registeredAt) || now.getTime();
+        runs.push({
+          id: `mem-${app.instanceId}`,
+          standSlug: project.slug,
+          standName: project.name,
+          appName: app.appName,
+          host: app.host || 'localhost',
+          port: app.port,
+          environment: app.environment,
+          networkMode: app.networkMode,
+          machineId: machine.machineId,
+          machineName: machine.machineName,
+          startedAt: app.registeredAt,
+          lastHeartbeatAt: app.lastPingAt || app.registeredAt,
+          durationSec: Math.max(1, Math.round((now.getTime() - startedMs) / 1000)),
+          endReason: app.status === 'EVICTED' ? 'EVICTED' : 'ACTIVE',
+        });
+      }
+    }
+    return runs;
+  }
+
+  private async safeRecordAppRunStarted(project: ProjectariumProject, app: ProjectariumApp): Promise<void> {
+    try {
+      const machine = resolveMachineIdentity({
+        machineId: app.machineId,
+        machineName: app.machineName,
+        networkMode: app.networkMode,
+        host: app.host,
+      });
+      await this.prisma.projectariumAppRunRecord.upsert({
+        where: { instanceId: app.instanceId },
+        create: {
+          id: `run-${app.instanceId}`,
+          standId: project.id,
+          standSlug: project.slug,
+          standName: project.name,
+          appName: app.appName,
+          host: app.host || 'localhost',
+          port: app.port,
+          instanceId: app.instanceId,
+          environment: app.environment,
+          networkMode: app.networkMode,
+          machineId: machine.machineId,
+          machineName: machine.machineName,
+          startedAt: new Date(app.registeredAt),
+          lastHeartbeatAt: new Date(app.lastPingAt || app.registeredAt),
+          endReason: 'ACTIVE',
+        },
+        update: {
+          lastHeartbeatAt: new Date(app.lastPingAt || app.registeredAt),
+          endReason: 'ACTIVE',
+          endedAt: null,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Skipped recording app run start for '${app.instanceId}': ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  private async safeRecordAppRunHeartbeat(instanceId: string, renewedAtIso: string): Promise<void> {
+    try {
+      await this.prisma.projectariumAppRunRecord.updateMany({
+        where: { instanceId, endedAt: null },
+        data: { lastHeartbeatAt: new Date(renewedAtIso) },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Skipped recording app run heartbeat for '${instanceId}': ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  private async safeRecordAppRunEnded(
+    instanceId: string,
+    endReason: Exclude<ProjectariumRunEndReason, 'ACTIVE'>,
+    endedAtIso = new Date().toISOString(),
+  ): Promise<void> {
+    try {
+      const existing = await this.prisma.projectariumAppRunRecord.findUnique({
+        where: { instanceId },
+      });
+      if (!existing || existing.endedAt) {
+        return;
+      }
+      const endedAt = new Date(endedAtIso);
+      const durationSec = Math.max(1, Math.round((endedAt.getTime() - existing.startedAt.getTime()) / 1000));
+      await this.prisma.projectariumAppRunRecord.update({
+        where: { instanceId },
+        data: {
+          endedAt,
+          durationSec,
+          endReason,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Skipped recording app run end for '${instanceId}': ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   private async syncFromDatabase(): Promise<void> {
     const defaultPartyProject = this.engine.getProject('lemon-party');
     const stands = await this.prisma.projectariumStand.findMany({
@@ -405,6 +821,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       for (const project of defaults) {
         await this.persistProject(project);
       }
+      await this.safeBackfillActiveRuns(defaults);
       this.logger.log(`Seeded ${defaults.length} default Projectarium stands into PostgreSQL.`);
       return;
     }
@@ -420,15 +837,25 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       updatedAt: stand.updatedAt.toISOString(),
       apps: stand.apps.map((app) => {
         const metadata = app.metadata ? this.asJsonRecord(app.metadata) : undefined;
+        const host = resolveAppHost(metadata?.['host'] as string | undefined, app.healthUrl ?? undefined);
+        const networkMode = app.networkMode as ProjectariumNetworkMode;
+        const machine = resolveMachineIdentity({
+          machineId: app.machineId ?? (metadata?.['machineId'] as string | undefined),
+          machineName: app.machineName ?? (metadata?.['machineName'] as string | undefined),
+          networkMode,
+          host,
+        });
         return {
           id: app.id,
           appName: app.appName,
-          host: resolveAppHost(metadata?.['host'] as string | undefined, app.healthUrl ?? undefined),
+          host,
           port: app.port,
           instanceId: app.instanceId,
           leaseToken: app.leaseToken,
           environment: app.environment as ProjectariumEnvironment,
-          networkMode: app.networkMode as ProjectariumNetworkMode,
+          networkMode,
+          machineId: machine.machineId,
+          machineName: machine.machineName,
           status: app.status as ProjectariumAppStatus,
           healthUrl: app.healthUrl ?? undefined,
           lastPingAt: app.lastPingAt ? app.lastPingAt.toISOString() : undefined,
@@ -477,7 +904,52 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.engine.hydrateSnapshot(hydrated);
+    await this.safeBackfillActiveRuns(hydrated);
     this.logger.log(`Hydrated ${hydrated.length} Projectarium stands from PostgreSQL.`);
+  }
+
+  private async safeBackfillActiveRuns(projects: ProjectariumProject[]): Promise<void> {
+    try {
+      const rows = projects.flatMap((project) =>
+        project.apps
+          .filter((app) => app.status !== 'EVICTED')
+          .map((app) => {
+            const machine = resolveMachineIdentity({
+              machineId: app.machineId,
+              machineName: app.machineName,
+              networkMode: app.networkMode,
+              host: app.host,
+            });
+            return {
+              id: `run-${app.instanceId}`,
+              standId: project.id,
+              standSlug: project.slug,
+              standName: project.name,
+              appName: app.appName,
+              host: app.host || 'localhost',
+              port: app.port,
+              instanceId: app.instanceId,
+              environment: app.environment,
+              networkMode: app.networkMode,
+              machineId: machine.machineId,
+              machineName: machine.machineName,
+              startedAt: new Date(app.registeredAt),
+              lastHeartbeatAt: new Date(app.lastPingAt || app.registeredAt),
+              endReason: 'ACTIVE',
+            };
+          }),
+      );
+      if (rows.length > 0) {
+        await this.prisma.projectariumAppRunRecord.createMany({
+          data: rows,
+          skipDuplicates: true,
+        });
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Skipped backfilling active runs: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   private async persistProject(project: ProjectariumProject): Promise<void> {
@@ -510,9 +982,17 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       if (project.apps.length > 0) {
         await tx.projectariumAppRecord.createMany({
           data: project.apps.map((app) => {
+            const machine = resolveMachineIdentity({
+              machineId: app.machineId,
+              machineName: app.machineName,
+              networkMode: app.networkMode,
+              host: app.host,
+            });
             const metadata = {
               ...(app.metadata ?? {}),
               ...(app.host ? { host: app.host } : {}),
+              machineId: machine.machineId,
+              machineName: machine.machineName,
             };
             return {
               id: app.id,
@@ -523,6 +1003,8 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
               leaseToken: app.leaseToken,
               environment: app.environment,
               networkMode: app.networkMode,
+              machineId: machine.machineId,
+              machineName: machine.machineName,
               status: app.status,
               healthUrl: app.healthUrl ?? null,
               lastPingAt: app.lastPingAt ? new Date(app.lastPingAt) : null,

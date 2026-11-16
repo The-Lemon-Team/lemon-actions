@@ -210,4 +210,42 @@ describe('ProjectStandCardComponent', () => {
     expect(fixture.componentInstance.secondaryListContainerClass).toBe('flex flex-col gap-1.5');
     expect(fixture.componentInstance.notesListContainerClass).toBe('flex flex-col gap-2');
   });
+
+  it('separates public/shared URLs from machine-bound localhost apps in local-apps-section', () => {
+    const fixture = TestBed.createComponent(ProjectStandCardComponent);
+    fixture.componentRef.setInput('selectedMachineId', 'pc-1');
+    fixture.componentRef.setInput('selectedMachineName', 'PC-1');
+    fixture.componentRef.setInput(
+      'stand',
+      buildStand([
+        buildApp({
+          id: 'app-prod',
+          appName: 'Prod Gateway',
+          host: '192.168.1.100',
+          port: 8090,
+          url: 'http://192.168.1.100:8090/health',
+          environment: 'production',
+          networkMode: 'lan',
+        }),
+        buildApp({
+          id: 'app-local-1',
+          appName: 'Local Dev UI',
+          host: 'localhost',
+          port: 4320,
+          url: 'http://localhost:4320/health',
+          environment: 'dev',
+          networkMode: 'local',
+          machineId: 'pc-1',
+          machineName: 'PC-1',
+        }),
+      ]),
+    );
+    fixture.detectChanges();
+
+    const localSection = fixture.nativeElement.querySelector('[data-testid="local-apps-section"]') as HTMLElement | null;
+    expect(localSection).not.toBeNull();
+    expect(localSection!.textContent).toContain('PC-1');
+    expect(localSection!.textContent).toContain('Local Dev UI');
+    expect(localSection!.textContent).not.toContain('Prod Gateway');
+  });
 });

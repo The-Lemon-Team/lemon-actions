@@ -212,110 +212,145 @@ type StandSubTab = 'APPS' | 'TODOS' | 'NOTES' | 'CHRONICLE';
               </button>
             </div>
 
-            <!-- List of protected apps -->
+            <!-- List of protected apps: Public / Shared first, Localhost Machine-Scoped separated -->
             <div [class]="appsListContainerClass">
-              @for (app of filteredApps; track app.id) {
-                <div class="p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all hover:bg-black/10">
-                  <!-- App Icon & Details -->
-                  <div class="flex items-center gap-2.5 min-w-0">
-                    <div class="w-8 h-8 rounded-xl bg-black/5 dark:bg-white/10 flex items-center justify-center text-primary flex-shrink-0">
-                      <span class="material-symbols-rounded text-base">{{ app.icon }}</span>
-                    </div>
-                    <div class="flex flex-col min-w-0">
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="font-bold text-xs text-on-surface truncate">{{ app.appName }}</span>
-                        <!-- Host:Port Address Badge -->
-                        @if (isHttpUrl(app.url)) {
-                          <a
-                            [href]="app.url"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 transition-colors hover:underline"
-                            [class]="getHostBadgeClass(getAppHost(app))"
-                            [title]="'Открыть ' + app.url"
-                          >
-                            <span class="material-symbols-rounded text-[11px]">{{ getHostIcon(getAppHost(app)) }}</span>
-                            <span>{{ getAppAddress(app) }}</span>
-                            <span class="material-symbols-rounded text-[10px] opacity-70">open_in_new</span>
-                          </a>
-                        } @else {
-                          <span
-                            class="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1"
-                            [class]="getHostBadgeClass(getAppHost(app))"
-                            [title]="app.url"
-                          >
-                            <span class="material-symbols-rounded text-[11px]">{{ getHostIcon(getAppHost(app)) }}</span>
-                            <span>{{ getAppAddress(app) }}</span>
-                          </span>
-                        }
-                        <!-- Lease Token Badge -->
-                        @if (app.leaseToken) {
-                          <span
-                            class="font-mono text-[9px] text-on-surface-variant/70 truncate max-w-[90px]"
-                            [title]="'Lease: ' + app.leaseToken"
-                          >
-                            {{ app.leaseToken }}
-                          </span>
-                        }
-                      </div>
-                      <span class="text-[10px] text-on-surface-variant/80 truncate">
-                        {{ app.role }}
+              @if (publicApps.length > 0) {
+                @for (app of publicApps; track app.id) {
+                  <ng-container *ngTemplateOutlet="appRowTemplate; context: { $implicit: app }" />
+                }
+              }
+
+              @if (localApps.length > 0) {
+                <div
+                  data-testid="local-apps-section"
+                  class="mt-1 pt-2.5 border-t border-dashed border-black/15 dark:border-white/15 flex flex-col gap-2"
+                >
+                  <div class="flex items-center justify-between text-[10px] font-mono text-on-surface-variant px-1">
+                    <span class="inline-flex items-center gap-1 font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                      <span class="material-symbols-rounded text-xs">computer</span>
+                      <span>
+                        Локальная машина ({{ selectedMachineName || selectedMachineId || 'localhost' }})
                       </span>
-                      <span class="font-mono text-[9px] text-on-surface-variant/65 truncate" [title]="app.url">
-                        {{ app.url }}
-                      </span>
-                    </div>
+                    </span>
+                    <span class="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-800 dark:text-sky-300 font-bold">
+                      {{ localApps.length }} local
+                    </span>
                   </div>
-
-                  <!-- Right Side: Status, Circuit Breaker Controls & Actions -->
-                  <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
-                    <!-- Environment / Network badge -->
-                    <div class="flex flex-col items-end text-[9px] font-mono">
-                      <span class="font-bold uppercase" [ngClass]="getEnvColor(app.environment)">
-                        {{ app.environment }}
-                      </span>
-                      <span class="text-on-surface-variant/70">
-                        {{ getNetworkLabel(app.networkMode) }}
-                      </span>
-                    </div>
-
-                    <!-- Health status badge -->
-                    <div
-                      class="flex items-center gap-1 px-2 py-1 rounded-lg font-mono text-[10px] font-bold"
-                      [class]="getHealthBadgeClass(app.status)"
-                      [title]="getHealthTooltip(app)"
-                      data-testid="app-health-badge"
-                    >
-                      <span
-                        class="w-1.5 h-1.5 rounded-full"
-                        [class]="getHealthDotClass(app.status)"
-                      ></span>
-                      <span>{{ getHealthLabel(app) }}</span>
-                    </div>
-
-                    <span class="w-px h-4 bg-black/10 dark:bg-white/10" aria-hidden="true"></span>
-
-                    <!-- Service Actions -->
-                    <div class="flex items-center gap-1">
-                      <!-- Delete button -->
-                      <button
-                        type="button"
-                        (click)="removeApp.emit({ standId: stand.id, appId: app.id })"
-                        class="w-6 h-6 rounded-md flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors opacity-60 hover:opacity-100 cursor-pointer"
-                        title="Освободить порт и удалить приложение из пула"
-                        aria-label="Удалить сервис"
-                      >
-                        <span class="material-symbols-rounded text-sm">close</span>
-                      </button>
-                    </div>
-                  </div>
+                  @for (app of localApps; track app.id) {
+                    <ng-container *ngTemplateOutlet="appRowTemplate; context: { $implicit: app }" />
+                  }
                 </div>
-              } @empty {
+              }
+
+              @if (publicApps.length === 0 && localApps.length === 0) {
                 <div class="p-4 text-center rounded-2xl bg-black/5 text-[11px] text-on-surface-variant">
                   Нет сервисов в данном фильтре окружения
                 </div>
               }
             </div>
+
+            <ng-template #appRowTemplate let-app>
+              <div class="p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all hover:bg-black/10">
+                <!-- App Icon & Details -->
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="w-8 h-8 rounded-xl bg-black/5 dark:bg-white/10 flex items-center justify-center text-primary flex-shrink-0">
+                    <span class="material-symbols-rounded text-base">{{ app.icon }}</span>
+                  </div>
+                  <div class="flex flex-col min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span class="font-bold text-xs text-on-surface truncate">{{ app.appName }}</span>
+                      <!-- Host:Port Address Badge -->
+                      @if (isHttpUrl(app.url)) {
+                        <a
+                          [href]="app.url"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 transition-colors hover:underline"
+                          [class]="getHostBadgeClass(getAppHost(app))"
+                          [title]="'Открыть ' + app.url"
+                        >
+                          <span class="material-symbols-rounded text-[11px]">{{ getHostIcon(getAppHost(app)) }}</span>
+                          <span>{{ getAppAddress(app) }}</span>
+                          <span class="material-symbols-rounded text-[10px] opacity-70">open_in_new</span>
+                        </a>
+                      } @else {
+                        <span
+                          class="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1"
+                          [class]="getHostBadgeClass(getAppHost(app))"
+                          [title]="app.url"
+                        >
+                          <span class="material-symbols-rounded text-[11px]">{{ getHostIcon(getAppHost(app)) }}</span>
+                          <span>{{ getAppAddress(app) }}</span>
+                        </span>
+                      }
+                      @if (app.networkMode === 'local' && (app.machineName || app.machineId)) {
+                        <span class="px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold bg-sky-500/15 text-sky-800 dark:text-sky-300">
+                          {{ app.machineName || app.machineId }}
+                        </span>
+                      }
+                      <!-- Lease Token Badge -->
+                      @if (app.leaseToken) {
+                        <span
+                          class="font-mono text-[9px] text-on-surface-variant/70 truncate max-w-[90px]"
+                          [title]="'Lease: ' + app.leaseToken"
+                        >
+                          {{ app.leaseToken }}
+                        </span>
+                      }
+                    </div>
+                    <span class="text-[10px] text-on-surface-variant/80 truncate">
+                      {{ app.role }}
+                    </span>
+                    <span class="font-mono text-[9px] text-on-surface-variant/65 truncate" [title]="app.url">
+                      {{ app.url }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Right Side: Status, Circuit Breaker Controls & Actions -->
+                <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                  <!-- Environment / Network badge -->
+                  <div class="flex flex-col items-end text-[9px] font-mono">
+                    <span class="font-bold uppercase" [ngClass]="getEnvColor(app.environment)">
+                      {{ app.environment }}
+                    </span>
+                    <span class="text-on-surface-variant/70">
+                      {{ getNetworkLabel(app.networkMode) }}
+                    </span>
+                  </div>
+
+                  <!-- Health status badge -->
+                  <div
+                    class="flex items-center gap-1 px-2 py-1 rounded-lg font-mono text-[10px] font-bold"
+                    [class]="getHealthBadgeClass(app.status)"
+                    [title]="getHealthTooltip(app)"
+                    data-testid="app-health-badge"
+                  >
+                    <span
+                      class="w-1.5 h-1.5 rounded-full"
+                      [class]="getHealthDotClass(app.status)"
+                    ></span>
+                    <span>{{ getHealthLabel(app) }}</span>
+                  </div>
+
+                  <span class="w-px h-4 bg-black/10 dark:bg-white/10" aria-hidden="true"></span>
+
+                  <!-- Service Actions -->
+                  <div class="flex items-center gap-1">
+                    <!-- Delete button -->
+                    <button
+                      type="button"
+                      (click)="removeApp.emit({ standId: stand.id, appId: app.id })"
+                      class="w-6 h-6 rounded-md flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors opacity-60 hover:opacity-100 cursor-pointer"
+                      title="Освободить порт и удалить приложение из пула"
+                      aria-label="Удалить сервис"
+                    >
+                      <span class="material-symbols-rounded text-sm">close</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </ng-template>
           </section>
         }
 
@@ -774,6 +809,8 @@ type StandSubTab = 'APPS' | 'TODOS' | 'NOTES' | 'CHRONICLE';
 export class ProjectStandCardComponent {
   @Input({ required: true }) stand!: ProjectStand;
   @Input() expanded = false;
+  @Input() selectedMachineId = '';
+  @Input() selectedMachineName = '';
 
   @Output() pinToggle = new EventEmitter<string>();
   @Output() colorChange = new EventEmitter<{ standId: string; color: LemonCardColor }>();
@@ -879,6 +916,14 @@ export class ProjectStandCardComponent {
       return this.stand.apps;
     }
     return this.stand.apps.filter((a) => a.environment === this.stand.activeEnvironment);
+  }
+
+  get publicApps(): StandAppItem[] {
+    return this.filteredApps.filter((a) => a.networkMode !== 'local');
+  }
+
+  get localApps(): StandAppItem[] {
+    return this.filteredApps.filter((a) => a.networkMode === 'local');
   }
 
   get completedTodosCount(): number {
