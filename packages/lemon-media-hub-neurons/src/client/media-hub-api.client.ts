@@ -52,7 +52,7 @@ export class MediaHubApiClient {
   }
 
   resolveUrl(relativeOrAbsolute: string): string {
-    if (/^https?:\/\//i.test(relativeOrAbsolute)) return relativeOrAbsolute;
+    if (/^(?:https?:|data:|blob:)/i.test(relativeOrAbsolute)) return relativeOrAbsolute;
     const clean = relativeOrAbsolute.startsWith('/') ? relativeOrAbsolute : `/${relativeOrAbsolute}`;
     return `${this.baseUrl}${clean}`;
   }
