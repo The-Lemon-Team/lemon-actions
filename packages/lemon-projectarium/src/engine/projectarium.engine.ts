@@ -119,7 +119,7 @@ export class ProjectariumEngine {
    * Seed the four default project stands:
    * 1. Lemon Seasons
    * 2. Lemon Actions
-   * 3. Lemon-Party
+   * 3. Lemon-Universe
    * 4. Sportdrop
    */
   private seedDefaultStands(): void {

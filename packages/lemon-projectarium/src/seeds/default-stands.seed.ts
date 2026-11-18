@@ -5,7 +5,7 @@ import { ProjectariumProject } from '../types/projectarium.types';
  * 1. Lemon Seasons
  * 2. Lemon Actions
  * 3. Sportdrop
- * 4. Lemon-Party
+ * 4. Lemon-Universe
  */
 export function createDefaultProjectariumStands(): ProjectariumProject[] {
   const now = new Date().toISOString();
@@ -483,7 +483,7 @@ export function createDefaultProjectariumStands(): ProjectariumProject[] {
       {
         id: 'note-a-1',
         title: 'Обвязки lemon-core',
-        content: 'Ядро потоков (CONTEXT, MUTEX, OBSERVER, FSM, PROJECTION, BATCH) и SDK обвязки в приоритете. После завершения возвращаемся к перенесению прототипов Lemon-Party.',
+        content: 'Ядро потоков (CONTEXT, MUTEX, OBSERVER, FSM, PROJECTION, BATCH) и SDK обвязки в приоритете. После завершения возвращаемся к перенесению прототипов Lemon-Universe.',
         author: 'Lead Architect',
         tags: ['LEMON_CORE', 'FLOWS', 'SDK'],
         createdAt: now,
@@ -664,27 +664,27 @@ export function createDefaultProjectariumStands(): ProjectariumProject[] {
     updatedAt: now,
   };
 
-  const lemonPartyProject: ProjectariumProject = {
-    id: 'stand-lemon-party',
-    name: 'Lemon-Party',
-    slug: 'lemon-party',
-    neuronWorkspace: 'workspace.party',
-    projectToken: 'proj_party_arena_9012de',
+  const lemonUniverseProject: ProjectariumProject = {
+    id: 'stand-lemon-universe',
+    name: 'Lemon-Universe',
+    slug: 'lemon-universe',
+    neuronWorkspace: 'workspace.universe',
+    projectToken: 'proj_universe_arena_9012de',
     context: {
-      domain: 'Interactive Hero Flows, Time-Traveling Notes & Party Modes',
+      domain: 'Interactive Hero Flows, Time-Traveling Notes & Universe Modes',
       environment: 'dev',
       color: 'lavender',
       isPinned: true,
       stack: ['Angular 18', 'Core Combinator', 'FSM', 'Chrono Cloud'],
-      tags: ['LEMON_PARTY', 'TIME_TRAVELING', 'TIMELINE', 'HERO_CARDS', 'FSM'],
+      tags: ['LEMON_UNIVERSE', 'TIME_TRAVELING', 'TIMELINE', 'HERO_CARDS', 'FSM'],
       description:
-        'Проекты и игровые режимы на базе Lemon-Party: асинхронные заметки сквозь время, таймлайны дня и героев, карточки персонажей и желаний.',
+        'Проекты и игровые режимы на базе Lemon-Universe: асинхронные заметки сквозь время, таймлайны дня и героев, карточки персонажей и желаний.',
     },
     apps: [],
     todos: [
       {
-        id: 'todo-lp-1',
-        title: 'Закончить все обвязки для lemon-core перед возвращением к режимам Lemon-Party',
+        id: 'todo-lu-1',
+        title: 'Закончить все обвязки для lemon-core перед возвращением к режимам Lemon-Universe',
         completed: false,
         scope: 'PROJECT',
         createdAt: now,
@@ -692,7 +692,7 @@ export function createDefaultProjectariumStands(): ProjectariumProject[] {
         priority: 'HIGH',
       },
       {
-        id: 'todo-lp-2',
+        id: 'todo-lu-2',
         title: 'Спроектировать прототип Time Traveling (вручную + Stitch) и выделить золотую середину',
         completed: false,
         scope: 'PROJECT',
@@ -703,10 +703,10 @@ export function createDefaultProjectariumStands(): ProjectariumProject[] {
     ],
     notes: [
       {
-        id: 'note-lp-apps-interest',
-        title: 'Рабочие приложения и режимы на базе Lemon-Party',
+        id: 'note-lu-apps-interest',
+        title: 'Рабочие приложения и режимы на базе Lemon-Universe',
         content:
-          'Направления и приложения, которые нас заинтересовали для дальнейшего развития на базе Lemon-Party:\n' +
+          'Направления и приложения, которые нас заинтересовали для дальнейшего развития на базе Lemon-Universe:\n' +
           '• Time Traveling — режим игры, где поток оставляет метку о себе, другой герой возвращается через время, видит наброски идеи, продолжает её или через FSM поворачивает в новое направление (имя героя, время последних наработок, мысли на потом; позже через хаб — музыка, видео, картинки).\n' +
           '• Timeline (Day / Hero) — суточная и персонажная временная лента событий и следов.\n' +
           '• Hero Cards — карточки героев, желаний и истории их взаимодействий.\n\n' +
@@ -719,10 +719,10 @@ export function createDefaultProjectariumStands(): ProjectariumProject[] {
     ],
     chronicle: [
       {
-        id: 'ev-lp-1',
+        id: 'ev-lu-1',
         type: 'PROJECT_CREATED',
         scope: 'PROJECT',
-        description: 'Проект Lemon-Party выделен в отдельный стенд Projectarium с заметками по будущим режимам',
+        description: 'Проект Lemon-Universe выделен в отдельный стенд Projectarium с заметками по будущим режимам',
         timestamp: now,
         author: 'system',
       },
@@ -764,5 +764,5 @@ export function createDefaultProjectariumStands(): ProjectariumProject[] {
     updatedAt: now,
   };
 
-  return [seasonsProject, actionsProject, sportdropProject, lemonPartyProject, lemonWatchersProject];
+  return [seasonsProject, actionsProject, sportdropProject, lemonUniverseProject, lemonWatchersProject];
 }

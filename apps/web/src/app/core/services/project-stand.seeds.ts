@@ -413,7 +413,7 @@ export const INITIAL_PROJECT_STANDS: ProjectStand[] = [
       {
         id: 'note-act-1',
         title: 'Обвязки lemon-core',
-        content: 'Ядро потоков (CONTEXT, MUTEX, OBSERVER, FSM, PROJECTION, BATCH) и SDK обвязки в приоритете. После завершения возвращаемся к перенесению прототипов Lemon-Party.',
+        content: 'Ядро потоков (CONTEXT, MUTEX, OBSERVER, FSM, PROJECTION, BATCH) и SDK обвязки в приоритете. После завершения возвращаемся к перенесению прототипов Lemon-Universe.',
         author: 'Lead Architect',
         tags: ['LEMON_CORE', 'FLOWS', 'SDK'],
         createdAt: new Date(Date.now() - 86400000).toISOString(),
@@ -582,43 +582,43 @@ export const INITIAL_PROJECT_STANDS: ProjectStand[] = [
     updatedAt: new Date().toISOString(),
   },
 
-  // 4. LEMON-PARTY
+  // 4. LEMON-UNIVERSE
   {
-    id: 'stand-lemon-party',
-    name: 'Lemon-Party',
-    slug: 'lemon-party',
-    projectToken: 'proj_party_arena_9012de',
+    id: 'stand-lemon-universe',
+    name: 'Lemon-Universe',
+    slug: 'lemon-universe',
+    projectToken: 'proj_universe_arena_9012de',
     description:
-      'Проекты и игровые режимы на базе Lemon-Party: асинхронные заметки сквозь время, таймлайны дня и героев, карточки персонажей и желаний.',
+      'Проекты и игровые режимы на базе Lemon-Universe: асинхронные заметки сквозь время, таймлайны дня и героев, карточки персонажей и желаний.',
     color: 'lavender',
     isPinned: true,
-    neuronPath: 'workspace.party',
-    tags: ['LEMON_PARTY', 'TIME_TRAVELING', 'TIMELINE', 'HERO_CARDS', 'FSM'],
+    neuronPath: 'workspace.universe',
+    tags: ['LEMON_UNIVERSE', 'TIME_TRAVELING', 'TIMELINE', 'HERO_CARDS', 'FSM'],
     environments: ['dev', 'staging', 'production'],
     activeEnvironment: 'ALL',
     apps: [],
     chronicle: [
       {
-        id: 'log-lp-1',
+        id: 'log-lu-1',
         timestamp: new Date().toISOString(),
         type: 'MILESTONE',
         author: 'System',
-        title: 'Проект Lemon-Party выделен в отдельный стенд Projectarium',
+        title: 'Проект Lemon-Universe выделен в отдельный стенд Projectarium',
         details: 'Добавлена заметка по ключевым режимам: Time Traveling, Timeline (Day / Hero), Hero Cards',
         badge: 'STAND_INIT',
       },
     ],
     todos: [
       {
-        id: 'todo-lp-1',
-        text: 'Закончить все обвязки для lemon-core перед возвращением к режимам Lemon-Party',
+        id: 'todo-lu-1',
+        text: 'Закончить все обвязки для lemon-core перед возвращением к режимам Lemon-Universe',
         completed: false,
         isReactive: false,
         scope: 'PROJECT',
         priority: 'HIGH',
       },
       {
-        id: 'todo-lp-2',
+        id: 'todo-lu-2',
         text: 'Спроектировать прототип Time Traveling (вручную + Stitch) и выделить золотую середину',
         completed: false,
         isReactive: false,
@@ -628,10 +628,10 @@ export const INITIAL_PROJECT_STANDS: ProjectStand[] = [
     ],
     notes: [
       {
-        id: 'note-lp-apps-interest',
-        title: 'Рабочие приложения и режимы на базе Lemon-Party',
+        id: 'note-lu-apps-interest',
+        title: 'Рабочие приложения и режимы на базе Lemon-Universe',
         content:
-          'Направления и приложения, которые нас заинтересовали для дальнейшего развития на базе Lemon-Party:\n' +
+          'Направления и приложения, которые нас заинтересовали для дальнейшего развития на базе Lemon-Universe:\n' +
           '• Time Traveling — режим игры, где поток оставляет метку о себе, другой герой возвращается через время, видит наброски идеи, продолжает её или через FSM поворачивает в новое направление (имя героя, время последних наработок, мысли на потом; позже через хаб — музыка, видео, картинки).\n' +
           '• Timeline (Day / Hero) — суточная и персонажная временная лента событий и следов.\n' +
           '• Hero Cards — карточки героев, желаний и истории их взаимодействий.\n\n' +

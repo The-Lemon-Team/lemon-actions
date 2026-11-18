@@ -103,3 +103,14 @@ test('expireStaleLocalLeases expires dynamic local apps past TTL while preservin
   // Seed anchors remain intact
   assert.equal(actions.apps.some((a) => a.id === 'app-actions-web'), true);
 });
+
+test('default stands seed uses Lemon-Universe instead of Lemon-Party', () => {
+  const engine = new ProjectariumEngine();
+
+  const universe = engine.getProject('lemon-universe');
+  assert.ok(universe);
+  assert.equal(universe.id, 'stand-lemon-universe');
+  assert.equal(universe.name, 'Lemon-Universe');
+  assert.equal(universe.neuronWorkspace, 'workspace.universe');
+  assert.equal(engine.getProject('lemon-party'), undefined);
+});

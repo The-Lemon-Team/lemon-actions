@@ -144,7 +144,7 @@ describe('ProjectStandCardComponent', () => {
     stand.notes = [
       {
         id: 'n-1',
-        title: 'Идея для Lemon-Party',
+        title: 'Идея для Lemon-Universe',
         content: 'Time Traveling + Hero Cards',
         author: 'Team',
         tags: ['Time Traveling'],

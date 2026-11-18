@@ -802,7 +802,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async syncFromDatabase(): Promise<void> {
-    const defaultPartyProject = this.engine.getProject('lemon-party');
+    const defaultUniverseProject = this.engine.getProject('lemon-universe');
     const stands = await this.prisma.projectariumStand.findMany({
       include: {
         apps: { orderBy: { registeredAt: 'asc' } },
@@ -897,15 +897,82 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       })),
     }));
 
-    if (defaultPartyProject && !hydrated.some((p) => p.slug === 'lemon-party')) {
-      hydrated.push(defaultPartyProject);
-      await this.persistProject(defaultPartyProject);
-      this.logger.log('Seeded Lemon-Party stand into existing Projectarium PostgreSQL.');
+    await this.migrateLegacyPartyStand(hydrated);
+
+    if (defaultUniverseProject && !hydrated.some((p) => p.slug === 'lemon-universe')) {
+      hydrated.push(defaultUniverseProject);
+      await this.persistProject(defaultUniverseProject);
+      this.logger.log('Seeded Lemon-Universe stand into existing Projectarium PostgreSQL.');
     }
 
     this.engine.hydrateSnapshot(hydrated);
     await this.safeBackfillActiveRuns(hydrated);
     this.logger.log(`Hydrated ${hydrated.length} Projectarium stands from PostgreSQL.`);
+  }
+
+  private async migrateLegacyPartyStand(hydrated: ProjectariumProject[]): Promise<void> {
+    const legacyIndex = hydrated.findIndex(
+      (p) => p.slug === 'lemon-party' || p.id === 'stand-lemon-party',
+    );
+    if (legacyIndex === -1 || hydrated.some((p) => p.slug === 'lemon-universe')) {
+      return;
+    }
+
+    const legacy = hydrated[legacyIndex];
+    const replacePartyText = (text: string): string =>
+      text.replace(/Lemon-Party/gi, 'Lemon-Universe').replace(/Party Modes/g, 'Universe Modes');
+    const tags = Array.isArray(legacy.context?.['tags'])
+      ? legacy.context['tags'].map((tag: unknown) => (tag === 'LEMON_PARTY' ? 'LEMON_UNIVERSE' : tag))
+      : undefined;
+
+    const migrated: ProjectariumProject = {
+      ...legacy,
+      id: legacy.id === 'stand-lemon-party' ? 'stand-lemon-universe' : legacy.id,
+      name: legacy.name.toLowerCase() === 'lemon-party' ? 'Lemon-Universe' : replacePartyText(legacy.name),
+      slug: 'lemon-universe',
+      neuronWorkspace: legacy.neuronWorkspace === 'workspace.party' ? 'workspace.universe' : legacy.neuronWorkspace,
+      projectToken: legacy.projectToken === 'proj_party_arena_9012de' ? 'proj_universe_arena_9012de' : legacy.projectToken,
+      context: {
+        ...legacy.context,
+        ...(typeof legacy.context?.['domain'] === 'string'
+          ? { domain: replacePartyText(legacy.context['domain']) }
+          : {}),
+        ...(typeof legacy.context?.['description'] === 'string'
+          ? { description: replacePartyText(legacy.context['description']) }
+          : {}),
+        ...(tags ? { tags } : {}),
+      },
+      todos: legacy.todos.map((t) => ({ ...t, title: replacePartyText(t.title) })),
+      notes: (legacy.notes ?? []).map((n) => ({
+        ...n,
+        ...(n.title ? { title: replacePartyText(n.title) } : {}),
+        content: replacePartyText(n.content),
+      })),
+      chronicle: legacy.chronicle.map((ev) => ({
+        ...ev,
+        description: replacePartyText(ev.description),
+      })),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.prisma.projectariumStand.deleteMany({ where: { id: legacy.id } });
+    try {
+      await this.prisma.projectariumAppRunRecord.updateMany({
+        where: { OR: [{ standId: legacy.id }, { standSlug: 'lemon-party' }] },
+        data: {
+          standId: migrated.id,
+          standSlug: migrated.slug,
+          standName: migrated.name,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Skipped migrating app runs for '${legacy.slug}': ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    await this.persistProject(migrated);
+    hydrated[legacyIndex] = migrated;
+    this.logger.log(`Migrated legacy stand '${legacy.slug}' -> '${migrated.slug}' in PostgreSQL.`);
   }
 
   private async safeBackfillActiveRuns(projects: ProjectariumProject[]): Promise<void> {

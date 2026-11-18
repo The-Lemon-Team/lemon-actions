@@ -19,7 +19,7 @@ import { buildAppUrl, extractHostFromUrl, inferAppIcon, resolveAppHost } from '.
 import { INITIAL_PROJECT_STANDS } from './project-stand.seeds';
 
 const STANDS_STORAGE_KEY = 'lemon_actions_project_stands_v1';
-const PARTY_STAND_SEEDED_KEY = 'lemon_actions_projectarium_party_seeded_v1';
+const UNIVERSE_STAND_SEEDED_KEY = 'lemon_actions_projectarium_universe_seeded_v1';
 const MACHINE_ID_STORAGE_KEY = 'lemon_projectarium_machine_id_v1';
 const MACHINE_NAME_STORAGE_KEY = 'lemon_projectarium_machine_name_v1';
 const PROJECTARIUM_API_BASE = '/api/projectarium';
@@ -135,7 +135,7 @@ export class ProjectStandService {
           ? 'amber'
           : p.slug === 'actions'
             ? 'lemon'
-            : p.slug === 'lemon-party'
+            : p.slug === 'lemon-universe'
               ? 'lavender'
               : 'sky'),
       isPinned: p.context?.isPinned ?? existing?.isPinned ?? true,
@@ -224,17 +224,52 @@ export class ProjectStandService {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const normalized: ProjectStand[] = parsed.map((stand: any) => ({
-            ...stand,
-            notes: Array.isArray(stand.notes) ? stand.notes : [],
-          }));
-          const alreadySeededParty = localStorage.getItem(PARTY_STAND_SEEDED_KEY) === '1';
-          if (!alreadySeededParty && !normalized.some((s) => s.slug === 'lemon-party')) {
-            const partyDefault = INITIAL_PROJECT_STANDS.find((s) => s.slug === 'lemon-party');
-            if (partyDefault) {
-              normalized.push(partyDefault);
+          const normalized: ProjectStand[] = parsed.map((stand: any) => {
+            const notes = Array.isArray(stand.notes) ? stand.notes : [];
+            if (stand.slug === 'lemon-party' || stand.id === 'stand-lemon-party') {
+              const replaceParty = (v: unknown) =>
+                typeof v === 'string' ? v.replace(/Lemon-Party/gi, 'Lemon-Universe') : v;
+              return {
+                ...stand,
+                id: stand.id === 'stand-lemon-party' ? 'stand-lemon-universe' : stand.id,
+                name: 'Lemon-Universe',
+                slug: 'lemon-universe',
+                projectToken:
+                  stand.projectToken === 'proj_party_arena_9012de'
+                    ? 'proj_universe_arena_9012de'
+                    : stand.projectToken,
+                neuronPath:
+                  stand.neuronPath === 'workspace.party' ? 'workspace.universe' : stand.neuronPath,
+                description: replaceParty(stand.description) as string,
+                tags: Array.isArray(stand.tags)
+                  ? stand.tags.map((t: string) => (t === 'LEMON_PARTY' ? 'LEMON_UNIVERSE' : t))
+                  : [],
+                todos: Array.isArray(stand.todos)
+                  ? stand.todos.map((t: any) => ({ ...t, text: replaceParty(t.text) }))
+                  : [],
+                chronicle: Array.isArray(stand.chronicle)
+                  ? stand.chronicle.map((c: any) => ({
+                      ...c,
+                      title: replaceParty(c.title),
+                      details: replaceParty(c.details),
+                    }))
+                  : [],
+                notes: notes.map((n: any) => ({
+                  ...n,
+                  title: replaceParty(n.title),
+                  content: replaceParty(n.content),
+                })),
+              };
             }
-            localStorage.setItem(PARTY_STAND_SEEDED_KEY, '1');
+            return { ...stand, notes };
+          });
+          const alreadySeededUniverse = localStorage.getItem(UNIVERSE_STAND_SEEDED_KEY) === '1';
+          if (!alreadySeededUniverse && !normalized.some((s) => s.slug === 'lemon-universe')) {
+            const universeDefault = INITIAL_PROJECT_STANDS.find((s) => s.slug === 'lemon-universe');
+            if (universeDefault) {
+              normalized.push(universeDefault);
+            }
+            localStorage.setItem(UNIVERSE_STAND_SEEDED_KEY, '1');
           }
           return normalized;
         }
@@ -243,7 +278,7 @@ export class ProjectStandService {
       // fallback
     }
     try {
-      localStorage.setItem(PARTY_STAND_SEEDED_KEY, '1');
+      localStorage.setItem(UNIVERSE_STAND_SEEDED_KEY, '1');
     } catch {
       // storage unavailable
     }
