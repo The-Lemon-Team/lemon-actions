@@ -26,6 +26,20 @@ export interface NoteTodoStats {
   pending: number;
 }
 
+export interface NoteMediaAttachmentInput {
+  url: string;
+  thumbnailUrl?: string;
+  filename?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  width?: number | null;
+  height?: number | null;
+  caption?: string;
+  alt?: string;
+  isMain?: boolean;
+  mediaAssetId?: string;
+}
+
 export interface IngestSeasonNoteInput {
   externalId?: string;
   title?: string;
@@ -33,6 +47,7 @@ export interface IngestSeasonNoteInput {
   summary?: string;
   type?: NoteType;
   privacy?: NotePrivacy;
+  ownerUserId?: string;
   status?: 'DRAFT' | 'SCHEDULED' | 'PUBLISHED' | 'ARCHIVED';
   feedSlug?: string;
   feedId?: string;
@@ -46,6 +61,10 @@ export interface IngestSeasonNoteInput {
   folder?: string;
   origin?: string;
   todoList?: NoteTodoItem[];
+  imageUrl?: string;
+  imageCaption?: string;
+  images?: NoteMediaAttachmentInput[];
+  mediaAssetIds?: string[];
   metadata?: Record<string, any>;
 }
 
@@ -127,6 +146,16 @@ export interface TopologyFacetItem {
   count: number;
 }
 
+export interface TopologyDateBucket {
+  dateKey: string;
+  count: number;
+}
+
+export interface TopologyAuthorFacet {
+  author: string;
+  count: number;
+}
+
 export interface SeasonsTopologySnapshot {
   revision: number;
   contour: 'public' | 'admin';
@@ -147,8 +176,8 @@ export interface SeasonsTopologySnapshot {
   streams: TopologyStreamNode[];
   feeds: TopologyFeedNode[];
   facets?: {
-    dateBuckets?: Array<{ dateKey: string; count: number }>;
-    authors?: Array<{ author: string; count: number }>;
+    dateBuckets?: TopologyDateBucket[];
+    authors?: TopologyAuthorFacet[];
     hashtags?: TopologyFacetItem[];
   };
   activePeriods?: Array<Record<string, any>>;
@@ -166,8 +195,19 @@ export interface SeasonsTopologyPatch {
     streams?: number;
     feeds?: number;
     notes: number;
+    publicNotes?: number;
+    privateNotes?: number;
+    upcomingNotes?: number;
     activePeriods?: number;
   };
+  streams?: Record<
+    string,
+    {
+      totalNotes: number;
+      upcomingCount?: number;
+      tabs?: Array<{ slug: string; count: number }>;
+    }
+  >;
   feeds?: Record<
     string,
     {
@@ -175,9 +215,12 @@ export interface SeasonsTopologyPatch {
       publishedNotes: number;
       stagingNotes: number;
       byType?: Record<string, number>;
+      lastNoteAt?: string | null;
     }
   >;
   dateBuckets?: Record<string, number>;
+  authors?: Record<string, number>;
+  hashtags?: Record<string, number>;
 }
 
 export interface SeasonsLiveNoteImpulse {
@@ -188,16 +231,49 @@ export interface SeasonsLiveNoteImpulse {
     | 'NOTE_DELETED'
     | 'NOTE_ENTERED'
     | 'NOTE_LEFT'
-    | 'STREAM_UPDATED';
+    | 'STREAM_UPDATED'
+    | 'FEED_UPDATED'
+    | 'TOPOLOGY_CHANGED';
   noteId?: string;
-  streamSlug?: string;
+  externalId?: string | null;
+  parentNoteId?: string | null;
+  title?: string;
+  summary?: string | null;
+  author?: string | null;
+  origin?: string;
+  streamSlug?: string | null;
   streamSlugs?: string[];
-  feedSlug?: string;
-  previousFeedSlug?: string;
-  note?: IngestSeasonNoteInput;
+  feedId?: string | null;
+  feedSlug?: string | null;
+  previousFeedSlug?: string | null;
+  feedTitle?: string | null;
+  feedIcon?: string | null;
+  feedColor?: string | null;
+  privacy?: 'public' | 'private';
+  status?: string;
+  noteType?: string;
+  dateKey?: string | null;
+  hashtags?: string[];
+  isPromoted?: boolean;
+  publishedAt?: string | null;
+  note?: any;
   timestamp: string | number;
+}
+
+export interface ShareNoteInput {
+  granteeUserIds: string[];
+  scopeType?: 'USER' | 'TIMELINE_GROUP';
+  scopeRef?: string;
+  canReadMedia?: boolean;
+  expiresAt?: string;
+}
+
+export interface ShareFeedInput {
+  granteeUserId: string;
+  permission?: 'READ' | 'WRITE';
 }
 
 export type SeasonsSsePacket =
   | { kind: 'note'; event: SeasonsLiveNoteImpulse }
-  | { kind: 'topology'; patch: SeasonsTopologyPatch };
+  | { kind: 'topology'; patch: SeasonsTopologyPatch }
+  | { kind: 'snapshot'; snapshot: SeasonsTopologySnapshot };

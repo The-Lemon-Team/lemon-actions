@@ -11,6 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "paths": {
       "@lemon/core-combinator-sdk": ["../core-combinator-sdk/dist"],
+      "@lemon/media-hub-neurons": ["../lemon-media-hub-neurons/dist"],
       "rxjs": ["../../apps/api/node_modules/rxjs"],
       "rxjs/*": ["../../apps/api/node_modules/rxjs/*"]
     }

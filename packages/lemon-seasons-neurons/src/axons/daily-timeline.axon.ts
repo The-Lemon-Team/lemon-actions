@@ -42,8 +42,13 @@ export class DailyTimelineAxon {
       ],
     });
 
+    const combinator = this.bridge.combinator;
+    if (!combinator) {
+      throw new Error('[DailyTimelineAxon] CoreCombinatorClient is required on SeasonsCombinatorBridge');
+    }
+
     // 2. Ensure Core Combinator Composite Neuron
-    this.neuronInstance = await this.bridge.combinator.neurons.ensureCompositeNeuron({
+    this.neuronInstance = await combinator.neurons.ensureCompositeNeuron({
       name: 'Daily Timeline Neuron',
       path: 'seasons.timeline.daily',
       flows: {
@@ -71,7 +76,7 @@ export class DailyTimelineAxon {
     // 3. Listen to BATCH_FLUSH from the batch flow -> ingest note into Seasons
     const batchFlow = this.neuronInstance.flows.batch;
     if (batchFlow) {
-      this.bridge.combinator.batch.onFlush(batchFlow.id, async (batch) => {
+      combinator.batch.onFlush(batchFlow.id, async (batch) => {
         await this.onBatchFlush(batch);
       });
     }
@@ -89,7 +94,7 @@ export class DailyTimelineAxon {
     moodEmoji?: string;
     tags?: string[];
   }): Promise<void> {
-    if (!this.neuronInstance?.flows.batch) {
+    if (!this.neuronInstance?.flows.batch || !this.bridge.combinator) {
       throw new Error('[DailyTimelineAxon] Axon not initialized. Call init() first.');
     }
 

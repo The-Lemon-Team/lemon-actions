@@ -2,11 +2,16 @@ import {
   SeasonsApiClient,
   computeTodoStats,
   extractTodoListFromNote,
+  extractNoteMedia,
 } from '../src/client/seasons-api.client';
 import { SeasonsSseBus } from '../src/client/seasons-sse.bus';
+import { TopologyNeuron } from '../src/neurons/topology.neuron';
+import { FeedNeuron } from '../src/neurons/feed.neuron';
+import { StreamNeuron } from '../src/neurons/stream.neuron';
 import { SeasonsCombinatorBridge } from '../src/bridge/seasons-combinator-bridge';
 import { CodingMemoryAxon } from '../src/axons/coding-memory.axon';
 import { DailyTimelineAxon } from '../src/axons/daily-timeline.axon';
+import { SeasonsMediaAxon } from '../src/axons/seasons-media.axon';
 
 async function runSeasonsBridgeTests() {
   console.log('=== Running Lemon-Seasons-Neurons Bridge Verification Tests ===\n');
@@ -236,6 +241,216 @@ async function runSeasonsBridgeTests() {
     throw new Error(`Unexpected SSE stream URL: ${streamUrl}`);
   }
   console.log('  ✓ TodoList корректно упакован в Note.metadata + Markdown checklist, SSE URL исправлен на /api/v1/events/stream!');
+
+  // 7. Проверка TopologyNeuron, StreamNeuron и FeedNeuron + SSE reconciliation
+  console.log('\nTest 7: TopologyNeuron, StreamNeuron & FeedNeuron Reactive Reconciliation');
+  let topologyVersion = 1;
+  const mockReadApi = {
+    ...mockSeasonsApi,
+    getTopology: async () => ({
+      revision: topologyVersion,
+      contour: 'admin',
+      totals: { streams: 1, feeds: 1, notes: 1 },
+      streams: [
+        {
+          id: 's1',
+          slug: 'projectarium',
+          title: 'Projectarium',
+          privacy: 'private',
+          totalNotes: 1,
+          tabs: [{ id: 't1', slug: 'projectarium-notes', label: 'Notes', type: 'feed', count: 1 }],
+        },
+      ],
+      feeds: [
+        {
+          id: 'f1',
+          slug: 'projectarium-notes',
+          title: 'Notes',
+          privacy: 'private',
+          totalNotes: 1,
+          publishedNotes: 1,
+          stagingNotes: 0,
+          streamSlugs: ['projectarium'],
+        },
+      ],
+      facets: { dateBuckets: [{ dateKey: '2026-11-18', count: 1 }], authors: [], hashtags: [] },
+    }),
+    getFeedNotesPage: async () => ({
+      total: 1,
+      limit: 30,
+      offset: 0,
+      hasMore: false,
+      items: [{ id: 'note-a', title: 'Initial Note', feedSlug: 'projectarium-notes' }],
+    }),
+    getStreamNotesPage: async () => ({
+      total: 1,
+      limit: 30,
+      offset: 0,
+      hasMore: false,
+      items: [{ id: 'note-a', title: 'Initial Note', feedSlug: 'projectarium-notes' }],
+    }),
+    attachMediaAssets: async (noteId: string, items: any[]) => ({ noteId, items }),
+  } as unknown as SeasonsApiClient;
+
+  const topoNeuron = new TopologyNeuron({ apiClient: mockReadApi, sseBus });
+  await topoNeuron.initialize();
+  sseBus.emitPacket({
+    kind: 'topology',
+    patch: {
+      type: 'TOPOLOGY_PATCH',
+      revision: 2,
+      previousRevision: 1,
+      timestamp: Date.now(),
+      totals: { streams: 1, feeds: 1, notes: 2 },
+      feeds: {
+        'projectarium-notes': { totalNotes: 2, publishedNotes: 2, stagingNotes: 0 },
+      },
+      dateBuckets: { '2026-11-18': 2 },
+    },
+  });
+  if (topoNeuron.getSnapshot()?.revision !== 2 || topoNeuron.getSnapshot()?.totals.notes !== 2) {
+    throw new Error('Expected TopologyNeuron to apply TOPOLOGY_PATCH revision 2');
+  }
+
+  const streamNeuron = new StreamNeuron({ streamSlug: 'projectarium', apiClient: mockReadApi, sseBus });
+  await streamNeuron.connect(true);
+  const feedNeuron = streamNeuron.getOrCreateFeedNeuron('projectarium-notes');
+  await feedNeuron.connect(true);
+  sseBus.emitPacket({
+    kind: 'note',
+    event: {
+      id: 'evt-1',
+      type: 'NOTE_CREATED',
+      noteId: 'note-b',
+      streamSlug: 'projectarium',
+      feedSlug: 'projectarium-notes',
+      timestamp: Date.now(),
+      note: { id: 'note-b', title: 'Live SSE Note' },
+    },
+  });
+  if (feedNeuron.value.items.length !== 2 || streamNeuron.value.items.length !== 2) {
+    throw new Error('Expected FeedNeuron & StreamNeuron to reconcile NOTE_CREATED');
+  }
+  sseBus.emitPacket({
+    kind: 'note',
+    event: {
+      id: 'evt-2',
+      type: 'NOTE_LEFT',
+      noteId: 'note-a',
+      streamSlug: 'projectarium',
+      previousFeedSlug: 'projectarium-notes',
+      feedSlug: 'other-feed',
+      timestamp: Date.now(),
+    },
+  });
+  if (feedNeuron.value.items.some((i) => i.id === 'note-a')) {
+    throw new Error('Expected FeedNeuron to evict note-a on NOTE_LEFT');
+  }
+  topoNeuron.disconnect();
+  streamNeuron.disconnect();
+  console.log('  ✓ TopologyNeuron, StreamNeuron и FeedNeuron реактивно обработали патчи, NOTE_CREATED и NOTE_LEFT!');
+
+  // 8. Проверка SeasonsMediaAxon (@lemon/media-hub-neurons <-> @lemon/seasons-neurons)
+  console.log('\nTest 8: SeasonsMediaAxon Cross-Neuron Media + Note Ingestion');
+  const attachedMediaCalls: any[] = [];
+  const seasonsWithMediaBridge = new SeasonsCombinatorBridge({
+    combinator: mockCombinator,
+    seasons: {
+      ...mockReadApi,
+      ingestNote: mockSeasonsApi.ingestNote,
+      attachMediaAssets: async (noteId: string, items: any[]) => {
+        attachedMediaCalls.push({ noteId, items });
+        return items;
+      },
+    } as unknown as SeasonsApiClient,
+  });
+  await seasonsWithMediaBridge.ensureSeasonsCompositeNeurons();
+
+  const mockMediaAxon = {
+    apiClient: {
+      resolveUrl: (u: string) => (u.startsWith('http') ? u : `http://127.0.0.1:3005${u}`),
+    },
+    addMedia: async (req: any) => ({
+      asset: {
+        id: 'asset-media-1',
+        kind: 'IMAGE',
+        title: req.title || 'Cover Image',
+        url: '/api/media/asset-media-1/file/webp',
+        thumbnailUrl: '/api/media/asset-media-1/file/thumb',
+        filename: req.filename || 'cover.webp',
+        originalFilename: req.filename || 'cover.webp',
+        folderPath: req.folderPath || 'seasons/notes',
+        mimeType: 'image/webp',
+        sizeBytes: 2048,
+        width: 1280,
+        height: 720,
+        aspectRatio: '16:9',
+        processingStatus: 'READY',
+        visibility: 'SCOPED',
+        tags: req.tags || [],
+        isFavorite: false,
+        usageCount: 0,
+        sourceApp: 'lemon-seasons',
+        model: 'upload',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      waitedForProcessing: true,
+      elapsedMs: 12,
+    }),
+    viewMedia: async (req: { assetId: string }) => ({
+      asset: {
+        id: req.assetId,
+        url: `/api/media/${req.assetId}/file/webp`,
+        thumbnailUrl: `/api/media/${req.assetId}/file/thumb`,
+        filename: 'cover.webp',
+        originalFilename: 'cover.webp',
+        mimeType: 'image/webp',
+        sizeBytes: 2048,
+      },
+      variant: 'webp',
+      url: `http://127.0.0.1:3005/api/media/${req.assetId}/file/webp?sig=hmac123`,
+      relativeUrl: `/api/media/${req.assetId}/file/webp?sig=hmac123`,
+      signed: true,
+    }),
+    deleteMedia: async (req: any) => ({
+      assetId: req.assetId,
+      success: true,
+      deletedAt: new Date().toISOString(),
+    }),
+  } as any;
+
+  const seasonsMediaAxon = new SeasonsMediaAxon({
+    bridge: seasonsWithMediaBridge,
+    mediaAxon: mockMediaAxon,
+  });
+
+  const mediaIngestRes = await seasonsMediaAxon.ingestNoteWithMedia({
+    note: {
+      externalId: 'note-with-media-1',
+      title: 'Release with Hero Cover',
+      content: 'Includes a cover generated via Media Hub',
+      feedSlug: 'dev-changelogs',
+    },
+    mediaFiles: [
+      {
+        file: new Uint8Array([1, 2, 3]),
+        filename: 'hero.png',
+        mimeType: 'image/png',
+      },
+    ],
+  });
+
+  const extracted = extractNoteMedia(mediaIngestRes.note);
+  if (
+    mediaIngestRes.uploadedAssets.length !== 1 ||
+    extracted.length !== 1 ||
+    extracted[0].mediaAssetId !== 'asset-media-1' ||
+    !extracted[0].url.includes('sig=hmac123')
+  ) {
+    throw new Error('Expected SeasonsMediaAxon to upload media, resolve signed URL, and attach to ingested note');
+  }
+  console.log('  ✓ SeasonsMediaAxon загрузил ассет в Media Hub, получил signed URL и связал его с заметкой в Seasons!');
 
   console.log('\n=== All Lemon-Seasons-Neurons Bridge Tests Passed! ===');
 }

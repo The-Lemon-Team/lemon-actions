@@ -23,12 +23,25 @@ export class SeasonsSseBus {
   private readonly packet$ = new Subject<SeasonsSsePacket>();
   private es: any = null;
   private abortController: AbortController | null = null;
+  private connected = false;
 
   constructor(options: SeasonsSseBusOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.token = options.token;
     this.includeTopology = options.includeTopology ?? true;
     this.lastEventId = options.sinceEventId ?? null;
+  }
+
+  setToken(token?: string): void {
+    this.token = token;
+  }
+
+  isConnected(): boolean {
+    return this.connected;
+  }
+
+  getLastEventId(): string | null {
+    return this.lastEventId;
   }
 
   buildStreamUrl(params?: {
@@ -57,8 +70,15 @@ export class SeasonsSseBus {
     if (factory) {
       const es = new factory(url);
       this.es = es;
+      es.onopen = () => {
+        this.connected = true;
+      };
+      es.onerror = () => {
+        this.connected = false;
+      };
 
       const handleRaw = (event: any) => {
+        this.connected = true;
         if (event?.lastEventId) {
           this.lastEventId = event.lastEventId;
         }
@@ -80,6 +100,7 @@ export class SeasonsSseBus {
   }
 
   disconnect(): void {
+    this.connected = false;
     if (this.es) {
       this.es.close();
       this.es = null;
@@ -108,6 +129,10 @@ export class SeasonsSseBus {
     );
   }
 
+  get noteEvents$(): Observable<SeasonsLiveNoteImpulse> {
+    return this.impulses$();
+  }
+
   topologyPatches$(): Observable<SeasonsTopologyPatch> {
     return this.packet$.asObservable().pipe(
       filter((p): p is { kind: 'topology'; patch: SeasonsTopologyPatch } => p.kind === 'topology'),
@@ -123,6 +148,22 @@ export class SeasonsSseBus {
           p.feedSlug?.toLowerCase() === norm ||
           p.previousFeedSlug?.toLowerCase() === norm ||
           p.type === 'NOTE_DELETED',
+      ),
+    );
+  }
+
+  selectFeed$(feedSlug: string): Observable<SeasonsLiveNoteImpulse> {
+    return this.feedImpulses$(feedSlug);
+  }
+
+  selectStream$(streamSlug: string): Observable<SeasonsLiveNoteImpulse> {
+    const norm = streamSlug.toLowerCase().trim();
+    return this.impulses$().pipe(
+      filter(
+        (e) =>
+          e.streamSlug?.toLowerCase() === norm ||
+          Boolean(e.streamSlugs?.some((s) => s.toLowerCase() === norm)) ||
+          e.type === 'NOTE_DELETED',
       ),
     );
   }
@@ -152,7 +193,11 @@ export class SeasonsSseBus {
         signal: ac.signal,
       });
 
-      if (!res.ok || !res.body) return;
+      if (!res.ok || !res.body) {
+        this.connected = false;
+        return;
+      }
+      this.connected = true;
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -176,6 +221,8 @@ export class SeasonsSseBus {
       }
     } catch {
       // Aborted or disconnected
+    } finally {
+      this.connected = false;
     }
   }
 }

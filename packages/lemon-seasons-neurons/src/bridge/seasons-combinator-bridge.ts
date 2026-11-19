@@ -1,4 +1,8 @@
-import { CoreCombinatorClient, FlowImpulsePacket } from '@lemon/core-combinator-sdk';
+import {
+  CompositeNeuronInstance,
+  CoreCombinatorClient,
+  FlowImpulsePacket,
+} from '@lemon/core-combinator-sdk';
 import { SeasonsApiClient } from '../client/seasons-api.client';
 import { SeasonsSseBus } from '../client/seasons-sse.bus';
 import {
@@ -9,11 +13,21 @@ import {
 } from '../types/seasons.types';
 
 export interface SeasonsCombinatorBridgeOptions {
-  combinator: CoreCombinatorClient;
+  combinator?: CoreCombinatorClient;
   seasons: SeasonsApiClient;
   sseBus?: SeasonsSseBus;
+  profileId?: string;
+  basePath?: string;
   defaultStreamSlug?: string;
   defaultPrivacy?: 'public' | 'private';
+  bestEffortTelemetry?: boolean;
+}
+
+export interface SeasonsCompositeNeurons {
+  topology?: CompositeNeuronInstance;
+  ingest?: CompositeNeuronInstance;
+  todos?: CompositeNeuronInstance;
+  media?: CompositeNeuronInstance;
 }
 
 export interface FeedNeuronBindingOptions {
@@ -25,11 +39,15 @@ export interface FeedNeuronBindingOptions {
 }
 
 export class SeasonsCombinatorBridge {
-  public readonly combinator: CoreCombinatorClient;
+  public readonly combinator?: CoreCombinatorClient;
   public readonly seasons: SeasonsApiClient;
   public readonly sseBus?: SeasonsSseBus;
+  public readonly profileId?: string;
+  public readonly basePath: string;
   public readonly defaultStreamSlug: string;
   public readonly defaultPrivacy: 'public' | 'private';
+  private readonly bestEffortTelemetry: boolean;
+  private neurons: SeasonsCompositeNeurons = {};
 
   private activeBindings: Array<() => void> = [];
 
@@ -37,8 +55,167 @@ export class SeasonsCombinatorBridge {
     this.combinator = options.combinator;
     this.seasons = options.seasons;
     this.sseBus = options.sseBus;
+    this.profileId = options.profileId;
+    this.basePath = (options.basePath || '/seasons').replace(/\/+$/, '');
     this.defaultStreamSlug = options.defaultStreamSlug || 'core-combinator';
     this.defaultPrivacy = options.defaultPrivacy || 'private';
+    this.bestEffortTelemetry = options.bestEffortTelemetry ?? true;
+  }
+
+  get registeredNeurons(): SeasonsCompositeNeurons {
+    return this.neurons;
+  }
+
+  /**
+   * Idempotently registers Composite Neurons for Lemon Seasons operations in Core Combinator:
+   * - `/seasons/topology`
+   * - `/seasons/ingest`
+   * - `/seasons/todos`
+   * - `/seasons/media`
+   */
+  async ensureSeasonsCompositeNeurons(): Promise<SeasonsCompositeNeurons> {
+    if (!this.combinator) {
+      return this.neurons;
+    }
+
+    const [topology, ingest, todos, media] = await Promise.all([
+      this.combinator.neurons.ensureCompositeNeuron({
+        name: 'Seasons Topology & Streams',
+        path: `${this.basePath}/topology`,
+        profileId: this.profileId,
+        flows: {
+          context: {
+            config: {
+              service: 'lemon-seasons',
+              baseUrl: this.seasons.baseUrl,
+              capabilities: ['topology', 'streams', 'feeds', 'notes', 'sse'],
+            },
+          },
+          timer: {
+            intervalSeconds: 30,
+          },
+          observer: {},
+        },
+      }),
+      this.combinator.neurons.ensureCompositeNeuron({
+        name: 'Seasons Note Ingest Flow',
+        path: `${this.basePath}/ingest`,
+        profileId: this.profileId,
+        flows: {
+          context: {
+            config: {
+              pipeline: 'impulse -> seasons-ingest -> postgres-upsert -> sse-broadcast',
+            },
+          },
+          batch: {
+            maxBatchSize: 15,
+            maxWaitSeconds: 30,
+            idleTimeoutSeconds: 5,
+            deduplicationKey: 'externalId',
+          },
+          mutex: {
+            isExclusive: false,
+            onConflict: 'queue',
+            leaseTimeoutSeconds: 90,
+          },
+          circuitBreaker: {
+            failureThreshold: 5,
+            cooldownSeconds: 30,
+            successThreshold: 2,
+          },
+          observer: {},
+        },
+      }),
+      this.combinator.neurons.ensureCompositeNeuron({
+        name: 'Seasons TodoList Sync Flow',
+        path: `${this.basePath}/todos`,
+        profileId: this.profileId,
+        flows: {
+          context: {
+            config: {
+              pipeline: 'projectarium-todo -> markdown-merge -> note-patch',
+            },
+          },
+          mutex: {
+            isExclusive: true,
+            onConflict: 'queue',
+            leaseTimeoutSeconds: 60,
+          },
+          observer: {},
+        },
+      }),
+      this.combinator.neurons.ensureCompositeNeuron({
+        name: 'Seasons Note Media Bridge',
+        path: `${this.basePath}/media`,
+        profileId: this.profileId,
+        flows: {
+          context: {
+            config: {
+              pipeline: 'media-hub-neurons -> asset-resolve -> note-image-attach',
+              upstream: '@lemon/media-hub-neurons',
+            },
+          },
+          batch: {
+            maxBatchSize: 10,
+            maxWaitSeconds: 20,
+            idleTimeoutSeconds: 5,
+            deduplicationKey: 'mediaAssetId',
+          },
+          mutex: {
+            isExclusive: false,
+            onConflict: 'queue',
+            leaseTimeoutSeconds: 120,
+          },
+          observer: {},
+        },
+      }),
+    ]);
+
+    this.neurons = { topology, ingest, todos, media };
+    return this.neurons;
+  }
+
+  async emitChronicle(
+    channel: keyof SeasonsCompositeNeurons,
+    eventType: string,
+    payload: Record<string, any>,
+    explicitFlowId?: string,
+  ): Promise<void> {
+    if (!this.combinator) return;
+
+    const neuron = this.neurons[channel];
+    const flowId =
+      explicitFlowId ||
+      neuron?.flows?.observer?.id ||
+      neuron?.flows?.context?.id;
+
+    if (!flowId) return;
+
+    try {
+      await this.combinator.chronicle.emit(flowId, {
+        eventType,
+        payload,
+        source: 'lemon-seasons-neurons',
+      });
+    } catch (err) {
+      if (!this.bestEffortTelemetry) throw err;
+    }
+  }
+
+  async pushBatchTelemetry(
+    channel: 'ingest' | 'media',
+    payload: Record<string, any>,
+    dedupKey?: string,
+  ): Promise<void> {
+    if (!this.combinator) return;
+    const batchFlowId = this.neurons[channel]?.flows?.batch?.id;
+    if (!batchFlowId) return;
+
+    try {
+      await this.combinator.batch.push(batchFlowId, payload, dedupKey);
+    } catch (err) {
+      if (!this.bestEffortTelemetry) throw err;
+    }
   }
 
   /**
@@ -110,7 +287,7 @@ export class SeasonsCombinatorBridge {
   async ingestNote(
     input: IngestSeasonNoteInput,
     flowId?: string,
-  ): Promise<{ noteId: string; action: 'CREATED' | 'UPDATED' }> {
+  ): Promise<{ noteId: string; action: 'CREATED' | 'UPDATED'; note?: any }> {
     const notePayload: IngestSeasonNoteInput = {
       ...input,
       streamSlug: input.streamSlug || this.defaultStreamSlug,
@@ -120,22 +297,32 @@ export class SeasonsCombinatorBridge {
 
     const res = await this.seasons.ingestNote(notePayload);
 
-    // If a Core Combinator flowId is provided, write a mirror FlowEvent
-    if (flowId) {
-      await this.combinator.chronicle.emit(flowId, {
-        eventType: 'SEASONS_NOTE_INGESTED',
-        source: 'lemon-seasons-neurons',
-        payload: {
-          noteId: res.noteId,
-          action: res.action,
-          title: input.title,
-          feedSlug: input.feedSlug,
-          streamSlug: notePayload.streamSlug,
-        },
-      });
+    const targetFlowId =
+      flowId ||
+      this.neurons.ingest?.flows?.observer?.id ||
+      this.neurons.ingest?.flows?.context?.id;
+
+    if (this.combinator && targetFlowId) {
+      try {
+        await this.combinator.chronicle.emit(targetFlowId, {
+          eventType: 'SEASONS_NOTE_INGESTED',
+          source: 'lemon-seasons-neurons',
+          payload: {
+            noteId: res.noteId,
+            action: res.action,
+            title: input.title,
+            feedSlug: input.feedSlug,
+            streamSlug: notePayload.streamSlug,
+            mediaCount:
+              (input.images?.length || 0) + (input.mediaAssetIds?.length || 0),
+          },
+        });
+      } catch (err) {
+        if (!this.bestEffortTelemetry) throw err;
+      }
     }
 
-    return { noteId: res.noteId, action: res.action };
+    return { noteId: res.noteId, action: res.action, note: res.note };
   }
 
   /**
@@ -155,6 +342,11 @@ export class SeasonsCombinatorBridge {
     metadata?: Record<string, any>;
     flowId?: string;
   }): Promise<{ noteId: string; action: 'CREATED' | 'UPDATED' }> {
+    const targetFlowId =
+      input.flowId ||
+      this.neurons.todos?.flows?.observer?.id ||
+      this.neurons.todos?.flows?.context?.id;
+
     return this.ingestNote(
       {
         externalId: input.externalId,
@@ -172,7 +364,7 @@ export class SeasonsCombinatorBridge {
         todoList: input.todoList,
         metadata: input.metadata,
       },
-      input.flowId,
+      targetFlowId,
     );
   }
 
@@ -192,49 +384,57 @@ export class SeasonsCombinatorBridge {
    * Listens to SSE impulses (e.g. BATCH_FLUSH, CHRONICLE_EVENT) and automatically ingests notes.
    */
   bindNeuronToFeed(options: FeedNeuronBindingOptions): () => void {
-    const unsub = this.combinator.stream.subscribe({ folderId: options.folderId }, async (packet) => {
-      let noteInput: IngestSeasonNoteInput | null = null;
+    if (!this.combinator) {
+      return () => {};
+    }
+    const unsub = this.combinator.stream.subscribe(
+      { folderId: options.folderId },
+      async (packet) => {
+        let noteInput: IngestSeasonNoteInput | null = null;
 
-      if (options.transformer) {
-        noteInput = options.transformer(packet);
-      } else {
-        // Default transformer
-        if (packet.type === 'BATCH_FLUSH') {
-          const p = packet.payload as any;
-          noteInput = {
-            title: `Batch Flush: ${packet.flowName} (${p.itemsCount || 0} items)`,
-            content: `\`\`\`json\n${JSON.stringify(p.items || [], null, 2)}\n\`\`\``,
-            type: 'EVENT',
-            summary: `Automated batch flush containing ${p.itemsCount || 0} items`,
-            tags: ['combinator:batch', `flow:${packet.flowId}`],
-          };
-        } else if (packet.type === 'CHRONICLE_EVENT') {
-          const p = packet.payload as any;
-          noteInput = {
-            title: `${packet.flowName}: ${p.eventType || 'Event'}`,
-            content: typeof p.summary === 'string' ? p.summary : JSON.stringify(p, null, 2),
-            type: 'SINGLE',
-            tags: ['combinator:event', `flow:${packet.flowId}`],
-          };
+        if (options.transformer) {
+          noteInput = options.transformer(packet);
+        } else {
+          if (packet.type === 'BATCH_FLUSH') {
+            const p = packet.payload as any;
+            noteInput = {
+              title: `Batch Flush: ${packet.flowName} (${p.itemsCount || 0} items)`,
+              content: `\`\`\`json\n${JSON.stringify(p.items || [], null, 2)}\n\`\`\``,
+              type: 'EVENT',
+              summary: `Automated batch flush containing ${p.itemsCount || 0} items`,
+              tags: ['combinator:batch', `flow:${packet.flowId}`],
+            };
+          } else if (packet.type === 'CHRONICLE_EVENT') {
+            const p = packet.payload as any;
+            noteInput = {
+              title: `${packet.flowName}: ${p.eventType || 'Event'}`,
+              content: typeof p.summary === 'string' ? p.summary : JSON.stringify(p, null, 2),
+              type: 'SINGLE',
+              tags: ['combinator:event', `flow:${packet.flowId}`],
+            };
+          }
         }
-      }
 
-      if (noteInput) {
-        await this.ingestNote({
-          ...noteInput,
-          streamSlug: options.streamSlug,
-          feedSlug: options.feedSlug,
-          privacy: options.privacy || this.defaultPrivacy,
-          metadata: {
-            ...noteInput.metadata,
-            combinatorFlowId: packet.flowId,
-            combinatorFolderId: packet.folderId,
-            combinatorImpulseType: packet.type,
-            activeSessionIds: packet.activeSessionIds,
-          },
-        }, packet.flowId);
-      }
-    });
+        if (noteInput) {
+          await this.ingestNote(
+            {
+              ...noteInput,
+              streamSlug: options.streamSlug,
+              feedSlug: options.feedSlug,
+              privacy: options.privacy || this.defaultPrivacy,
+              metadata: {
+                ...noteInput.metadata,
+                combinatorFlowId: packet.flowId,
+                combinatorFolderId: packet.folderId,
+                combinatorImpulseType: packet.type,
+                activeSessionIds: packet.activeSessionIds,
+              },
+            },
+            packet.flowId,
+          );
+        }
+      },
+    );
 
     this.activeBindings.push(unsub);
     return unsub;
