@@ -1,0 +1,25 @@
+{
+  "name": "@lemon/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lemon Dock — Windows Tauri Quick-Access Panel for the Lemon Stack",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.2.0",
+    "@tauri-apps/plugin-opener": "^2.2.6",
+    "lemon-actions-monorepo": "file:../.."
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.2.7",
+    "typescript": "^5.5.4",
+    "vite": "^6.0.0"
+  }
+}

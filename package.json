@@ -28,6 +28,8 @@
     "start:projectarium": "npm run --prefix apps/web start:projectarium",
     "start:projectarium-mcp": "node packages/lemon-projectarium/dist/mcp/projectarium-mcp.server.js",
     "start:agent": "npm run --prefix apps/web start:agent",
+    "dev:desktop": "npm run --prefix apps/desktop tauri:dev",
+    "build:desktop": "npm run --prefix apps/desktop tauri:build",
     "migrate:data": "ts-node -r tsconfig-paths/register apps/api/src/migrations/agent-data-migration.ts"
   },
   "devDependencies": {

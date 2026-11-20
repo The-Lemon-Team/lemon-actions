@@ -1,0 +1,419 @@
+:root {
+  --bg-dock: rgba(30, 34, 42, 0.94);
+  --bg-panel: rgba(36, 40, 49, 0.98);
+  --bg-surface: #282c34;
+  --bg-hover: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.11);
+  --text-primary: #eceff4;
+  --text-secondary: #9da5b4;
+  --accent-lemon: #f7d02c;
+  --status-online: #98c379;
+  --status-offline: #5c6370;
+  --status-checking: #e5c07b;
+  --danger: #e06c75;
+  --radius-dock: 16px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+  overflow: hidden;
+  user-select: none;
+}
+
+.dock-shell {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dock-bar {
+  height: 64px;
+  min-height: 64px;
+  background: var(--bg-dock);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-dock);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+}
+
+.drag-handle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 4px;
+  cursor: grab;
+  color: var(--text-secondary);
+  border-right: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.grip-dots {
+  font-size: 14px;
+  letter-spacing: -2px;
+  opacity: 0.7;
+}
+
+.brand-mark {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.dock-apps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px;
+  scrollbar-width: none;
+}
+
+.dock-apps::-webkit-scrollbar {
+  display: none;
+}
+
+.app-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 50px;
+  padding: 4px 10px;
+  border-radius: 11px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform 0.14s ease, background 0.14s ease, border-color 0.14s ease;
+  flex-shrink: 0;
+}
+
+.app-btn:hover {
+  transform: translateY(-2px);
+  background: var(--bg-hover);
+  border-color: var(--app-accent, var(--border-subtle));
+}
+
+.app-btn:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.app-icon {
+  font-size: 19px;
+  line-height: 1.1;
+}
+
+.app-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  max-width: 68px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-btn:hover .app-label {
+  color: var(--text-primary);
+}
+
+.status-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-offline);
+  border: 1px solid rgba(0, 0, 0, 0.5);
+}
+
+.status-dot.online {
+  background: var(--status-online);
+  box-shadow: 0 0 6px rgba(152, 195, 121, 0.75);
+}
+
+.status-dot.checking {
+  background: var(--status-checking);
+}
+
+.mode-badge {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  font-size: 8px;
+  opacity: 0.55;
+  color: var(--text-secondary);
+}
+
+.dock-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.ctrl-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.ctrl-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.ctrl-btn.active {
+  background: rgba(247, 208, 44, 0.14);
+  color: var(--accent-lemon);
+  border-color: rgba(247, 208, 44, 0.35);
+}
+
+/* Expanded Settings / App Manager Panel */
+.manager-panel {
+  flex: 1;
+  background: var(--bg-panel);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-dock);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.manager-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.manager-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 12px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.apps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.app-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  font-size: 12px;
+}
+
+.app-row.selected {
+  border-color: var(--accent-lemon);
+}
+
+.app-row-icon {
+  font-size: 16px;
+  width: 22px;
+  text-align: center;
+}
+
+.app-row-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-row-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-row-url {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.mini-btn {
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mini-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.mini-btn.pinned {
+  color: var(--accent-lemon);
+  border-color: rgba(247, 208, 44, 0.4);
+}
+
+.mini-btn.danger:hover {
+  color: var(--danger);
+  border-color: rgba(224, 108, 117, 0.5);
+}
+
+.editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 10px 12px;
+  overflow-y: auto;
+}
+
+.editor-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-lemon);
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.field label {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.field input,
+.field select {
+  background: #1e222a;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--accent-lemon);
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.form-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.btn-primary {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: none;
+  background: var(--accent-lemon);
+  color: #1b1c1a;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+.btn-secondary {
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
