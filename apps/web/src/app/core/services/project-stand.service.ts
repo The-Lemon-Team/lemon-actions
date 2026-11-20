@@ -1037,4 +1037,34 @@ export class ProjectStandService {
       })
       .pipe(tap(() => this.fetchFromBackend()));
   }
+
+  listTimelineLinks(standSlug: string): Observable<any[]> {
+    return this.http.get<any[]>(`${PROJECTARIUM_API_BASE}/projects/${standSlug}/timelines`);
+  }
+
+  upsertTimelineLink(
+    standSlug: string,
+    payload: {
+      boardId: string;
+      boardTitle?: string;
+      timelineUrl: string;
+      apiBaseUrl: string;
+      token: string;
+    },
+  ): Observable<any> {
+    return this.http.post<any>(`${PROJECTARIUM_API_BASE}/projects/${standSlug}/timelines`, payload);
+  }
+
+  removeTimelineLink(standSlug: string, boardId: string): Observable<any> {
+    return this.http.delete<any>(`${PROJECTARIUM_API_BASE}/projects/${standSlug}/timelines/${boardId}`);
+  }
+
+  syncTimelineLinks(standSlug: string): Observable<{ syncedBoards: number; importedEvents: number }> {
+    return this.http
+      .post<{ syncedBoards: number; importedEvents: number }>(
+        `${PROJECTARIUM_API_BASE}/projects/${standSlug}/timelines/sync`,
+        {},
+      )
+      .pipe(tap(() => this.fetchFromBackend()));
+  }
 }

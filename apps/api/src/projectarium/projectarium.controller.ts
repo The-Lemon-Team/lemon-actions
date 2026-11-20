@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ProjectariumEnvironment, ProjectariumNetworkMode } from '@lemon/projectarium';
 import { ProjectariumService } from './projectarium.service';
+import { TimelineBoardLinkDto, TimelinesSyncService } from './timelines-sync.service';
 import {
   AddAppToProjectDto,
   AddChronicleEventDto,
@@ -26,7 +27,10 @@ import {
 
 @Controller('projectarium')
 export class ProjectariumController {
-  constructor(private readonly projectariumService: ProjectariumService) {}
+  constructor(
+    private readonly projectariumService: ProjectariumService,
+    private readonly timelinesSync: TimelinesSyncService,
+  ) {}
 
   /**
    * Unified Smart Handler ("Upsert on First Touch")
@@ -248,5 +252,43 @@ export class ProjectariumController {
     @Body() dto: AddChronicleEventDto
   ) {
     return this.projectariumService.addChronicleEvent(slugOrToken, dto);
+  }
+
+  /**
+   * List linked TimeLine boards for a Projectarium stand
+   */
+  @Get('projects/:slugOrToken/timelines')
+  listTimelineLinks(@Param('slugOrToken') slugOrToken: string) {
+    return this.timelinesSync.listLinks(slugOrToken);
+  }
+
+  /**
+   * Link a TimeLine board to a Projectarium stand
+   */
+  @Post('projects/:slugOrToken/timelines')
+  upsertTimelineLink(
+    @Param('slugOrToken') slugOrToken: string,
+    @Body() dto: TimelineBoardLinkDto,
+  ) {
+    return this.timelinesSync.upsertLink(slugOrToken, dto);
+  }
+
+  /**
+   * Unlink a TimeLine board from a Projectarium stand
+   */
+  @Delete('projects/:slugOrToken/timelines/:boardId')
+  removeTimelineLink(
+    @Param('slugOrToken') slugOrToken: string,
+    @Param('boardId') boardId: string,
+  ) {
+    return this.timelinesSync.removeLink(slugOrToken, boardId);
+  }
+
+  /**
+   * Trigger manual bidirectional sync with linked TimeLine boards
+   */
+  @Post('projects/:slugOrToken/timelines/sync')
+  syncTimelineLinks(@Param('slugOrToken') slugOrToken: string) {
+    return this.timelinesSync.syncStand(slugOrToken);
   }
 }

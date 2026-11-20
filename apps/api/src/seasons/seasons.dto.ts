@@ -99,6 +99,39 @@ export class NoteTodoItemDto {
   author?: string;
 }
 
+export class NoteMediaAttachmentDto {
+  @IsString()
+  url: string;
+
+  @IsString()
+  @IsOptional()
+  thumbnailUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  filename?: string;
+
+  @IsString()
+  @IsOptional()
+  mimeType?: string;
+
+  @IsString()
+  @IsOptional()
+  caption?: string;
+
+  @IsString()
+  @IsOptional()
+  alt?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isMain?: boolean;
+
+  @IsString()
+  @IsOptional()
+  mediaAssetId?: string;
+}
+
 export class IngestSeasonNoteDto {
   @IsString()
   @IsOptional()
@@ -145,6 +178,25 @@ export class IngestSeasonNoteDto {
   @Type(() => NoteTodoItemDto)
   @IsOptional()
   todoList?: NoteTodoItemDto[];
+
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  imageCaption?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NoteMediaAttachmentDto)
+  @IsOptional()
+  images?: NoteMediaAttachmentDto[];
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  mediaAssetIds?: string[];
 }
 
 export class ProxyNoteTodosDto {

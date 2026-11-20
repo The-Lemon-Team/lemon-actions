@@ -225,6 +225,10 @@ export class SeasonsService implements OnModuleInit, OnModuleDestroy {
       tags: dto.tags,
       origin: 'LEMON_ACTIONS_PROXY',
       todoList,
+      imageUrl: dto.imageUrl,
+      imageCaption: dto.imageCaption,
+      images: dto.images,
+      mediaAssetIds: dto.mediaAssetIds,
     });
   }
 
