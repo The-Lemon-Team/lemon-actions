@@ -305,17 +305,15 @@ export class FlowsService {
         }
       }
 
-      // Auto-update Projection on incoming events
+      // Auto-update Projection on incoming events (Wallet, Resource Storage, Participants & Emitter Tasks)
       if (flow.type === FlowType.PROJECTION) {
         const cfg = (flow.config ?? {}) as Record<string, any>;
-        const projectionState = cfg.projectionState || {};
-        const updatedProjection = {
-          ...projectionState,
-          lastEventType: dto.eventType,
-          lastUpdatedAt: event.createdAt.toISOString(),
-          eventsCount: (projectionState.eventsCount || 0) + 1,
-          lastPayload: dto.payload,
-        };
+        const updatedProjection = this.reduceProjectionState(
+          cfg,
+          dto.eventType,
+          (dto.payload ?? {}) as Record<string, any>,
+          event.createdAt,
+        );
         await this.repo.update(
           flow.id,
           { config: this.json({ ...cfg, projectionState: updatedProjection }) },
@@ -603,6 +601,329 @@ export class FlowsService {
 
     const reasons = results.filter((r) => !r.satisfied).map((r) => r.reason || 'Unsatisfied condition');
     return { allowed, reasons };
+  }
+
+  /**
+   * Pure reducer for PROJECTION flows:
+   * - Wallet balances (`DEPOSIT`, `REWARD_MINTED`, `LEDGER_CREDIT`, `WITHDRAW`, `LEDGER_DEBIT`).
+   * - Tower resource counters (`RESOURCE_PRODUCED`, `RESTOCKED`, `COUNTER_INCREMENT`).
+   * - Tower `participants` roster (`PARTICIPANT_JOINED`, `PARTICIPANT_LEFT`).
+   * - Main Emitter task registry (`TASK_ISSUED`, `TASK_CLAIMED_BY_TOWER`, `TASK_COMPLETED`),
+   *   retaining completed tasks under the Main Emitter (`retainedByEmitter: true`).
+   * - Tower self-published lots (`OWN_LOT_PUBLISHED`) unlocked after earning starter currency.
+   */
+  private reduceProjectionState(
+    cfg: Record<string, any>,
+    eventType: string,
+    payload: Record<string, any>,
+    at: Date,
+  ): Record<string, any> {
+    const prev = (cfg.projectionState ?? {}) as Record<string, any>;
+    const isoAt = at.toISOString();
+    const balances: Record<string, number> = { ...(prev.balances ?? {}) };
+    const resources: Record<string, any> = { ...(prev.resources ?? {}) };
+    const participants: Array<Record<string, any>> = Array.isArray(prev.participants) ? [...prev.participants] : [];
+    const emitterTasks: Array<Record<string, any>> = Array.isArray(prev.emitterTasks) ? [...prev.emitterTasks] : [];
+    const ownLots: Array<Record<string, any>> = Array.isArray(prev.ownLots) ? [...prev.ownLots] : [];
+
+    switch (eventType) {
+      case 'DEPOSIT':
+      case 'REWARD_MINTED':
+      case 'LEDGER_CREDIT':
+        this.applyBalanceDelta(balances, payload, 1, Boolean(cfg.allowNegative));
+        break;
+      case 'WITHDRAW':
+      case 'LEDGER_DEBIT':
+        this.applyBalanceDelta(balances, payload, -1, Boolean(cfg.allowNegative));
+        break;
+      case 'RESOURCE_PRODUCED':
+      case 'RESTOCKED':
+      case 'COUNTER_INCREMENT':
+        this.applyResourceDelta(resources, cfg, payload, isoAt);
+        break;
+      case 'PARTICIPANT_JOINED':
+        this.upsertParticipant(participants, cfg, payload, isoAt);
+        break;
+      case 'PARTICIPANT_LEFT': {
+        const actorId = String(payload.actorId || '').trim();
+        const idx = actorId ? participants.findIndex((p) => p.actorId === actorId) : -1;
+        if (idx >= 0) participants.splice(idx, 1);
+        break;
+      }
+      case 'TASK_ISSUED':
+      case 'TASK_CLAIMED_BY_TOWER':
+      case 'TASK_STEP_UPDATED':
+      case 'TASK_COMPLETED':
+        this.reduceEmitterTask(emitterTasks, balances, cfg, eventType, payload, isoAt);
+        break;
+      case 'OWN_LOT_PUBLISHED': {
+        const canPublish = this.hasStarterCapital(prev, balances);
+        if (canPublish) {
+          ownLots.push({
+            lotId: String(payload.lotId || `lot-${Date.now()}`),
+            title: payload.title || 'Tower Lot',
+            reward: Number(payload.reward ?? 0),
+            currency: String(payload.currency || 'ancient_point'),
+            kind: payload.kind || 'ORDER',
+            status: 'OPEN',
+            publishedAt: isoAt,
+          });
+        }
+        break;
+      }
+    }
+
+    const canPublishOwnLots = this.hasStarterCapital(prev, balances);
+
+    return {
+      ...prev,
+      balances,
+      resources,
+      participants,
+      emitterTasks,
+      ownLots,
+      canPublishOwnLots,
+      lastEventType: eventType,
+      lastUpdatedAt: isoAt,
+      eventsCount: (prev.eventsCount || 0) + 1,
+      lastPayload: payload,
+    };
+  }
+
+  private hasStarterCapital(prev: Record<string, any>, balances: Record<string, number>): boolean {
+    return (
+      Boolean(prev.canPublishOwnLots) ||
+      (balances['ancient_point'] ?? 0) > 0 ||
+      (balances['golden_ancient_point'] ?? 0) > 0 ||
+      (balances['fire_point'] ?? 0) > 0
+    );
+  }
+
+  private applyBalanceDelta(
+    balances: Record<string, number>,
+    payload: Record<string, any>,
+    sign: 1 | -1,
+    allowNegative: boolean,
+  ): void {
+    const currency = String(payload.currency || 'ancient_point');
+    const amount = Number(payload.amount ?? payload.delta ?? 0);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const nextVal = (balances[currency] ?? 0) + sign * amount;
+    balances[currency] = sign < 0 && !allowNegative ? Math.max(0, nextVal) : nextVal;
+  }
+
+  private applyResourceDelta(
+    resources: Record<string, any>,
+    cfg: Record<string, any>,
+    payload: Record<string, any>,
+    isoAt: string,
+  ): void {
+    const key = String(payload.resource || cfg.defaultResource || 'default');
+    const delta = Number(payload.delta ?? payload.amount ?? payload.currentQty ?? 1);
+    if (!Number.isFinite(delta)) return;
+    const existing = resources[key] ?? { code: key, current: 0, maxCapacity: cfg.maxCapacity ?? null };
+    const unclamped = (existing.current ?? 0) + delta;
+    const current =
+      typeof existing.maxCapacity === 'number'
+        ? Math.min(existing.maxCapacity, Math.max(0, unclamped))
+        : Math.max(0, unclamped);
+    resources[key] = { ...existing, current, updatedAt: isoAt };
+  }
+
+  private upsertParticipant(
+    participants: Array<Record<string, any>>,
+    cfg: Record<string, any>,
+    payload: Record<string, any>,
+    isoAt: string,
+  ): void {
+    const actorId = String(payload.actorId || '').trim();
+    if (!actorId) return;
+    const idx = participants.findIndex((p) => p.actorId === actorId);
+    const entry = {
+      actorId,
+      actorName: payload.actorName || actorId,
+      role: payload.role || 'MEMBER',
+      element: payload.element || cfg.towerElement || null,
+      source: payload.source || 'EMITTER_QUEST',
+      joinedAt: idx >= 0 ? participants[idx].joinedAt : isoAt,
+      updatedAt: isoAt,
+    };
+    if (idx >= 0) {
+      participants[idx] = entry;
+    } else {
+      participants.push(entry);
+    }
+  }
+
+  async queryTaskPool(
+    flowId: string,
+    filter: { actorId?: string; status?: string; tower?: string } = {},
+  ) {
+    const flow = await this.require(flowId);
+    const state = ((flow.config as Record<string, any>)?.projectionState ?? {}) as Record<string, any>;
+    const emitterTasks = Array.isArray(state.emitterTasks) ? state.emitterTasks : [];
+    const ownLots = Array.isArray(state.ownLots) ? state.ownLots : [];
+    const allTasks: Array<Record<string, any>> = [...emitterTasks, ...ownLots];
+
+    const items = allTasks.filter((t) => {
+      if (filter.status && t.status !== filter.status) return false;
+      if (filter.tower && t.claimedByTower !== filter.tower) return false;
+      if (filter.actorId) {
+        const isPrimary = t.assigneeActorId === filter.actorId;
+        const isParticipant = Array.isArray(t.assignedParticipants) && t.assignedParticipants.includes(filter.actorId);
+        if (!isPrimary && !isParticipant) return false;
+      }
+      return true;
+    });
+
+    const byStatus: Record<string, number> = {};
+    for (const t of allTasks) {
+      const s = String(t.status || 'OPEN');
+      byStatus[s] = (byStatus[s] ?? 0) + 1;
+    }
+
+    return {
+      flowId: flow.id,
+      total: allTasks.length,
+      filteredCount: items.length,
+      byStatus,
+      items: items.map((t): Record<string, any> => {
+        const steps = Array.isArray(t.steps) ? t.steps : [];
+        return {
+          ...t,
+          stepsTotal: steps.length,
+          stepsDone: steps.filter((s: any) => s.status === 'DONE').length,
+        };
+      }),
+    };
+  }
+
+  private normalizeTaskSteps(rawSteps: unknown): Array<Record<string, any>> {
+    if (!Array.isArray(rawSteps)) return [];
+    return rawSteps.map((s: any, idx: number) => ({
+      stepId: String(s?.stepId || `step-${idx + 1}`),
+      title: String(s?.title || `Step ${idx + 1}`),
+      status: s?.status === 'DONE' || s?.status === 'IN_PROGRESS' ? s.status : 'PENDING',
+      assigneeActorId: s?.assigneeActorId || null,
+      completedAt: s?.completedAt || null,
+    }));
+  }
+
+  private reduceEmitterTask(
+    emitterTasks: Array<Record<string, any>>,
+    balances: Record<string, number>,
+    cfg: Record<string, any>,
+    eventType: string,
+    payload: Record<string, any>,
+    isoAt: string,
+  ): void {
+    const taskId = String(payload.taskId || (eventType === 'TASK_ISSUED' ? `task-${Date.now()}` : ''));
+    if (!taskId) return;
+    const idx = emitterTasks.findIndex((t) => t.taskId === taskId);
+
+    if (eventType === 'TASK_ISSUED') {
+      const participants = Array.isArray(payload.participants) ? payload.participants : [];
+      const record = {
+        taskId,
+        title: payload.title || taskId,
+        issuer: 'genesis-emitter',
+        retainedByEmitter: true,
+        reward: Number(payload.reward ?? 0),
+        currency: String(payload.currency || 'ancient_point'),
+        rewards: Array.isArray(payload.rewards) ? payload.rewards : undefined,
+        status: payload.status || 'OPEN',
+        claimedByTower: payload.claimedByTower || null,
+        assigneeActorId: String(payload.assigneeActorId || participants[0] || 'actor-master-ai'),
+        assignedParticipants: participants,
+        steps: this.normalizeTaskSteps(payload.steps),
+        issuedAt: idx >= 0 ? emitterTasks[idx].issuedAt : isoAt,
+        updatedAt: isoAt,
+      };
+      if (idx >= 0) {
+        emitterTasks[idx] = { ...emitterTasks[idx], ...record };
+      } else {
+        emitterTasks.push(record);
+      }
+      return;
+    }
+
+    if (idx < 0) return;
+    const current = emitterTasks[idx];
+
+    if (eventType === 'TASK_CLAIMED_BY_TOWER') {
+      const nextParticipants = Array.isArray(payload.participants)
+        ? [...new Set([...(current.assignedParticipants ?? []), ...payload.participants])]
+        : current.assignedParticipants;
+      emitterTasks[idx] = {
+        ...current,
+        status: 'IN_PROGRESS',
+        claimedByTower: payload.claimedByTower || current.claimedByTower,
+        assigneeActorId: payload.assigneeActorId || payload.participants?.[0] || current.assigneeActorId,
+        assignedParticipants: nextParticipants,
+        steps: Array.isArray(payload.steps) ? this.normalizeTaskSteps(payload.steps) : current.steps,
+        updatedAt: isoAt,
+      };
+      return;
+    }
+
+    if (eventType === 'TASK_STEP_UPDATED') {
+      const stepId = String(payload.stepId || '');
+      const steps = Array.isArray(current.steps) ? [...current.steps] : [];
+      const sIdx = steps.findIndex((s: any) => s.stepId === stepId);
+      if (sIdx >= 0) {
+        const nextStepStatus = payload.status === 'DONE' || payload.status === 'IN_PROGRESS' ? payload.status : 'PENDING';
+        steps[sIdx] = {
+          ...steps[sIdx],
+          status: nextStepStatus,
+          assigneeActorId: payload.assigneeActorId || steps[sIdx].assigneeActorId,
+          completedAt: nextStepStatus === 'DONE' ? isoAt : null,
+        };
+      }
+      const nextStatus =
+        current.status === 'OPEN' && steps.some((s: any) => s.status !== 'PENDING')
+          ? 'IN_PROGRESS'
+          : current.status;
+      emitterTasks[idx] = {
+        ...current,
+        status: nextStatus,
+        steps,
+        updatedAt: isoAt,
+      };
+      return;
+    }
+
+    if (eventType === 'TASK_COMPLETED') {
+      const steps = Array.isArray(current.steps)
+        ? current.steps.map((s: any) =>
+            payload.completeRemainingSteps !== false && s.status !== 'DONE'
+              ? { ...s, status: 'DONE', completedAt: s.completedAt || isoAt }
+              : s,
+          )
+        : [];
+      emitterTasks[idx] = {
+        ...current,
+        status: 'COMPLETED',
+        issuer: 'genesis-emitter',
+        retainedByEmitter: true,
+        steps,
+        completedAt: isoAt,
+        updatedAt: isoAt,
+      };
+      // On the Main Emitter mint flow, currency is disbursed outward; on a tower projection, reward is credited.
+      if (cfg.cardRole !== 'EMITTER_MINT_AND_REGISTRY') {
+        if (Array.isArray(current.rewards)) {
+          for (const r of current.rewards) {
+            if (Number(r?.amount) > 0) {
+              const cur = String(r.currency || 'ancient_point');
+              balances[cur] = (balances[cur] ?? 0) + Number(r.amount);
+            }
+          }
+        } else if (current.reward > 0) {
+          const cur = String(current.currency || 'ancient_point');
+          balances[cur] = (balances[cur] ?? 0) + Number(current.reward);
+        }
+      }
+    }
   }
 
   private async require(id: string) {

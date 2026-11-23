@@ -100,6 +100,16 @@ export class FlowsController {
     return this.service.listEvents(id, q.sessionId);
   }
 
+  @Get(':id/tasks')
+  listTaskPool(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('actorId') actorId?: string,
+    @Query('status') status?: string,
+    @Query('tower') tower?: string,
+  ) {
+    return this.service.queryTaskPool(id, { actorId, status, tower });
+  }
+
   @Post(':id/events')
   appendEvent(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateFlowEventDto) {
     return this.service.appendEvent(id, dto);

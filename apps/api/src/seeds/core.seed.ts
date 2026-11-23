@@ -1,5 +1,6 @@
 import { FlowStatus, FlowType } from '@prisma/client';
 import { SeedFlow, SeedFolder } from './seed.types';
+import { SPACE_FOLDERS, SPACE_TOWER_FLOWS } from './space-towers.seed';
 
 export const CORE_FOLDERS: SeedFolder[] = [
   { name: 'Workspace', path: 'workspace' },
@@ -17,6 +18,7 @@ export const CORE_FOLDERS: SeedFolder[] = [
   { name: 'Character Deck', path: 'arena.actors' },
   { name: 'Desire Cards Deck', path: 'arena.desire_cards' },
   { name: 'Friday Sync Field', path: 'arena.friday_sync' },
+  ...SPACE_FOLDERS,
 ];
 
 export const DEEP_WORK_FSM = {
@@ -134,4 +136,5 @@ export const CORE_FLOWS: SeedFlow[] = [
     folder: 'infrastructure',
     tags: ['infrastructure', 'mutex', 'routine'],
   },
+  ...SPACE_TOWER_FLOWS,
 ];
