@@ -91,13 +91,15 @@ export class TimelinesSyncService implements OnModuleInit, OnModuleDestroy {
           last_error TEXT,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           UNIQUE (stand_slug, board_id)
-        );
+        )
+      `);
+      await this.prisma.$executeRawUnsafe(`
         CREATE TABLE IF NOT EXISTS projectarium_timeline_synced_refs (
           stand_slug TEXT NOT NULL,
           external_ref TEXT NOT NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           PRIMARY KEY (stand_slug, external_ref)
-        );
+        )
       `);
       this.schemaReady = true;
     } catch (err) {

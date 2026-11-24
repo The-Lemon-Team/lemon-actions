@@ -5,14 +5,18 @@ import {
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { CoreCombinatorClient } from '@lemon/core-combinator-sdk';
+import { ProjectBusClient } from '@lemon/stack-bus';
 import {
   AssetLineage,
   MediaAsset,
   MediaCompositeNeurons,
+  MediaEventImpulse,
   MediaFolder,
+  MediaImpulseType,
   MediaKind,
   MediaLifecycleAxon,
   MediaServiceClient,
@@ -22,8 +26,9 @@ import {
   QueryAssetsOptions,
 } from '@lemon/media-hub-neurons';
 import { Response } from 'express';
-import { Observable } from 'rxjs';
+import { EMPTY, Observable, map } from 'rxjs';
 import { Readable } from 'stream';
+import { StackBusService } from '../bus/stack-bus.service';
 import {
   CreateMediaClientDto,
   CreateMediaFolderDto,
@@ -58,8 +63,9 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
   private neuronsSynced = false;
   private initTimer: NodeJS.Timeout | null = null;
   private authInFlight: Promise<boolean> | null = null;
+  private readonly mediaBus?: ProjectBusClient;
 
-  constructor() {
+  constructor(@Optional() private readonly stackBus?: StackBusService) {
     this.baseUrl = (process.env.LEMON_MEDIA_HUB_URL || 'http://127.0.0.1:3005').replace(
       /\/+$/,
       '',
@@ -86,10 +92,13 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.authenticated = Boolean(token || apiKey);
+    this.mediaBus = this.stackBus?.forProject('media-hub', 'lemon-media-hub');
   }
 
   onModuleInit(): void {
-    // Defer bootstrap network calls until HTTP listener is ready
+    // Defer bootstrap network calls until HTTP listener is ready.
+    // Inter-service SSE to media-hub is intentionally disabled per inter-service-bus rule:
+    // media-hub lifecycle events arrive via StackBus (NATS JetStream lemon.media-hub.>).
     this.initTimer = setTimeout(() => {
       void this.bootstrapConnections();
     }, 1500);
@@ -105,7 +114,56 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
   }
 
   events$(): Observable<MediaSsePacket> {
-    return this.axon.sseBus.packets$;
+    if (!this.stackBus) {
+      return EMPTY;
+    }
+    const eventToImpulse: Record<string, MediaImpulseType | undefined> = {
+      created: 'MEDIA_ADDED',
+      processing: 'MEDIA_PROCESSING',
+      ready: 'MEDIA_READY',
+      failed: 'MEDIA_FAILED',
+      updated: 'MEDIA_UPDATED',
+      access_changed: 'MEDIA_ACCESS_CHANGED',
+      favorited: 'MEDIA_FAVORITED',
+      viewed: 'MEDIA_VIEWED',
+      deleted: 'MEDIA_DELETED',
+    };
+
+    return this.stackBus
+      .subscribe$({ projectSlug: 'media-hub', topicPattern: 'lemon.media-hub.media.>' })
+      .pipe(
+        map((env) => {
+          const payload = (env.payload ?? {}) as Record<string, unknown>;
+          const type: MediaImpulseType = eventToImpulse[env.event] ?? 'MEDIA_UPDATED';
+          const impulse: MediaEventImpulse = {
+            id: env.eventId,
+            type,
+            timestamp: env.timestamp,
+            assetId: typeof payload.assetId === 'string' ? payload.assetId : undefined,
+            folderId: typeof payload.folderId === 'string' ? payload.folderId : undefined,
+            folderPath: typeof payload.folderPath === 'string' ? payload.folderPath : undefined,
+            kind: typeof payload.kind === 'string' ? (payload.kind as MediaKind) : undefined,
+            visibility:
+              typeof payload.visibility === 'string'
+                ? (payload.visibility as MediaVisibility)
+                : undefined,
+            processingStatus:
+              typeof payload.processingStatus === 'string'
+                ? (payload.processingStatus as ProcessingStatus)
+                : undefined,
+            asset:
+              payload.asset && typeof payload.asset === 'object'
+                ? (payload.asset as MediaAsset)
+                : undefined,
+            payload,
+          };
+          return {
+            type,
+            impulse,
+            receivedAt: Date.now(),
+          } satisfies MediaSsePacket;
+        }),
+      );
   }
 
   async getStatus(): Promise<{
@@ -113,6 +171,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     connected: boolean;
     authenticated: boolean;
     sseConnected: boolean;
+    busConnected: boolean;
     neuronsSynced: boolean;
     combinatorNeurons: MediaCombinatorNeuronSummary[];
     error?: string;
@@ -126,18 +185,19 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       if (!this.authenticated) {
         await this.ensureAuthenticated();
       }
-      if (this.authenticated && !this.axon.sseBus.isConnected) {
-        this.axon.sseBus.connect();
-      }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     }
+
+    const busStatus = await this.stackBus?.getStatus().catch(() => null);
+    const busConnected = busStatus?.connected ?? false;
 
     return {
       baseUrl: this.baseUrl,
       connected,
       authenticated: this.authenticated,
-      sseConnected: this.axon.sseBus.isConnected,
+      sseConnected: busConnected,
+      busConnected,
       neuronsSynced: this.neuronsSynced,
       combinatorNeurons: this.summarizeNeurons(this.axon.bridge.registeredNeurons),
       error,
@@ -151,7 +211,6 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     try {
       const res = await this.axon.apiClient.loginAdmin(username, password);
       this.authenticated = true;
-      this.axon.sseBus.connect();
       return { authenticated: true, admin: res.admin };
     } catch (err) {
       this.authenticated = false;
@@ -225,7 +284,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     if (!this.neuronsSynced) {
       await this.ensureCombinatorNeurons();
     }
-    return this.withAutoAuth(() =>
+    const result = await this.withAutoAuth(() =>
       this.axon.addMedia({
         file: new Uint8Array(file.buffer),
         filename: file.originalname,
@@ -240,6 +299,17 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
         dedupKey: body.dedupKey,
       }),
     );
+
+    if (result?.asset) {
+      await this.publishMediaLifecycleEvent('created', {
+        assetId: result.asset.id,
+        kind: result.asset.kind,
+        folderPath: result.asset.folderPath,
+        filename: result.asset.filename,
+        visibility: result.asset.visibility,
+      });
+    }
+    return result;
   }
 
   async updateMetadata(id: string, dto: UpdateMediaMetadataDto): Promise<MediaAsset> {
@@ -276,12 +346,17 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
     if (!this.neuronsSynced) {
       await this.ensureCombinatorNeurons();
     }
-    return this.withAutoAuth(() =>
+    const result = await this.withAutoAuth(() =>
       this.axon.deleteMedia({
         assetId: id,
         reason: reason || 'admin-moderation',
       }),
     );
+    await this.publishMediaLifecycleEvent('deleted', {
+      assetId: id,
+      reason: reason || 'admin-moderation',
+    });
+    return result;
   }
 
   async listClients(): Promise<MediaServiceClient[]> {
@@ -352,10 +427,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
 
   private async bootstrapConnections(): Promise<void> {
     await this.ensureCombinatorNeurons();
-    const ok = await this.ensureAuthenticated();
-    if (ok) {
-      this.axon.sseBus.connect();
-    }
+    await this.ensureAuthenticated();
   }
 
   private async ensureAuthenticated(force = false): Promise<boolean> {
@@ -424,5 +496,26 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
           .filter((f): f is NonNullable<typeof f> => Boolean(f))
           .map((f) => f.id),
       }));
+  }
+
+  private async publishMediaLifecycleEvent(
+    event: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.mediaBus) return;
+    const assetId = typeof payload.assetId === 'string' ? payload.assetId : 'unknown';
+    const kind = typeof payload.kind === 'string' ? payload.kind.toLowerCase() : undefined;
+    try {
+      await this.mediaBus.publish('media', event, payload, {
+        dedupKey: `media:${event}:${assetId}`,
+        tags: ['media-hub', 'media', event, ...(kind ? [kind] : [])],
+      });
+    } catch (err) {
+      this.logger.debug(
+        `Failed to publish media.${event} to StackBus: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   }
 }

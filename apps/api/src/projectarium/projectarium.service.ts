@@ -1,6 +1,8 @@
-import { Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, Optional, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { ProjectBusClient } from '@lemon/stack-bus';
 import { Observable, Subject } from 'rxjs';
+import { StackBusService } from '../bus/stack-bus.service';
 import {
   HealthProbeResult,
   ProjectariumAnalytics,
@@ -62,9 +64,14 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
   private readonly changesSubject$ = new Subject<ProjectariumChangeEvent>();
   private probeTimer: NodeJS.Timeout | null = null;
   private isProbingAll = false;
+  private readonly projectariumBus?: ProjectBusClient;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly stackBus?: StackBusService,
+  ) {
     this.engine = new ProjectariumEngine();
+    this.projectariumBus = this.stackBus?.forProject('projectarium', 'lemon-projectarium');
   }
 
   changes$(): Observable<ProjectariumChangeEvent> {
@@ -115,12 +122,23 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       initialTodos: dto.initialTodos,
       author: dto.author,
     });
-    await this.persistProject(project);
+    await this.persistNewStand(project);
     this.changesSubject$.next({ kind: 'STAND_CREATED', project });
+    this.emitProjectariumBusEvent('stand', 'created', {
+      standId: project.id,
+      standSlug: project.slug,
+      standName: project.name,
+    }, [project.slug]);
     return project;
   }
 
   async registerOrAttach(dto: ProjectariumRegisterDto): Promise<ProjectariumRegisterResponse> {
+    const existing =
+      (dto.projectToken ? this.engine.getProject(dto.projectToken) : undefined) ??
+      (dto.projectSlug ? this.engine.getProject(dto.projectSlug) : undefined);
+    const prevTodoIds = new Set(existing?.todos.map((t) => t.id) ?? []);
+    const prevChronicleIds = new Set(existing?.chronicle.map((e) => e.id) ?? []);
+
     const appContext = {
       ...(dto.context ?? {}),
       ...(dto.role ? { role: dto.role } : {}),
@@ -142,9 +160,24 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       initialTodos: dto.initialTodos,
       author: dto.author,
     });
-    await this.persistProject(response.project);
+    if (!existing) {
+      await this.persistNewStand(response.project);
+    } else {
+      await this.persistGranularDelta(response.project, {
+        appsToUpsert: [response.allocatedApp],
+        todosToUpsert: response.project.todos.filter((t) => !prevTodoIds.has(t.id)),
+        prevChronicleIds,
+      });
+    }
     await this.safeRecordAppRunStarted(response.project, response.allocatedApp);
     this.changesSubject$.next({ kind: 'CHRONICLE_ADDED', project: response.project });
+    this.emitProjectariumBusEvent('app', 'registered', {
+      standSlug: response.project.slug,
+      appName: response.allocatedApp.appName,
+      port: response.allocatedApp.port,
+      instanceId: response.allocatedApp.instanceId,
+      environment: response.allocatedApp.environment,
+    }, [response.project.slug, response.allocatedApp.appName]);
     return response;
   }
 
@@ -172,6 +205,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
 
   async addAppToProject(slugOrToken: string, dto: AddAppToProjectDto): Promise<ProjectariumRegisterResponse> {
     const project = this.getProject(slugOrToken);
+    const prevChronicleIds = new Set(project.chronicle.map((e) => e.id));
     const appContext = {
       ...(dto.role ? { role: dto.role } : {}),
       ...(dto.icon ? { icon: dto.icon } : {}),
@@ -189,26 +223,43 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       context: Object.keys(appContext).length > 0 ? appContext : undefined,
       author: dto.author,
     });
-    await this.persistProject(response.project);
+    await this.persistGranularDelta(response.project, {
+      appsToUpsert: [response.allocatedApp],
+      prevChronicleIds,
+    });
     await this.safeRecordAppRunStarted(response.project, response.allocatedApp);
     return response;
   }
 
   async releaseApp(slugOrToken: string, instanceId: string, author?: string): Promise<{ success: boolean }> {
     const project = this.getProject(slugOrToken);
+    const prevChronicleIds = new Set(project.chronicle.map((e) => e.id));
     const targetApp = project.apps.find((a) => a.instanceId === instanceId || a.id === instanceId);
     const success = this.engine.releaseApp(slugOrToken, instanceId, author);
     if (!success) {
       throw new NotFoundException(`App instance '${instanceId}' not found in project '${slugOrToken}'`);
     }
-    await this.persistProject(project);
+    await this.persistGranularDelta(project, {
+      removedInstanceIds: targetApp ? [targetApp.instanceId] : [instanceId],
+      prevChronicleIds,
+    });
     if (targetApp) {
       await this.safeRecordAppRunEnded(targetApp.instanceId, 'RELEASED');
+      this.emitProjectariumBusEvent('app', 'released', {
+        standSlug: project.slug,
+        appName: targetApp.appName,
+        port: targetApp.port,
+        instanceId: targetApp.instanceId,
+      }, [project.slug, targetApp.appName]);
     }
     return { success: true };
   }
 
   async heartbeat(dto: ProjectariumHeartbeatDto): Promise<ProjectariumHeartbeatResponse> {
+    const beforeMatch = this.engine.findAppByInstanceId(dto.instanceId);
+    const prevStatus = beforeMatch?.app.status;
+    const prevChronicleIds = new Set(beforeMatch?.project.chronicle.map((e) => e.id) ?? []);
+
     const outcome = this.engine.heartbeat(dto.instanceId, dto.leaseToken);
     if (!outcome.ok) {
       if (outcome.reason === 'NOT_FOUND') {
@@ -216,12 +267,33 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       }
       throw new UnauthorizedException(`Invalid lease token for instance '${dto.instanceId}'`);
     }
-    await this.safePersistProject(outcome.project);
+
+    if (prevStatus !== 'ONLINE') {
+      const recoveredApp = outcome.project.apps.find((a) => a.instanceId === dto.instanceId);
+      await this.persistGranularDelta(outcome.project, {
+        appsToUpsert: recoveredApp ? [recoveredApp] : [],
+        prevChronicleIds,
+        bestEffort: true,
+      });
+      this.emitProjectariumBusEvent('app', 'recovered', {
+        standSlug: outcome.result.projectSlug,
+        instanceId: outcome.result.instanceId,
+        port: outcome.result.port,
+        renewedAt: outcome.result.renewedAt,
+      }, [outcome.result.projectSlug]);
+    } else {
+      await this.safeTouchAppHeartbeat(dto.instanceId, outcome.result.renewedAt);
+      this.emitCoalescedHeartbeat(outcome.result);
+    }
+
     await this.safeRecordAppRunHeartbeat(dto.instanceId, outcome.result.renewedAt);
     return outcome.result;
   }
 
   async releaseByLease(dto: ProjectariumReleaseDto): Promise<ProjectariumReleaseResponse> {
+    const beforeMatch = this.engine.findAppByInstanceId(dto.instanceId);
+    const prevChronicleIds = new Set(beforeMatch?.project.chronicle.map((e) => e.id) ?? []);
+
     const outcome = this.engine.releaseByLease(dto.instanceId, dto.leaseToken, dto.author || 'agent');
     if (!outcome.ok) {
       if (outcome.reason === 'NOT_FOUND') {
@@ -229,8 +301,17 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       }
       throw new UnauthorizedException(`Invalid lease token for instance '${dto.instanceId}'`);
     }
-    await this.safePersistProject(outcome.project);
+    await this.persistGranularDelta(outcome.project, {
+      removedInstanceIds: [outcome.result.instanceId],
+      prevChronicleIds,
+      bestEffort: true,
+    });
     await this.safeRecordAppRunEnded(outcome.result.instanceId, 'RELEASED', outcome.result.releasedAt);
+    this.emitProjectariumBusEvent('app', 'released', {
+      standSlug: outcome.project.slug,
+      instanceId: outcome.result.instanceId,
+      releasedAt: outcome.result.releasedAt,
+    }, [outcome.project.slug]);
     return outcome.result;
   }
 
@@ -255,6 +336,13 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     options: { recordSummary?: boolean; author?: string } = { recordSummary: true },
   ): Promise<ProjectariumProject> {
     const project = this.getProject(slugOrToken);
+    const prevChronicleIds = new Set(project.chronicle.map((e) => e.id));
+    const prevAppState = new Map(
+      project.apps.map((a) => [
+        a.id,
+        `${a.status}:${a.consecutiveFailures}:${a.lastPingAt ?? ''}:${a.pingLatencyMs ?? ''}`,
+      ]),
+    );
     const dockerHostAlias = process.env.PROJECTARIUM_LOCALHOST_ALIAS;
     const shouldProbeLocal = process.env.PROJECTARIUM_PROBE_LOCAL === 'true';
 
@@ -269,13 +357,31 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       })),
     );
 
+    let anyStatusChanged = false;
+    const touchedApps: ProjectariumApp[] = [];
     for (const { app, probe } of results) {
       const prevStatus = app.status;
       const updated = this.engine.recordProbeResult(project.slug, app.instanceId || app.id, probe, {
         recordChronicleOnFailure: Boolean(options.recordSummary),
       });
+      if (updated) {
+        if (updated.status !== prevStatus) {
+          anyStatusChanged = true;
+        }
+        const snapshot = `${updated.status}:${updated.consecutiveFailures}:${updated.lastPingAt ?? ''}:${updated.pingLatencyMs ?? ''}`;
+        if (prevAppState.get(updated.id) !== snapshot) {
+          touchedApps.push(updated);
+        }
+      }
       if (updated && prevStatus !== 'EVICTED' && updated.status === 'EVICTED') {
         await this.safeRecordAppRunEnded(updated.instanceId, 'EVICTED');
+        this.emitProjectariumBusEvent('app', 'evicted', {
+          standSlug: project.slug,
+          appName: updated.appName,
+          port: updated.port,
+          instanceId: updated.instanceId,
+          reason: 'PROBE_FAILED',
+        }, [project.slug, updated.appName]);
       }
     }
 
@@ -283,24 +389,46 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       this.engine.recordStandPingSummary(project.slug, options.author || 'health-probe');
     }
 
-    await this.safePersistProject(project);
+    if (options.recordSummary || anyStatusChanged) {
+      await this.persistGranularDelta(project, {
+        appsToUpsert: touchedApps,
+        prevChronicleIds,
+        bestEffort: true,
+      });
+    }
     return project;
   }
 
   async expireStaleLocalLeases(): Promise<void> {
+    const prevChronicleIdsByProject = new Map(
+      this.engine.listProjects().map((p) => [p.id, new Set(p.chronicle.map((e) => e.id))]),
+    );
     const expired = this.engine.expireStaleLocalLeases(this.getLocalLeaseTtlMs());
     if (expired.length === 0) {
       return;
     }
 
-    const touchedProjects = new Map<string, ProjectariumProject>();
+    const touchedProjects = new Map<string, { project: ProjectariumProject; removedInstanceIds: string[] }>();
     for (const { project, app } of expired) {
-      touchedProjects.set(project.id, project);
+      const entry = touchedProjects.get(project.id) ?? { project, removedInstanceIds: [] };
+      entry.removedInstanceIds.push(app.instanceId);
+      touchedProjects.set(project.id, entry);
       await this.safeRecordAppRunEnded(app.instanceId, 'TTL_EXPIRED');
+      this.emitProjectariumBusEvent('app', 'evicted', {
+        standSlug: project.slug,
+        appName: app.appName,
+        port: app.port,
+        instanceId: app.instanceId,
+        reason: 'TTL_EXPIRED',
+      }, [project.slug, app.appName]);
     }
 
-    for (const project of touchedProjects.values()) {
-      await this.safePersistProject(project);
+    for (const { project, removedInstanceIds } of touchedProjects.values()) {
+      await this.persistGranularDelta(project, {
+        removedInstanceIds,
+        prevChronicleIds: prevChronicleIdsByProject.get(project.id),
+        bestEffort: true,
+      });
     }
   }
 
@@ -309,6 +437,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     instanceId: string,
   ): Promise<{ app: ProjectariumApp; probe: HealthProbeResult }> {
     const project = this.getProject(slugOrToken);
+    const prevChronicleIds = new Set(project.chronicle.map((e) => e.id));
     const targetApp = project.apps.find((a) => a.instanceId === instanceId || a.id === instanceId);
     if (!targetApp) {
       throw new NotFoundException(`App instance '${instanceId}' not found in project '${slugOrToken}'`);
@@ -321,7 +450,11 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     const updated = this.engine.recordProbeResult(project.slug, targetApp.instanceId || targetApp.id, probe, {
       recordChronicleOnFailure: true,
     });
-    await this.safePersistProject(project);
+    await this.persistGranularDelta(project, {
+      appsToUpsert: [updated || targetApp],
+      prevChronicleIds,
+      bestEffort: true,
+    });
 
     return { app: updated || targetApp, probe };
   }
@@ -347,18 +480,9 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async safePersistProject(project: ProjectariumProject): Promise<void> {
-    try {
-      await this.persistProject(project);
-    } catch (error) {
-      this.logger.warn(
-        `Skipped persisting stand '${project.slug}' (DB unavailable): ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
-
   async addTodo(slugOrToken: string, dto: AddProjectTodoDto): Promise<ProjectariumTodoItem> {
     const project = this.getProject(slugOrToken);
+    const prevChronicleIds = new Set(project.chronicle.map((e) => e.id));
     const todo = this.engine.addTodo(slugOrToken, {
       title: dto.title,
       scope: dto.scope,
@@ -369,24 +493,45 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     if (!todo) {
       throw new NotFoundException(`Project stand '${slugOrToken}' not found`);
     }
-    await this.persistProject(project);
+    await this.persistGranularDelta(project, {
+      todosToUpsert: [todo],
+      prevChronicleIds,
+    });
     this.changesSubject$.next({ kind: 'TODO_CHANGED', project, todo });
+    this.emitProjectariumBusEvent('todo', 'changed', {
+      standSlug: project.slug,
+      todoId: todo.id,
+      title: todo.title,
+      completed: todo.completed,
+      priority: todo.priority,
+    }, [project.slug]);
     return todo;
   }
 
   async toggleTodo(slugOrToken: string, todoId: string): Promise<ProjectariumTodoItem> {
     const project = this.getProject(slugOrToken);
+    const prevChronicleIds = new Set(project.chronicle.map((e) => e.id));
     const todo = this.engine.toggleTodo(slugOrToken, todoId);
     if (!todo) {
       throw new NotFoundException(`Todo '${todoId}' not found in project '${slugOrToken}'`);
     }
-    await this.persistProject(project);
+    await this.persistGranularDelta(project, {
+      todosToUpsert: [todo],
+      prevChronicleIds,
+    });
     this.changesSubject$.next({ kind: 'TODO_CHANGED', project, todo });
+    this.emitProjectariumBusEvent('todo', 'changed', {
+      standSlug: project.slug,
+      todoId: todo.id,
+      title: todo.title,
+      completed: todo.completed,
+    }, [project.slug]);
     return todo;
   }
 
   async addNote(slugOrToken: string, dto: AddProjectNoteDto): Promise<ProjectariumNoteItem> {
     const project = this.getProject(slugOrToken);
+    const prevChronicleIds = new Set(project.chronicle.map((e) => e.id));
     const note = this.engine.addNote(slugOrToken, {
       title: dto.title,
       content: dto.content,
@@ -396,8 +541,17 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     if (!note) {
       throw new NotFoundException(`Project stand '${slugOrToken}' not found`);
     }
-    await this.persistProject(project);
+    await this.persistGranularDelta(project, {
+      notesToUpsert: [note],
+      prevChronicleIds,
+    });
     this.changesSubject$.next({ kind: 'NOTE_CHANGED', project, note });
+    this.emitProjectariumBusEvent('note', 'changed', {
+      standSlug: project.slug,
+      noteId: note.id,
+      title: note.title,
+      author: note.author,
+    }, [project.slug]);
     return note;
   }
 
@@ -407,6 +561,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     dto: UpdateProjectNoteDto,
   ): Promise<ProjectariumNoteItem> {
     const project = this.getProject(slugOrToken);
+    const prevChronicleIds = new Set(project.chronicle.map((e) => e.id));
     const note = this.engine.updateNote(slugOrToken, noteId, {
       title: dto.title,
       content: dto.content,
@@ -416,18 +571,31 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     if (!note) {
       throw new NotFoundException(`Note '${noteId}' not found in project '${slugOrToken}'`);
     }
-    await this.persistProject(project);
+    await this.persistGranularDelta(project, {
+      notesToUpsert: [note],
+      prevChronicleIds,
+    });
     this.changesSubject$.next({ kind: 'NOTE_CHANGED', project, note });
+    this.emitProjectariumBusEvent('note', 'changed', {
+      standSlug: project.slug,
+      noteId: note.id,
+      title: note.title,
+      author: note.author,
+    }, [project.slug]);
     return note;
   }
 
   async deleteNote(slugOrToken: string, noteId: string): Promise<{ success: boolean }> {
     const project = this.getProject(slugOrToken);
+    const prevChronicleIds = new Set(project.chronicle.map((e) => e.id));
     const deleted = this.engine.deleteNote(slugOrToken, noteId);
     if (!deleted) {
       throw new NotFoundException(`Note '${noteId}' not found in project '${slugOrToken}'`);
     }
-    await this.persistProject(project);
+    await this.persistGranularDelta(project, {
+      deletedNoteIds: [noteId],
+      prevChronicleIds,
+    });
     return { success: true };
   }
 
@@ -442,8 +610,19 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     if (!event) {
       throw new NotFoundException(`Project stand '${slugOrToken}' not found`);
     }
-    await this.persistProject(project);
+    await this.persistGranularDelta(project, {
+      directChronicleEvents: [event],
+    });
     this.changesSubject$.next({ kind: 'CHRONICLE_ADDED', project, event });
+    this.emitProjectariumBusEvent('chronicle', 'added', {
+      standSlug: project.slug,
+      chronicleId: event.id,
+      type: event.type,
+      scope: event.scope,
+      targetAppName: event.targetAppName,
+      description: event.description,
+      author: event.author,
+    }, [project.slug]);
     return event;
   }
 
@@ -759,6 +938,46 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private async safeTouchAppHeartbeat(instanceId: string, renewedAtIso: string): Promise<void> {
+    try {
+      await this.prisma.projectariumAppRecord.updateMany({
+        where: { instanceId },
+        data: {
+          lastPingAt: new Date(renewedAtIso),
+          consecutiveFailures: 0,
+          status: 'ONLINE',
+        },
+      });
+    } catch (error) {
+      this.logger.debug(
+        `Skipped lightweight app heartbeat touch for '${instanceId}': ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  private emitCoalescedHeartbeat(hb: ProjectariumHeartbeatResponse): void {
+    if (!this.projectariumBus) return;
+    const windowBucket = Math.floor(Date.now() / 5000);
+    void this.projectariumBus
+      .publish(
+        'app',
+        'heartbeat',
+        {
+          standSlug: hb.projectSlug,
+          instanceId: hb.instanceId,
+          port: hb.port,
+          renewedAt: hb.renewedAt,
+        },
+        {
+          dedupKey: `hb:${hb.instanceId}:${windowBucket}`,
+          tags: ['projectarium', 'heartbeat', 'ephemeral', hb.projectSlug],
+        },
+      )
+      .catch(() => {});
+  }
+
   private async safeRecordAppRunHeartbeat(instanceId: string, renewedAtIso: string): Promise<void> {
     try {
       await this.prisma.projectariumAppRunRecord.updateMany({
@@ -801,6 +1020,26 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private emitProjectariumBusEvent(
+    domain: string,
+    event: string,
+    payload: Record<string, unknown>,
+    extraTags: string[] = [],
+  ): void {
+    if (!this.projectariumBus) return;
+    void this.projectariumBus
+      .publish(domain, event, payload, {
+        tags: ['projectarium', domain, event, ...extraTags].filter(Boolean),
+      })
+      .catch((err) => {
+        this.logger.debug(
+          `Projectarium StackBus publish skipped: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      });
+  }
+
   private async syncFromDatabase(): Promise<void> {
     const defaultUniverseProject = this.engine.getProject('lemon-universe');
     const stands = await this.prisma.projectariumStand.findMany({
@@ -819,7 +1058,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     if (stands.length === 0) {
       const defaults = this.engine.listProjects();
       for (const project of defaults) {
-        await this.persistProject(project);
+        await this.persistNewStand(project);
       }
       await this.safeBackfillActiveRuns(defaults);
       this.logger.log(`Seeded ${defaults.length} default Projectarium stands into PostgreSQL.`);
@@ -901,7 +1140,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
 
     if (defaultUniverseProject && !hydrated.some((p) => p.slug === 'lemon-universe')) {
       hydrated.push(defaultUniverseProject);
-      await this.persistProject(defaultUniverseProject);
+      await this.persistNewStand(defaultUniverseProject);
       this.logger.log('Seeded Lemon-Universe stand into existing Projectarium PostgreSQL.');
     }
 
@@ -970,7 +1209,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
         `Skipped migrating app runs for '${legacy.slug}': ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-    await this.persistProject(migrated);
+    await this.persistNewStand(migrated);
     hydrated[legacyIndex] = migrated;
     this.logger.log(`Migrated legacy stand '${legacy.slug}' -> '${migrated.slug}' in PostgreSQL.`);
   }
@@ -1019,122 +1258,253 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async persistProject(project: ProjectariumProject): Promise<void> {
+  private buildStandUpsertPayload(project: ProjectariumProject) {
+    return {
+      where: { id: project.id },
+      create: {
+        id: project.id,
+        slug: project.slug,
+        name: project.name,
+        neuronWorkspace: project.neuronWorkspace,
+        projectToken: project.projectToken,
+        context: project.context as Prisma.InputJsonValue,
+        createdAt: new Date(project.createdAt),
+        updatedAt: new Date(project.updatedAt),
+      },
+      update: {
+        slug: project.slug,
+        name: project.name,
+        neuronWorkspace: project.neuronWorkspace,
+        projectToken: project.projectToken,
+        context: project.context as Prisma.InputJsonValue,
+        updatedAt: new Date(project.updatedAt),
+      },
+    };
+  }
+
+  private buildAppRowData(standId: string, app: ProjectariumApp) {
+    const machine = resolveMachineIdentity({
+      machineId: app.machineId,
+      machineName: app.machineName,
+      networkMode: app.networkMode,
+      host: app.host,
+    });
+    const metadata = {
+      ...(app.metadata ?? {}),
+      ...(app.host ? { host: app.host } : {}),
+      machineId: machine.machineId,
+      machineName: machine.machineName,
+    };
+    return {
+      id: app.id,
+      standId,
+      appName: app.appName,
+      port: app.port,
+      instanceId: app.instanceId,
+      leaseToken: app.leaseToken,
+      environment: app.environment,
+      networkMode: app.networkMode,
+      machineId: machine.machineId,
+      machineName: machine.machineName,
+      status: app.status,
+      healthUrl: app.healthUrl ?? null,
+      lastPingAt: app.lastPingAt ? new Date(app.lastPingAt) : null,
+      pingLatencyMs: app.pingLatencyMs ?? null,
+      consecutiveFailures: app.consecutiveFailures,
+      registeredAt: new Date(app.registeredAt),
+      metadata: Object.keys(metadata).length > 0 ? (metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
+    };
+  }
+
+  private buildTodoRowData(standId: string, todo: ProjectariumTodoItem) {
+    return {
+      id: todo.id,
+      standId,
+      title: todo.title,
+      completed: todo.completed,
+      scope: todo.scope,
+      targetAppName: todo.targetAppName ?? null,
+      author: todo.author,
+      priority: todo.priority,
+      createdAt: new Date(todo.createdAt),
+      completedAt: todo.completedAt ? new Date(todo.completedAt) : null,
+    };
+  }
+
+  private buildNoteRowData(standId: string, note: ProjectariumNoteItem) {
+    return {
+      id: note.id,
+      standId,
+      title: note.title ?? null,
+      content: note.content,
+      author: note.author,
+      tags: note.tags ?? [],
+      createdAt: new Date(note.createdAt),
+      updatedAt: new Date(note.updatedAt),
+    };
+  }
+
+  private buildEventRowData(standId: string, ev: ProjectariumEvent) {
+    return {
+      id: ev.id,
+      standId,
+      type: ev.type,
+      scope: ev.scope,
+      targetAppName: ev.targetAppName ?? null,
+      description: ev.description,
+      author: ev.author,
+      metadata: ev.metadata ? (ev.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
+      timestamp: new Date(ev.timestamp),
+    };
+  }
+
+  private async persistNewStand(project: ProjectariumProject): Promise<void> {
     const chronicleSlice = project.chronicle.slice(0, MAX_PERSISTED_CHRONICLE_EVENTS);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.projectariumStand.upsert({
-        where: { id: project.id },
-        create: {
-          id: project.id,
-          slug: project.slug,
-          name: project.name,
-          neuronWorkspace: project.neuronWorkspace,
-          projectToken: project.projectToken,
-          context: project.context as Prisma.InputJsonValue,
-          createdAt: new Date(project.createdAt),
-          updatedAt: new Date(project.updatedAt),
-        },
-        update: {
-          slug: project.slug,
-          name: project.name,
-          neuronWorkspace: project.neuronWorkspace,
-          projectToken: project.projectToken,
-          context: project.context as Prisma.InputJsonValue,
-          updatedAt: new Date(project.updatedAt),
-        },
-      });
+      await tx.projectariumStand.upsert(this.buildStandUpsertPayload(project));
 
-      await tx.projectariumAppRecord.deleteMany({ where: { standId: project.id } });
       if (project.apps.length > 0) {
         await tx.projectariumAppRecord.createMany({
-          data: project.apps.map((app) => {
-            const machine = resolveMachineIdentity({
-              machineId: app.machineId,
-              machineName: app.machineName,
-              networkMode: app.networkMode,
-              host: app.host,
-            });
-            const metadata = {
-              ...(app.metadata ?? {}),
-              ...(app.host ? { host: app.host } : {}),
-              machineId: machine.machineId,
-              machineName: machine.machineName,
-            };
-            return {
-              id: app.id,
-              standId: project.id,
-              appName: app.appName,
-              port: app.port,
-              instanceId: app.instanceId,
-              leaseToken: app.leaseToken,
-              environment: app.environment,
-              networkMode: app.networkMode,
-              machineId: machine.machineId,
-              machineName: machine.machineName,
-              status: app.status,
-              healthUrl: app.healthUrl ?? null,
-              lastPingAt: app.lastPingAt ? new Date(app.lastPingAt) : null,
-              pingLatencyMs: app.pingLatencyMs ?? null,
-              consecutiveFailures: app.consecutiveFailures,
-              registeredAt: new Date(app.registeredAt),
-              metadata: Object.keys(metadata).length > 0 ? (metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
-            };
-          }),
+          data: project.apps.map((app) => this.buildAppRowData(project.id, app)),
+          skipDuplicates: true,
         });
       }
 
-      await tx.projectariumTodoRecord.deleteMany({ where: { standId: project.id } });
       if (project.todos.length > 0) {
         await tx.projectariumTodoRecord.createMany({
-          data: project.todos.map((todo) => ({
-            id: todo.id,
-            standId: project.id,
-            title: todo.title,
-            completed: todo.completed,
-            scope: todo.scope,
-            targetAppName: todo.targetAppName ?? null,
-            author: todo.author,
-            priority: todo.priority,
-            createdAt: new Date(todo.createdAt),
-            completedAt: todo.completedAt ? new Date(todo.completedAt) : null,
-          })),
+          data: project.todos.map((todo) => this.buildTodoRowData(project.id, todo)),
+          skipDuplicates: true,
         });
       }
 
-      await tx.projectariumNoteRecord.deleteMany({ where: { standId: project.id } });
       if (project.notes && project.notes.length > 0) {
         await tx.projectariumNoteRecord.createMany({
-          data: project.notes.map((note) => ({
-            id: note.id,
-            standId: project.id,
-            title: note.title ?? null,
-            content: note.content,
-            author: note.author,
-            tags: note.tags ?? [],
-            createdAt: new Date(note.createdAt),
-            updatedAt: new Date(note.updatedAt),
-          })),
+          data: project.notes.map((note) => this.buildNoteRowData(project.id, note)),
+          skipDuplicates: true,
         });
       }
 
-      await tx.projectariumEventRecord.deleteMany({ where: { standId: project.id } });
       if (chronicleSlice.length > 0) {
         await tx.projectariumEventRecord.createMany({
-          data: chronicleSlice.map((ev) => ({
-            id: ev.id,
-            standId: project.id,
-            type: ev.type,
-            scope: ev.scope,
-            targetAppName: ev.targetAppName ?? null,
-            description: ev.description,
-            author: ev.author,
-            metadata: ev.metadata ? (ev.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
-            timestamp: new Date(ev.timestamp),
-          })),
+          data: chronicleSlice.map((ev) => this.buildEventRowData(project.id, ev)),
+          skipDuplicates: true,
         });
       }
     });
+  }
+
+  private async persistGranularDelta(
+    project: ProjectariumProject,
+    opts: {
+      appsToUpsert?: ProjectariumApp[];
+      removedInstanceIds?: string[];
+      todosToUpsert?: ProjectariumTodoItem[];
+      notesToUpsert?: ProjectariumNoteItem[];
+      deletedNoteIds?: string[];
+      prevChronicleIds?: Set<string>;
+      directChronicleEvents?: ProjectariumEvent[];
+      bestEffort?: boolean;
+    },
+  ): Promise<void> {
+    const run = async () => {
+      const chronicleToPersist =
+        opts.directChronicleEvents ??
+        (opts.prevChronicleIds
+          ? project.chronicle
+              .slice(0, MAX_PERSISTED_CHRONICLE_EVENTS)
+              .filter((ev) => !opts.prevChronicleIds!.has(ev.id))
+          : []);
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.projectariumStand.upsert(this.buildStandUpsertPayload(project));
+
+        for (const app of opts.appsToUpsert ?? []) {
+          const row = this.buildAppRowData(project.id, app);
+          const { id: _id, standId: _standId, registeredAt: _reg, ...updateData } = row;
+          await tx.projectariumAppRecord.upsert({
+            where: { id: app.id },
+            create: row,
+            update: updateData,
+          });
+        }
+
+        if (opts.removedInstanceIds && opts.removedInstanceIds.length > 0) {
+          await tx.projectariumAppRecord.deleteMany({
+            where: {
+              standId: project.id,
+              instanceId: { in: opts.removedInstanceIds },
+            },
+          });
+        }
+
+        for (const todo of opts.todosToUpsert ?? []) {
+          const row = this.buildTodoRowData(project.id, todo);
+          const { id: _id, standId: _standId, createdAt: _created, ...updateData } = row;
+          await tx.projectariumTodoRecord.upsert({
+            where: { id: todo.id },
+            create: row,
+            update: updateData,
+          });
+        }
+
+        for (const note of opts.notesToUpsert ?? []) {
+          const row = this.buildNoteRowData(project.id, note);
+          const { id: _id, standId: _standId, createdAt: _created, ...updateData } = row;
+          await tx.projectariumNoteRecord.upsert({
+            where: { id: note.id },
+            create: row,
+            update: updateData,
+          });
+        }
+
+        if (opts.deletedNoteIds && opts.deletedNoteIds.length > 0) {
+          await tx.projectariumNoteRecord.deleteMany({
+            where: {
+              standId: project.id,
+              id: { in: opts.deletedNoteIds },
+            },
+          });
+        }
+
+        for (const ev of chronicleToPersist) {
+          const row = this.buildEventRowData(project.id, ev);
+          const { id: _id, standId: _standId, ...updateData } = row;
+          await tx.projectariumEventRecord.upsert({
+            where: { id: ev.id },
+            create: row,
+            update: updateData,
+          });
+        }
+
+        if (chronicleToPersist.length > 0 && project.chronicle.length > MAX_PERSISTED_CHRONICLE_EVENTS) {
+          const overflow = await tx.projectariumEventRecord.findMany({
+            where: { standId: project.id },
+            orderBy: { timestamp: 'desc' },
+            skip: MAX_PERSISTED_CHRONICLE_EVENTS,
+            select: { id: true },
+          });
+          if (overflow.length > 0) {
+            await tx.projectariumEventRecord.deleteMany({
+              where: { id: { in: overflow.map((r) => r.id) } },
+            });
+          }
+        }
+      });
+    };
+
+    if (!opts.bestEffort) {
+      await run();
+      return;
+    }
+
+    try {
+      await run();
+    } catch (error) {
+      this.logger.warn(
+        `Skipped persisting granular delta for stand '${project.slug}' (DB unavailable): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   private asJsonRecord(value: Prisma.JsonValue | null | undefined): Record<string, any> {
