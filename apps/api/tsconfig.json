@@ -13,6 +13,7 @@
     "baseUrl": "./",
     "paths": {
       "@lemon/core-combinator": ["../../packages/core-combinator/dist"],
+      "@lemon/stack-bus": ["../../packages/lemon-stack-bus/dist"],
       "@lemon/core-combinator-sdk": ["../../packages/core-combinator-sdk/dist"],
       "@lemon/seasons-neurons": ["../../packages/lemon-seasons-neurons/dist"],
       "@lemon/media-hub-neurons": ["../../packages/lemon-media-hub-neurons/dist"],

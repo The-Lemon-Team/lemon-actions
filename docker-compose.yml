@@ -8,9 +8,13 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://lemon:secret@postgres:5432/lemon_db
+      NATS_URL: nats://nats:4222
+      LEMON_BUS_DRIVER: auto
       CORS_ORIGIN: "*"
     depends_on:
       postgres:
+        condition: service_healthy
+      nats:
         condition: service_healthy
 
   postgres:
@@ -29,5 +33,20 @@ services:
       timeout: 5s
       retries: 10
 
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - lemon_dev_natsdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   lemon_dev_pgdata:
+  lemon_dev_natsdata:

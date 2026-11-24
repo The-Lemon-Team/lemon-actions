@@ -11,6 +11,7 @@ RUN npm ci --prefix apps/api \
 # Copy & build internal @lemon/* packages in dependency order
 COPY packages ./packages
 RUN /workspace/apps/api/node_modules/.bin/tsc -p packages/core-combinator/tsconfig.json \
+ && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-stack-bus/tsconfig.json \
  && /workspace/apps/api/node_modules/.bin/tsc -p packages/core-combinator-sdk/tsconfig.json \
  && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-projectarium/tsconfig.json \
  && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-seasons-neurons/tsconfig.json \
@@ -19,12 +20,14 @@ RUN /workspace/apps/api/node_modules/.bin/tsc -p packages/core-combinator/tsconf
 
 # Populate @lemon/* inside apps/api/node_modules for runtime resolution
 RUN mkdir -p /workspace/apps/api/node_modules/@lemon/core-combinator \
+             /workspace/apps/api/node_modules/@lemon/stack-bus \
              /workspace/apps/api/node_modules/@lemon/core-combinator-sdk \
              /workspace/apps/api/node_modules/@lemon/projectarium \
              /workspace/apps/api/node_modules/@lemon/seasons-neurons \
              /workspace/apps/api/node_modules/@lemon/media-hub-neurons \
              /workspace/apps/api/node_modules/@lemon/ai-neurons \
  && cp -r packages/core-combinator/package.json packages/core-combinator/dist /workspace/apps/api/node_modules/@lemon/core-combinator/ \
+ && cp -r packages/lemon-stack-bus/package.json packages/lemon-stack-bus/dist /workspace/apps/api/node_modules/@lemon/stack-bus/ \
  && cp -r packages/core-combinator-sdk/package.json packages/core-combinator-sdk/dist /workspace/apps/api/node_modules/@lemon/core-combinator-sdk/ \
  && cp -r packages/lemon-projectarium/package.json packages/lemon-projectarium/dist /workspace/apps/api/node_modules/@lemon/projectarium/ \
  && cp -r packages/lemon-seasons-neurons/package.json packages/lemon-seasons-neurons/dist /workspace/apps/api/node_modules/@lemon/seasons-neurons/ \

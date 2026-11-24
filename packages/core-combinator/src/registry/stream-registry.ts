@@ -40,13 +40,17 @@ export class StreamRegistry {
     return this.streams.get(streamId);
   }
 
-  listStreams(filter?: { flowType?: string; folderId?: string }): StreamDescriptor[] {
+  listStreams(filter?: { flowType?: string; folderId?: string; projectSlug?: string }): StreamDescriptor[] {
     let result = Array.from(this.streams.values());
     if (filter?.flowType) {
       result = result.filter((s) => s.flowType === filter.flowType);
     }
     if (filter?.folderId) {
       result = result.filter((s) => s.folderId === filter.folderId);
+    }
+    if (filter?.projectSlug) {
+      const target = filter.projectSlug.trim().toLowerCase();
+      result = result.filter((s) => (s.projectSlug ?? '').trim().toLowerCase() === target);
     }
     return result;
   }
@@ -115,10 +119,34 @@ export class StreamRegistry {
   matchesFilter(packet: FlowImpulsePacket, filter?: StreamFilter): boolean {
     if (!filter) return true;
     if (filter.folderId && packet.folderId !== filter.folderId) return false;
+    if (filter.projectSlug) {
+      const want = filter.projectSlug.trim().toLowerCase();
+      const got = (packet.projectSlug ?? '').trim().toLowerCase();
+      if (got !== want) return false;
+    }
+    if (filter.topic) {
+      if (!packet.topic || !matchesTopicPattern(filter.topic, packet.topic)) return false;
+    }
     if (filter.flowId && packet.flowId !== filter.flowId) return false;
     if (filter.flowType && packet.flowType !== filter.flowType) return false;
     if (filter.impulseType && packet.type !== filter.impulseType) return false;
     if (filter.persistenceTier && packet.persistence !== filter.persistenceTier) return false;
     return true;
   }
+}
+
+function matchesTopicPattern(pattern: string, topic: string): boolean {
+  const p = pattern.trim().toLowerCase();
+  const t = topic.trim().toLowerCase();
+  if (!p || !t) return false;
+  if (p === '>' || p === t) return true;
+  const pTokens = p.split('.').filter(Boolean);
+  const tTokens = t.split('.').filter(Boolean);
+  for (let i = 0; i < pTokens.length; i++) {
+    const pt = pTokens[i];
+    if (pt === '>') return i < tTokens.length;
+    if (i >= tTokens.length) return false;
+    if (pt !== '*' && pt !== tTokens[i]) return false;
+  }
+  return pTokens.length === tTokens.length;
 }

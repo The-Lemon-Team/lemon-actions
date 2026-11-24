@@ -35,6 +35,9 @@ export class CreateFlowDto {
   @IsOptional() @IsUUID()
   profileId?: string | null;
 
+  @IsOptional() @IsString() @MaxLength(120)
+  projectSlug?: string | null;
+
   /** Tag names (leading '#' is stripped); created if missing. */
   @IsOptional() @IsArray() @IsString({ each: true }) @Transform(({ value }) => stripHash(value))
   tags?: string[];
@@ -62,6 +65,9 @@ export class UpdateFlowDto {
   @IsOptional() @IsUUID()
   folderId?: string | null;
 
+  @IsOptional() @IsString() @MaxLength(120)
+  projectSlug?: string | null;
+
   @IsOptional() @IsArray() @IsString({ each: true }) @Transform(({ value }) => stripHash(value))
   tags?: string[];
 
@@ -83,6 +89,9 @@ export class ListFlowsQueryDto {
 
   @IsOptional() @IsUUID()
   profileId?: string;
+
+  @IsOptional() @IsString() @MaxLength(120)
+  projectSlug?: string;
 
   /** ltree scope prefix, e.g. 'home' or 'home.supplies' */
   @IsOptional()

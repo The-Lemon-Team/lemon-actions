@@ -17,6 +17,7 @@ export interface FlowView {
   isExclusive: boolean;
   folderId: string | null;
   profileId: string | null;
+  projectSlug: string | null;
   tags: { id: string; name: string; colorHex?: string }[];
   config?: unknown;
   orchestratorRules?: unknown;
@@ -34,6 +35,7 @@ export function toFlowView(f: FlowWithTags): FlowView {
     isExclusive: f.isExclusive,
     folderId: f.folderId,
     profileId: f.profileId ?? null,
+    projectSlug: (f as any).projectSlug ?? null,
     tags: f.tags.map((t: { tag: Tag }) => ({
       id: t.tag.id,
       name: t.tag.name,
@@ -76,6 +78,7 @@ export class FlowsRepository {
     const where: Prisma.FlowWhereInput = {
       folderId: folderFilter,
       profileId: q.profileId,
+      ...(q.projectSlug ? { projectSlug: q.projectSlug } : {}),
       type: q.type,
       status: q.status,
       tags: q.tag ? { some: { tag: { name: q.tag } } } : undefined,

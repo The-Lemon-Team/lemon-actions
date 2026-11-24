@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "baseUrl": ".",
+    "paths": {
+      "rxjs": ["../../apps/api/node_modules/rxjs"],
+      "rxjs/*": ["../../apps/api/node_modules/rxjs/*"],
+      "nats": ["../../node_modules/nats", "../../apps/api/node_modules/nats"],
+      "nats/*": ["../../node_modules/nats/*", "../../apps/api/node_modules/nats/*"]
+    },
+    "typeRoots": [
+      "../../apps/api/node_modules/@types",
+      "../../node_modules/@types"
+    ],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"]
+}

@@ -11,6 +11,7 @@ import { FlowStatus, FlowType } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { StackBusService } from '../bus/stack-bus.service';
 import { FlowsService } from '../flows/flows.service';
 import { FlowsEventBusService } from '../flows/flows-event-bus.service';
 import { toLtreeLabel } from '../folders/folders.service';
@@ -79,6 +80,7 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
     private readonly foldersRepo: FoldersRepository,
     private readonly flowsService: FlowsService,
     @Optional() private readonly eventBus?: FlowsEventBusService,
+    @Optional() private readonly stackBus?: StackBusService,
   ) {}
 
   async onModuleInit() {
@@ -632,12 +634,30 @@ export class CodeTasksService implements OnModuleInit, OnModuleDestroy {
         id: `hb-${Date.now()}`,
         type: 'AGENT_HEARTBEAT',
         folderId: null,
+        projectSlug: 'lemon-code',
+        topic: 'lemon.lemon-code.agent.heartbeat',
         flowId,
         flowName: 'Antigravity Agent Session Orchestrator',
         flowType: FlowType.OBSERVER,
         timestamp: now,
         payload: { sessionId: dto.sessionId, lastSeen: now },
       });
+    }
+
+    if (this.stackBus) {
+      const windowBucket = Math.floor(Date.now() / 5000);
+      void this.stackBus
+        .forProject('lemon-code', 'code-tasks')
+        .publish(
+          'agent',
+          'heartbeat',
+          { sessionId: dto.sessionId, lastSeen: now },
+          {
+            dedupKey: `agent-hb:${dto.sessionId}:${windowBucket}`,
+            tags: ['lemon-code', 'heartbeat', 'ephemeral'],
+          },
+        )
+        .catch(() => {});
     }
 
     return { ok: true, timestamp: now };

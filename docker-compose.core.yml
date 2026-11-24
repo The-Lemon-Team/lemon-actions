@@ -38,10 +38,14 @@ services:
       LEMON_SEASONS_URL: ${LEMON_SEASONS_URL:-http://host.docker.internal:3001}
       LEMON_MEDIA_HUB_URL: ${LEMON_MEDIA_HUB_URL:-http://host.docker.internal:3005}
       LEMON_AI_SERVICE_URL: ${LEMON_AI_SERVICE_URL:-http://host.docker.internal:3006}
-      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,host.docker.internal,192.168.1.100}
-      no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,host.docker.internal,192.168.1.100}
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      LEMON_BUS_DRIVER: ${LEMON_BUS_DRIVER:-auto}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,host.docker.internal,192.168.1.100}
+      no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,host.docker.internal,192.168.1.100}
     depends_on:
       postgres:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
@@ -72,5 +76,22 @@ services:
       retries: 5
       start_period: 10s
 
+  nats:
+    image: nats:2.10-alpine
+    container_name: lemon-core-nats
+    restart: unless-stopped
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "${NATS_PORT:-4222}:4222"
+      - "${NATS_MONITOR_PORT:-8222}:8222"
+    volumes:
+      - lemon_nats_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   lemon_core_pgdata:
+  lemon_nats_data:

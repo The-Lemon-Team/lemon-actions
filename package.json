@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "build:core": "npm run --prefix packages/core-combinator build",
+    "build:stack-bus": "npm run --prefix packages/lemon-stack-bus build",
     "build:projectarium": "npx --prefix packages/core-combinator tsc --project packages/lemon-projectarium/tsconfig.json",
     "build:sdk": "npm run --prefix packages/core-combinator-sdk build",
     "build:neurons": "npm run --prefix packages/lemon-seasons-neurons build",
@@ -20,7 +21,7 @@
     "build:web:projectarium": "npm run --prefix apps/web build:projectarium",
     "build:agent": "npm run --prefix apps/web build:agent",
     "test:web": "npm run --prefix apps/web test:ci",
-    "build:all": "npm run build:core && npm run build:projectarium && npm run build:sdk && npm run build:neurons && npm run build:media-neurons && npm run build:ai-neurons && npm run build:api && npm run build:web",
+    "build:all": "npm run build:core && npm run build:stack-bus && npm run build:projectarium && npm run build:sdk && npm run build:neurons && npm run build:media-neurons && npm run build:ai-neurons && npm run build:api && npm run build:web",
     "dev:up": "powershell -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
     "dev:projectarium": "powershell -ExecutionPolicy Bypass -File ./scripts/start-projectarium-dev.ps1",
     "start:api": "npm run --prefix apps/api start:dev",

@@ -90,12 +90,17 @@ export class FlowsService {
     const folderMeta = await this.assertFolder(dto.folderId);
     const resolvedProfileId = dto.profileId ?? folderMeta?.profileId ?? null;
 
+    const resolvedProjectSlug = this.normalizeProjectSlug(
+      dto.projectSlug ?? (dto.config as any)?.projectSlug,
+    );
+
     const flow = await this.repo.create(
       {
         name: dto.name,
         description: dto.description,
         type: dto.type,
         isExclusive: dto.isExclusive ?? false,
+        ...(resolvedProjectSlug !== undefined ? { projectSlug: resolvedProjectSlug } : {}),
         folder: dto.folderId ? { connect: { id: dto.folderId } } : undefined,
         profile: resolvedProfileId ? { connect: { id: resolvedProfileId } } : undefined,
         config: this.json(dto.config),
@@ -112,11 +117,15 @@ export class FlowsService {
     this.registry.get(type).validateConfig(dto.config !== undefined ? dto.config : current.config);
     if (dto.folderId !== undefined) await this.assertFolder(dto.folderId);
 
+    const nextProjectSlug =
+      dto.projectSlug !== undefined ? this.normalizeProjectSlug(dto.projectSlug) : undefined;
+
     const data: Prisma.FlowUpdateInput = {
       name: dto.name,
       description: dto.description,
       type: dto.type,
       isExclusive: dto.isExclusive,
+      ...(nextProjectSlug !== undefined ? { projectSlug: nextProjectSlug } : {}),
       folder: dto.folderId === undefined ? undefined : dto.folderId ? { connect: { id: dto.folderId } } : { disconnect: true },
       config: dto.config === undefined ? undefined : this.json(dto.config),
       orchestratorRules: dto.orchestratorRules === undefined ? undefined : this.json(dto.orchestratorRules),
@@ -124,17 +133,8 @@ export class FlowsService {
     const tags = dto.tags ? this.uniqueTags(dto.tags) : undefined;
     const updated = await this.repo.update(id, data, tags);
 
-    if (this.eventBus && dto.config !== undefined) {
-      this.eventBus.emit({
-        id: crypto.randomUUID(),
-        type: 'CONTEXT_UPDATED',
-        folderId: updated.folderId,
-        flowId: updated.id,
-        flowName: updated.name,
-        flowType: updated.type,
-        timestamp: new Date().toISOString(),
-        payload: { config: dto.config },
-      });
+    if (dto.config !== undefined) {
+      this.emitImpulse(updated, 'CONTEXT_UPDATED', 'context_updated', { config: dto.config });
     }
 
     return toFlowView(updated);
@@ -232,18 +232,11 @@ export class FlowsService {
       }
 
       // 3. Emit impulse packet to Event Bus
-      if (this.eventBus) {
-        this.eventBus.emit({
-          id: crypto.randomUUID(),
-          type: 'MUTEX_STATUS',
-          folderId: updated.folderId,
-          flowId: updated.id,
-          flowName: updated.name,
-          flowType: updated.type,
-          timestamp: new Date().toISOString(),
-          payload: { previousStatus: flow.status, currentStatus: next, closedBy },
-        });
-      }
+      this.emitImpulse(updated, 'MUTEX_STATUS', 'status_changed', {
+        previousStatus: flow.status,
+        currentStatus: next,
+        closedBy,
+      });
 
       return toFlowView(updated);
     });
@@ -321,31 +314,22 @@ export class FlowsService {
           tx,
         );
 
-        this.eventBus?.emit({
-          id: crypto.randomUUID(),
-          type: 'PROJECTION_UPDATED',
-          folderId: flow.folderId,
-          flowId: flow.id,
-          flowName: flow.name,
-          flowType: flow.type,
+        this.emitImpulse(flow, 'PROJECTION_UPDATED', 'projection_updated', updatedProjection, {
           timestamp: event.createdAt.toISOString(),
-          payload: updatedProjection,
         });
       }
 
-      if (this.eventBus) {
-        this.eventBus.emit({
+      this.emitImpulse(
+        flow,
+        'CHRONICLE_EVENT',
+        dto.eventType.toLowerCase(),
+        (dto.payload ?? {}) as Record<string, unknown>,
+        {
           id: event.id,
-          type: 'CHRONICLE_EVENT',
-          folderId: flow.folderId,
-          flowId: flow.id,
-          flowName: flow.name,
-          flowType: flow.type,
           timestamp: event.createdAt.toISOString(),
-          payload: (dto.payload ?? {}) as Record<string, unknown>,
           activeSessionIds: openSessions.map((s) => s.id),
-        });
-      }
+        },
+      );
 
       return event;
     });
@@ -361,19 +345,12 @@ export class FlowsService {
       return this.flushBatch(flow.id, 'MANUAL_TRIGGER');
     }
 
-    const packet: FlowImpulsePacket = {
-      id: crypto.randomUUID(),
-      type: 'FLOW_TRIGGER',
-      folderId: flow.folderId,
-      flowId: flow.id,
-      flowName: flow.name,
-      flowType: flow.type,
-      timestamp: new Date().toISOString(),
-      payload: (dto?.payload ?? {}) as Record<string, unknown>,
-    };
-
-    this.eventBus?.emit(packet);
-    return packet;
+    return this.emitImpulse(
+      flow,
+      'FLOW_TRIGGER',
+      dto?.action ? `trigger_${dto.action}` : 'triggered',
+      (dto?.payload ?? {}) as Record<string, unknown>,
+    );
   }
 
   // --- Timer Operations ---
@@ -393,17 +370,9 @@ export class FlowsService {
       payload: { intervalSeconds: cfg.intervalSeconds || 60, tickedAt: now.toISOString() },
     });
 
-    const packet: FlowImpulsePacket = {
-      id: crypto.randomUUID(),
-      type: 'TIMER_TICK',
-      folderId: flow.folderId,
-      flowId: flow.id,
-      flowName: flow.name,
-      flowType: flow.type,
+    this.emitImpulse(flow, 'TIMER_TICK', 'timer_tick', { lastTickAt: now.toISOString() }, {
       timestamp: now.toISOString(),
-      payload: { lastTickAt: now.toISOString() },
-    };
-    this.eventBus?.emit(packet);
+    });
     return event;
   }
 
@@ -428,18 +397,7 @@ export class FlowsService {
       payload: { state, reason, timestamp: new Date().toISOString() },
     });
 
-    const packet: FlowImpulsePacket = {
-      id: crypto.randomUUID(),
-      type: 'CIRCUIT_BREAKER_STATE',
-      folderId: flow.folderId,
-      flowId: flow.id,
-      flowName: flow.name,
-      flowType: flow.type,
-      timestamp: new Date().toISOString(),
-      payload: { state, reason },
-    };
-    this.eventBus?.emit(packet);
-    return packet;
+    return this.emitImpulse(flow, 'CIRCUIT_BREAKER_STATE', 'circuit_breaker', { state, reason });
   }
 
   // --- Batch Operations ---
@@ -507,17 +465,9 @@ export class FlowsService {
       payload,
     });
 
-    const packet: FlowImpulsePacket = {
-      id: crypto.randomUUID(),
-      type: 'BATCH_FLUSH',
-      folderId: flow.folderId,
-      flowId: flow.id,
-      flowName: flow.name,
-      flowType: flow.type,
+    this.emitImpulse(flow, 'BATCH_FLUSH', 'batch_flushed', payload, {
       timestamp: now.toISOString(),
-      payload,
-    };
-    this.eventBus?.emit(packet);
+    });
 
     return payload;
   }
@@ -943,6 +893,52 @@ export class FlowsService {
 
   private uniqueTags(tags?: string[]): string[] {
     return [...new Set((tags ?? []).map((t) => t.trim()).filter(Boolean))];
+  }
+
+  private normalizeProjectSlug(raw?: string | null): string | null | undefined {
+    if (raw === undefined) return undefined;
+    if (raw === null) return null;
+    const cleaned = raw
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return cleaned || null;
+  }
+
+  private resolveFlowProjectSlug(flow: { projectSlug?: string | null; config?: unknown }): string {
+    if (flow.projectSlug) return flow.projectSlug;
+    const cfg = (flow.config ?? {}) as Record<string, any>;
+    if (typeof cfg.projectSlug === 'string' && cfg.projectSlug.trim()) {
+      return this.normalizeProjectSlug(cfg.projectSlug) ?? 'lemon-core';
+    }
+    return 'lemon-core';
+  }
+
+  private emitImpulse(
+    flow: { id: string; name: string; type: FlowType; folderId: string | null; projectSlug?: string | null; config?: unknown },
+    type: FlowImpulsePacket['type'],
+    eventSlug: string,
+    payload: Record<string, unknown>,
+    extra: Partial<Pick<FlowImpulsePacket, 'id' | 'timestamp' | 'activeSessionIds'>> = {},
+  ): FlowImpulsePacket {
+    const projectSlug = this.resolveFlowProjectSlug(flow);
+    const safeEvent = eventSlug.trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, '_') || 'event';
+    const packet: FlowImpulsePacket = {
+      id: extra.id ?? crypto.randomUUID(),
+      type,
+      folderId: flow.folderId,
+      projectSlug,
+      topic: `lemon.${projectSlug}.flow.${safeEvent}`,
+      flowId: flow.id,
+      flowName: flow.name,
+      flowType: flow.type,
+      timestamp: extra.timestamp ?? new Date().toISOString(),
+      payload,
+      ...(extra.activeSessionIds ? { activeSessionIds: extra.activeSessionIds } : {}),
+    };
+    this.eventBus?.emit(packet);
+    return packet;
   }
 
   private json(v: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined {

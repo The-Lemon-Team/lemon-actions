@@ -33,6 +33,8 @@ export interface FlowImpulsePacket<T = Record<string, any>> {
   id: string;
   type: FlowImpulseType;
   folderId: string | null;
+  projectSlug?: string | null;
+  topic?: string | null;
   flowId: string;
   flowName: string;
   flowType: FlowType;
@@ -49,6 +51,8 @@ export interface FlowImpulsePacket<T = Record<string, any>> {
 
 export interface StreamFilter {
   folderId?: string;
+  projectSlug?: string;
+  topic?: string;
   flowId?: string;
   flowType?: FlowType;
   impulseType?: FlowImpulseType;
@@ -90,6 +94,7 @@ export interface StreamDescriptor {
   name: string;
   flowType: FlowType;
   folderId?: string | null;
+  projectSlug?: string | null;
   persistenceTier: StreamPersistenceTier;
   tags?: string[];
   coalesceWindowMs?: number;

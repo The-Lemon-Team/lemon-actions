@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AiModule } from './ai/ai.module';
+import { StackBusModule } from './bus/stack-bus.module';
 import { CodeTasksModule } from './code-tasks/code-tasks.module';
 import { EventsModule } from './events/events.module';
 import { FlowsModule } from './flows/flows.module';
@@ -15,6 +16,7 @@ import { TagsModule } from './tags/tags.module';
 @Module({
   imports: [
     PrismaModule,
+    StackBusModule,
     ProfilesModule,
     FoldersModule,
     TagsModule,

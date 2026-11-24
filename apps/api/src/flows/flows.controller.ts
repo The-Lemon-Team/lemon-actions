@@ -41,6 +41,8 @@ export class FlowsController {
   @Sse('stream')
   stream(
     @Query('folderId') folderId?: string,
+    @Query('projectSlug') projectSlug?: string,
+    @Query('topic') topic?: string,
     @Query('flowId') flowId?: string,
     @Query('flowType') flowType?: FlowType,
     @Query('impulseType') impulseType?: any,
@@ -48,7 +50,7 @@ export class FlowsController {
     if (!this.eventBus) {
       return of({ data: { message: 'Event bus is not active' } } as MessageEvent);
     }
-    return this.eventBus.stream$({ folderId, flowId, flowType, impulseType }).pipe(
+    return this.eventBus.stream$({ folderId, projectSlug, topic, flowId, flowType, impulseType }).pipe(
       map((packet) => ({ data: packet } as MessageEvent)),
     );
   }
@@ -68,11 +70,13 @@ export class FlowsController {
     @Query() q: ListFlowsQueryDto,
     @Headers('x-profile-id') headerProfileId?: string,
     @Headers('x-app-scope') headerScope?: string,
+    @Headers('x-project-slug') headerProjectSlug?: string,
   ) {
     return this.service.list({
       ...q,
       profileId: q.profileId ?? headerProfileId,
       scope: q.scope ?? headerScope,
+      projectSlug: q.projectSlug ?? headerProjectSlug,
     });
   }
 
@@ -147,10 +151,12 @@ export class FlowsController {
   create(
     @Body() dto: CreateFlowDto,
     @Headers('x-profile-id') headerProfileId?: string,
+    @Headers('x-project-slug') headerProjectSlug?: string,
   ) {
     return this.service.create({
       ...dto,
       profileId: dto.profileId ?? headerProfileId ?? null,
+      projectSlug: dto.projectSlug ?? headerProjectSlug ?? null,
     });
   }
 

@@ -85,6 +85,7 @@ model Flow {
   isExclusive       Boolean    @default(false) @map("is_exclusive")
   folderId          String?    @map("folder_id") @db.Uuid
   profileId         String?    @map("profile_id") @db.Uuid
+  projectSlug       String?    @map("project_slug")
   config            Json?
   orchestratorRules Json?      @map("orchestrator_rules")
   createdAt         DateTime   @default(now()) @map("created_at")
@@ -100,6 +101,7 @@ model Flow {
 
   @@index([folderId])
   @@index([profileId])
+  @@index([projectSlug])
   @@index([type])
   @@index([status])
   @@map("flows")

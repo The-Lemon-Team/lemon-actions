@@ -257,7 +257,11 @@ async function runSpaceTowersTests() {
     actorId: 'actor-easy',
     tower: 'AIR',
   });
-  assert.equal(easyAfter.items[0].stepsDone, 3);
+  const cardAuditAfter = easyAfter.items.find((t: any) => t.taskId === 'bounty-3-tower-cards-constructor')!;
+  assert.equal(cardAuditAfter.stepsDone, 3);
+  const completedEasyTasks = easyAfter.items.filter((t: any) => t.status === 'COMPLETED');
+  assert.ok(completedEasyTasks.some((t: any) => t.taskId === 'bounty-2-lemon-actions-bus' && t.reward === 500));
+  assert.ok(completedEasyTasks.some((t: any) => t.taskId === 'bounty-6-bus-lightweight-heartbeats' && t.reward === 100));
 
   const openPool = await flowsService.queryTaskPool(emitterProj.id, { status: 'OPEN' });
   const mcpTask = openPool.items.find((t: any) => t.taskId === 'bounty-5-timelines-mcp');
