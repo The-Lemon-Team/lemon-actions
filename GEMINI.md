@@ -24,3 +24,9 @@ All project-management tracking across all projects must follow [`.agents/rules/
 - Do NOT create separate Lemon Seasons feeds/streams per project (`lemon-actions`, `lemon-watchers`, etc.).
 - Route all project changes, overviews, todos, notes, and chronicles into the unified `projectarium` stream (**Projectarium Workspace**) using `projectarium-projects`, `projectarium-todos`, `projectarium-notes`, and `projectarium-chronicle`, distinguishing projects via tags/metadata.
 
+### Inter-Service Subscriptions & Lemon Stack Bus
+All cross-service event flows must follow [`.agents/rules/inter-service-bus.md`](./.agents/rules/inter-service-bus.md):
+- Do NOT subscribe directly from one backend service to another service's SSE stream or polling endpoint; use `@lemon/stack-bus` (NATS JetStream `lemon.<projectSlug>.<domain>.<event>`) with `dedupKey`.
+- Keep immediate upload/download responses synchronous (`POST /upload`, `GET /file`), and route async lifecycle facts (`media.created`, `media.ready`, `projectarium.*`) through the bus and `OBSERVER` selectors.
+
+

@@ -32,3 +32,10 @@ All project-management changes across all projects must comply with [`.agents/ru
 - **Single Umbrella**: All project updates, decisions, roadmaps, and new project-management features live under **Lemon Projectarium** inside the private `projectarium` stream (**Projectarium Workspace**, `http://192.168.1.100:5175/projectarium`), using its functional feeds (`projectarium-projects`, `projectarium-todos`, `projectarium-notes`, `projectarium-chronicle`).
 - **Tagging Over Siloing**: Identify specific projects via tags/metadata (`stand:<slug>`, `project:<slug>`), never separate feeds.
 
+## Inter-Service Subscriptions & Lemon Stack Bus Rule
+All cross-service event integrations must comply with [`.agents/rules/inter-service-bus.md`](./.agents/rules/inter-service-bus.md):
+- **No Direct Service-to-Service SSE/Polling**: Never wire backend services together via direct SSE streams (e.g., `/api/media/stream`) or polling loops; SSE is only for live browser/UI feeds.
+- **Use `@lemon/stack-bus` (NATS JetStream)**: Publish compact lifecycle facts (`lemon.<projectSlug>.<domain>.<event>`) with `dedupKey` and consume via JetStream or `lemon-core` `OBSERVER` selectors.
+- **Direct HTTP Only for Immediate Payload**: Return uploaded media/files synchronously via `POST /upload` / `GET /file`; use the bus for async processing (`media.ready`) and cross-project reactions.
+
+
