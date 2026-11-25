@@ -38,4 +38,10 @@ All cross-service event integrations must comply with [`.agents/rules/inter-serv
 - **Use `@lemon/stack-bus` (NATS JetStream)**: Publish compact lifecycle facts (`lemon.<projectSlug>.<domain>.<event>`) with `dedupKey` and consume via JetStream or `lemon-core` `OBSERVER` selectors.
 - **Direct HTTP Only for Immediate Payload**: Return uploaded media/files synchronously via `POST /upload` / `GET /file`; use the bus for async processing (`media.ready`) and cross-project reactions.
 
+## Bounty Verification & Points Rule
+All bounty tasks and economy rewards must comply with [`.agents/rules/bounty-verification.md`](./.agents/rules/bounty-verification.md):
+- **No Premature Done / No Premature Points**: Never transition a bounty task to `COMPLETED` / `Done` or mint/credit `AP` / `GAP` / `FP` points before verification and acceptance are completed.
+- **Verification Gate**: Keep the task `IN_PROGRESS` until automated checks and functional/UI verification are confirmed.
+
+
 

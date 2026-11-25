@@ -29,4 +29,8 @@ All cross-service event flows must follow [`.agents/rules/inter-service-bus.md`]
 - Do NOT subscribe directly from one backend service to another service's SSE stream or polling endpoint; use `@lemon/stack-bus` (NATS JetStream `lemon.<projectSlug>.<domain>.<event>`) with `dedupKey`.
 - Keep immediate upload/download responses synchronous (`POST /upload`, `GET /file`), and route async lifecycle facts (`media.created`, `media.ready`, `projectarium.*`) through the bus and `OBSERVER` selectors.
 
+### Bounty Verification & Points
+All bounty tasks and rewards must follow [`.agents/rules/bounty-verification.md`](./.agents/rules/bounty-verification.md):
+- Do **not** mark tasks `COMPLETED` / `Done` or award `AP`/`GAP`/`FP` points until verification and acceptance are completed.
+
 

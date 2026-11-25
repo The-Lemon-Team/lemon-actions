@@ -263,9 +263,13 @@ async function runSpaceTowersTests() {
   assert.ok(completedEasyTasks.some((t: any) => t.taskId === 'bounty-2-lemon-actions-bus' && t.reward === 500));
   assert.ok(completedEasyTasks.some((t: any) => t.taskId === 'bounty-6-bus-lightweight-heartbeats' && t.reward === 100));
 
-  const openPool = await flowsService.queryTaskPool(emitterProj.id, { status: 'OPEN' });
-  const mcpTask = openPool.items.find((t: any) => t.taskId === 'bounty-5-timelines-mcp');
-  assert.ok(mcpTask, 'Expected bounty-5-timelines-mcp in OPEN tasks');
+  const firePool = await flowsService.queryTaskPool(emitterProj.id, {
+    actorId: 'actor-hades',
+    tower: 'FIRE',
+  });
+  const mcpTask = firePool.items.find((t: any) => t.taskId === 'bounty-5-timelines-mcp');
+  assert.ok(mcpTask, 'Expected bounty-5-timelines-mcp assigned to actor-hades in FIRE Tower');
+  assert.equal(mcpTask.status, 'IN_PROGRESS');
   assert.equal(mcpTask.reward, 500);
   assert.equal(mcpTask.currency, 'ancient_point');
   assert.equal(mcpTask.stepsTotal, 3);

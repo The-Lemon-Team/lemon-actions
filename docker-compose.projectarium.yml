@@ -36,6 +36,13 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       AUTO_SEED: ${AUTO_SEED:-false}
       PROJECTARIUM_LOCALHOST_ALIAS: ${PROJECTARIUM_LOCALHOST_ALIAS:-host.docker.internal}
+      NATS_URL: ${NATS_URL:-nats://host.docker.internal:4222}
+      LEMON_BUS_DRIVER: ${LEMON_BUS_DRIVER:-auto}
+      LEMON_SEASONS_URL: ${LEMON_SEASONS_URL:-http://host.docker.internal:3001}
+      LEMON_MEDIA_HUB_URL: ${LEMON_MEDIA_HUB_URL:-http://host.docker.internal:3005}
+      LEMON_AI_SERVICE_URL: ${LEMON_AI_SERVICE_URL:-http://host.docker.internal:3006}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,host.docker.internal,192.168.1.100,100.72.50.18}
+      no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,host.docker.internal,192.168.1.100,100.72.50.18}
     ports:
       - "${API_PORT:-3200}:3000"
     healthcheck:
