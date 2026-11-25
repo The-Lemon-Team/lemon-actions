@@ -14,8 +14,8 @@ RUN /workspace/apps/api/node_modules/.bin/tsc -p packages/core-combinator/tsconf
  && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-stack-bus/tsconfig.json \
  && /workspace/apps/api/node_modules/.bin/tsc -p packages/core-combinator-sdk/tsconfig.json \
  && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-projectarium/tsconfig.json \
- && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-seasons-neurons/tsconfig.json \
  && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-media-hub-neurons/tsconfig.json \
+ && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-seasons-neurons/tsconfig.json \
  && /workspace/apps/api/node_modules/.bin/tsc -p packages/lemon-ai-neurons/tsconfig.json
 
 # Populate @lemon/* inside apps/api/node_modules for runtime resolution
