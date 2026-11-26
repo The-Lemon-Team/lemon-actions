@@ -18,6 +18,8 @@ export const WELL_KNOWN_TOPICS = {
   PROJECTARIUM_NOTE_CHANGED: 'lemon.projectarium.note.changed',
   PROJECTARIUM_CHRONICLE_ADDED: 'lemon.projectarium.chronicle.added',
   FLOWS_ALL: 'lemon.*.flow.>',
+  SHARD_ALL: 'lemon.*.shard.>',
+  SHARD_METRICS: 'lemon.*.shard.metrics',
 } as const;
 
 export function sanitizeTopicToken(raw: string | undefined, fallback = 'default'): string {

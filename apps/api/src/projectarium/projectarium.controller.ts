@@ -131,6 +131,33 @@ export class ProjectariumController {
   }
 
   /**
+   * List all registered Lemon Core project shards (with attached analytics if available)
+   */
+  @Get('shards')
+  listShards(@Query('includeEvicted') includeEvicted?: string) {
+    return this.projectariumService.listShards(includeEvicted === 'true');
+  }
+
+  /**
+   * Resolve the active Core Shard endpoint for a projectSlug (falls back to Main Shard shared-logical)
+   */
+  @Get('shards/resolve')
+  resolveShard(
+    @Query('projectSlug') projectSlug = 'lemon-core',
+    @Query('fallbackBaseUrl') fallbackBaseUrl?: string,
+  ) {
+    return this.projectariumService.resolveShard(projectSlug, fallbackBaseUrl);
+  }
+
+  /**
+   * Aggregated cross-shard telemetry collected via durable JetStream consumer
+   */
+  @Get('shards/analytics')
+  getShardAnalytics(@Query('projectSlug') projectSlug?: string) {
+    return this.projectariumService.getShardAnalytics(projectSlug);
+  }
+
+  /**
    * Get single project stand
    */
   @Get('projects/:slugOrToken')

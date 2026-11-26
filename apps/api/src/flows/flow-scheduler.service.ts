@@ -1,7 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { FlowStatus, FlowType } from '@prisma/client';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
+import { FlowStatus } from '@prisma/client';
 import { FlowsRepository } from './flows.repository';
 import { FlowOrchestratorRules, FlowsService, ScheduleWindowRule } from './flows.service';
+import { DEFAULT_FLOW_TYPE_HANDLERS } from './handlers/flow-type.handler';
+import { FlowTypeRegistry } from './handlers/flow-type.registry';
 
 export { FlowOrchestratorRules, ScheduleWindowRule };
 
@@ -18,11 +20,26 @@ export class FlowSchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(FlowSchedulerService.name);
   private timer: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private lastTickAt: string | null = null;
+  private lastTickDurationMs = 0;
+  private lastSchedulableCount = 0;
+  private readonly registry: FlowTypeRegistry;
 
   constructor(
     private readonly repo: FlowsRepository,
     private readonly flowsService: FlowsService,
-  ) {}
+    @Optional() registry?: FlowTypeRegistry,
+  ) {
+    this.registry = registry ?? flowsService.typeRegistry ?? new FlowTypeRegistry(DEFAULT_FLOW_TYPE_HANDLERS);
+  }
+
+  getDiagnostics() {
+    return {
+      lastTickAt: this.lastTickAt,
+      lastTickDurationMs: this.lastTickDurationMs,
+      schedulableCount: this.lastSchedulableCount,
+    };
+  }
 
   onModuleInit() {
     this.timer = setInterval(() => this.tick(), 15000);
@@ -50,6 +67,7 @@ export class FlowSchedulerService implements OnModuleInit, OnModuleDestroy {
       };
     }
     this.isRunning = true;
+    const startedMs = Date.now();
 
     let scheduleToggled = 0;
     let leaseTimedOut = 0;
@@ -58,7 +76,11 @@ export class FlowSchedulerService implements OnModuleInit, OnModuleDestroy {
     let batchesFlushed = 0;
 
     try {
-      const flows = await this.repo.findMany({});
+      const flows =
+        typeof (this.repo as any).findSchedulableFlows === 'function'
+          ? await (this.repo as any).findSchedulableFlows()
+          : await this.repo.findMany({});
+      this.lastSchedulableCount = flows.length;
 
       for (const flow of flows) {
         const rules = (flow.orchestratorRules ?? {}) as FlowOrchestratorRules;
@@ -99,85 +121,38 @@ export class FlowSchedulerService implements OnModuleInit, OnModuleDestroy {
           }
         }
 
-        // 3. TIMER: циклическое тиканье с заданным интервалом
-        if (flow.type === FlowType.TIMER && flow.status === FlowStatus.ACTIVE) {
-          const cfg = (flow.config ?? {}) as { intervalSeconds?: number; lastTickAt?: string };
-          const intervalSec = cfg.intervalSeconds && cfg.intervalSeconds > 0 ? cfg.intervalSeconds : 60;
-          const lastTick = cfg.lastTickAt ? new Date(cfg.lastTickAt).getTime() : 0;
-          const elapsed = (now.getTime() - lastTick) / 1000;
-
-          if (elapsed >= intervalSec) {
-            try {
-              await this.flowsService.emitTimerTick(flow.id, now);
+        // 3. Delegate type-specific scheduling (TIMER, CIRCUIT_BREAKER, BATCH, custom types) to handler
+        const handler = this.registry.has(flow.type) ? this.registry.get(flow.type) : null;
+        if (handler?.onSchedulerTick) {
+          try {
+            const metric = await handler.onSchedulerTick({
+              flow,
+              now,
+              emitTimerTick: (flowId, tickAt) => this.flowsService.emitTimerTick(flowId, tickAt),
+              updateCircuitBreaker: (flowId, state, reason) =>
+                this.flowsService.updateCircuitBreaker(flowId, state, reason),
+              flushBatch: (flowId, reason) => this.flowsService.flushBatch(flowId, reason),
+            });
+            if (metric === 'timerTicks') {
               timerTicks++;
-              this.logger.log(`[Timer Tick] "${flow.name}" ticked (interval ${intervalSec}s)`);
-            } catch (err: any) {
-              this.logger.warn(`[Timer Tick] Could not tick "${flow.name}": ${err.message}`);
+              this.logger.log(`[Timer Tick] "${flow.name}" ticked`);
+            } else if (metric === 'circuitBreakersRecovered') {
+              circuitBreakersRecovered++;
+              this.logger.log(`[Circuit Breaker] "${flow.name}" OPEN -> HALF_OPEN`);
+            } else if (metric === 'batchesFlushed') {
+              batchesFlushed++;
+              this.logger.log(`[Batch Flush] "${flow.name}" auto-flushed`);
             }
-          }
-        }
-
-        // 4. CIRCUIT_BREAKER: автоматический переход OPEN -> HALF_OPEN по истечении cooldown
-        if (flow.type === FlowType.CIRCUIT_BREAKER) {
-          const cfg = (flow.config ?? {}) as { state?: string; openedAt?: string; cooldownSeconds?: number };
-          if (cfg.state === 'OPEN') {
-            const openedAt = cfg.openedAt ? new Date(cfg.openedAt).getTime() : new Date(flow.updatedAt).getTime();
-            const cooldownSec = cfg.cooldownSeconds && cfg.cooldownSeconds > 0 ? cfg.cooldownSeconds : 60;
-            const elapsed = (now.getTime() - openedAt) / 1000;
-
-            if (elapsed >= cooldownSec) {
-              try {
-                await this.flowsService.updateCircuitBreaker(flow.id, 'HALF_OPEN', 'cooldown_expired');
-                circuitBreakersRecovered++;
-                this.logger.log(
-                  `[Circuit Breaker] "${flow.name}" OPEN -> HALF_OPEN (cooldown ${cooldownSec}s expired)`,
-                );
-              } catch (err: any) {
-                this.logger.warn(`[Circuit Breaker] Could not probe "${flow.name}": ${err.message}`);
-              }
-            }
-          }
-        }
-
-        // 5. BATCH: проверка условий сброса буфера (maxWaitSeconds или idleTimeoutSeconds)
-        if (flow.type === FlowType.BATCH && flow.status === FlowStatus.ACTIVE) {
-          const cfg = (flow.config ?? {}) as {
-            pendingCount?: number;
-            maxWaitSeconds?: number;
-            idleTimeoutSeconds?: number;
-            windowStartedAt?: string;
-            lastItemAt?: string;
-          };
-          const pending = cfg.pendingCount ?? 0;
-          if (pending > 0) {
-            const maxWait = cfg.maxWaitSeconds && cfg.maxWaitSeconds > 0 ? cfg.maxWaitSeconds : 60;
-            const idleTimeout = cfg.idleTimeoutSeconds && cfg.idleTimeoutSeconds > 0 ? cfg.idleTimeoutSeconds : 10;
-            const windowStart = cfg.windowStartedAt
-              ? new Date(cfg.windowStartedAt).getTime()
-              : new Date(flow.updatedAt).getTime();
-            const lastItem = cfg.lastItemAt ? new Date(cfg.lastItemAt).getTime() : windowStart;
-
-            const waitElapsed = (now.getTime() - windowStart) / 1000;
-            const idleElapsed = (now.getTime() - lastItem) / 1000;
-
-            if (waitElapsed >= maxWait || idleElapsed >= idleTimeout) {
-              try {
-                await this.flowsService.flushBatch(
-                  flow.id,
-                  waitElapsed >= maxWait ? 'MAX_WAIT_TIMEOUT' : 'IDLE_TIMEOUT',
-                );
-                batchesFlushed++;
-                this.logger.log(`[Batch Flush] "${flow.name}" auto-flushed ${pending} items`);
-              } catch (err: any) {
-                this.logger.warn(`[Batch Flush] Could not flush "${flow.name}": ${err.message}`);
-              }
-            }
+          } catch (err: any) {
+            this.logger.warn(`[Scheduler Handler:${flow.type}] "${flow.name}" error: ${err.message}`);
           }
         }
       }
     } catch (err: any) {
       this.logger.error(`[FlowScheduler] Tick error: ${err.message}`);
     } finally {
+      this.lastTickAt = now.toISOString();
+      this.lastTickDurationMs = Date.now() - startedMs;
       this.isRunning = false;
     }
 

@@ -4,7 +4,7 @@ set -e
 echo "[api] Running Prisma migrations..."
 npx prisma migrate deploy
 
-if [ "${AUTO_SEED:-true}" = "true" ]; then
+if [ "${LEMON_SHARD_TIER:-shared-logical}" != "dedicated" ] && [ "${AUTO_SEED:-true}" = "true" ]; then
   PROFILE_COUNT=$(node -e "
     const { PrismaClient } = require('@prisma/client');
     const p = new PrismaClient();
@@ -18,6 +18,11 @@ if [ "${AUTO_SEED:-true}" = "true" ]; then
   else
     echo "[api] Database already initialized ($PROFILE_COUNT profiles) — skipping seed."
   fi
+fi
+
+if [ "${LEMON_SHARD_TIER:-shared-logical}" = "dedicated" ]; then
+  echo "[shard] Starting NestJS Dedicated Project Shard (${LEMON_SHARD_PROJECT_SLUG:-lemon-watchers})..."
+  exec node dist/shard.main
 fi
 
 echo "[api] Starting NestJS Core Combinator API on :${PORT:-3000}..."

@@ -1,11 +1,13 @@
 import { AsyncPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
 import { I18nService } from '../../core/i18n/i18n.service';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { CreateFlowPayload, Flow } from '../../core/models/flow.models';
+import { RegisteredShardView } from '../../core/models/project-stand.models';
 import { FlowOrchestratorService } from '../../core/services/flow-orchestrator.service';
+import { ProjectStandService } from '../../core/services/project-stand.service';
 import { CommandRibbonComponent } from '../command-ribbon/command-ribbon.component';
 import { CreateFlowModalComponent } from '../create-flow-modal/create-flow-modal.component';
 import { FlowMetricsComponent } from '../flow-metrics/flow-metrics.component';
@@ -63,6 +65,79 @@ import { FlowTableComponent } from '../flow-table/flow-table.component';
           <span>{{ 'dashboard.createFlowChannel' | trans }}</span>
         </button>
       </div>
+
+      <!-- Core Shard Switcher Ribbon -->
+      <div
+        data-testid="core-shard-switcher"
+        class="bg-surface-container-lowest rounded-xl px-3 py-2 shadow-sm border border-outline-variant flex items-center justify-between gap-2 flex-wrap"
+      >
+        <div class="flex items-center gap-2 flex-wrap min-w-0">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant mr-1">
+            <span class="material-symbols-rounded text-base text-primary">hub</span>
+            <span>Шард ядра:</span>
+          </div>
+
+          <button
+            type="button"
+            data-testid="core-shard-chip-main"
+            (click)="orchestrator.switchShard(null)"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-all cursor-pointer"
+            [class]="getShardChipClass(!(activeShard$ | async))"
+          >
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>Main Shard (Logical)</span>
+          </button>
+
+          @for (shard of (shards$ | async) ?? []; track shard.shardId) {
+            <button
+              type="button"
+              [attr.data-testid]="'core-shard-chip-' + shard.projectSlug"
+              (click)="selectShard(shard)"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-all cursor-pointer"
+              [class]="getShardChipClass((activeShard$ | async)?.shardId === shard.shardId)"
+            >
+              <span class="w-2 h-2 rounded-full" [class]="getShardDotClass(shard.status)"></span>
+              <span>{{ shard.projectSlug }}</span>
+              <span class="font-mono text-[10px] opacity-75">{{ shard.tier }}</span>
+            </button>
+          }
+        </div>
+
+        <button
+          type="button"
+          data-testid="core-shard-refresh-btn"
+          (click)="standService.fetchShards()"
+          title="Обновить список шардов из Projectarium"
+          class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant text-xs cursor-pointer"
+        >
+          <span class="material-symbols-rounded text-sm">sync</span>
+          <span class="hidden sm:inline">Шарды</span>
+        </button>
+      </div>
+
+      <!-- Active Dedicated Shard Banner -->
+      @if (activeShard$ | async; as activeShard) {
+        <div
+          data-testid="active-shard-banner"
+          class="flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-primary-container text-on-primary-container border border-primary text-xs"
+        >
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="material-symbols-rounded text-base">hub</span>
+            <span class="font-bold truncate">
+              Шард: {{ activeShard.shardId }} ({{ activeShard.projectSlug }} · {{ activeShard.tier }})
+            </span>
+            <span class="font-mono opacity-80 truncate">{{ activeShard.apiBaseUrl }}</span>
+          </div>
+          <button
+            type="button"
+            data-testid="reset-main-shard-btn"
+            (click)="orchestrator.switchShard(null)"
+            class="px-3 py-1 rounded-xl bg-surface-container-lowest text-on-surface font-bold text-xs hover:bg-surface-container cursor-pointer flex-shrink-0"
+          >
+            Вернуться в Main Shard
+          </button>
+        </div>
+      }
 
       <!-- Live Flow Metrics -->
       @if (metrics$ | async; as metrics) {
@@ -256,8 +331,9 @@ import { FlowTableComponent } from '../flow-table/flow-table.component';
     </section>
   `,
 })
-export class FlowDashboardComponent {
+export class FlowDashboardComponent implements OnInit {
   protected readonly orchestrator = inject(FlowOrchestratorService);
+  protected readonly standService = inject(ProjectStandService);
   protected readonly i18n = inject(I18nService);
 
   readonly rows$ = this.orchestrator.rows$;
@@ -272,6 +348,34 @@ export class FlowDashboardComponent {
   readonly projects$ = this.orchestrator.projects$;
   readonly selectedProject$ = this.orchestrator.selectedProject$;
   readonly selectedProjectId$ = this.orchestrator.selectedProjectId$;
+  readonly activeShard$ = this.orchestrator.activeShard$;
+  readonly shards$ = this.standService.shards$;
+
+  ngOnInit(): void {
+    this.standService.fetchShards();
+  }
+
+  selectShard(shard: RegisteredShardView): void {
+    this.orchestrator.switchShard({
+      shardId: shard.shardId,
+      projectSlug: shard.projectSlug,
+      projectName: shard.projectName,
+      tier: shard.tier,
+      apiBaseUrl: shard.apiBaseUrl,
+    });
+  }
+
+  getShardChipClass(isActive: boolean): string {
+    return isActive
+      ? 'bg-primary-container text-on-primary-container font-bold border-primary shadow-xs'
+      : 'bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant border-transparent';
+  }
+
+  getShardDotClass(status: string): string {
+    if (status === 'ONLINE') return 'bg-emerald-500';
+    if (status === 'DEGRADED') return 'bg-amber-500';
+    return 'bg-slate-400';
+  }
 
   showCreateModal = false;
   showCreateProjectForm = false;

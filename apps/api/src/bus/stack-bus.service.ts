@@ -8,6 +8,7 @@ import {
   StackBusPublishInput,
   StackBusReplayOptions,
   StackBusStatus,
+  StackBusSubscriptionHandle,
   StackBusSubscriptionOptions,
 } from '@lemon/stack-bus';
 import { Observable } from 'rxjs';
@@ -67,6 +68,13 @@ export class StackBusService implements OnModuleInit, OnModuleDestroy {
     input: StackBusPublishInput<TPayload>,
   ): Promise<StackBusEnvelope<TPayload>> {
     return this.hub.publish(input);
+  }
+
+  subscribe<TPayload = Record<string, unknown>>(
+    options: StackBusSubscriptionOptions,
+    handler: (envelope: StackBusEnvelope<TPayload>) => void | Promise<void>,
+  ): Promise<StackBusSubscriptionHandle> {
+    return this.hub.subscribe(options, handler);
   }
 
   subscribe$<TPayload = Record<string, unknown>>(

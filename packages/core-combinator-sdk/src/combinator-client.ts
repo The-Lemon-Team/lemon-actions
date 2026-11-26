@@ -8,7 +8,31 @@ export interface CoreCombinatorClientOptions {
   baseUrl: string;
   token?: string;
   profileId?: string;
+  projectSlug?: string;
 }
+
+export interface ProjectShardResolutionOptions {
+  projectSlug: string;
+  projectariumUrl: string;
+  fallbackBaseUrl?: string;
+  token?: string;
+  profileId?: string;
+  cacheTtlMs?: number;
+  forceRefresh?: boolean;
+}
+
+export interface ResolvedProjectShard {
+  projectSlug: string;
+  mode: 'dedicated-shard' | 'shared-logical';
+  apiBaseUrl: string;
+  shard: Record<string, any> | null;
+  resolvedAt: string;
+}
+
+const shardResolutionCache = new Map<
+  string,
+  { resolution: ResolvedProjectShard; expiresAt: number }
+>();
 
 export interface HttpClient {
   get: <T>(path: string, params?: Record<string, any>) => Promise<T>;
@@ -17,19 +41,26 @@ export interface HttpClient {
 }
 
 export class CoreCombinatorClient {
-  public readonly baseUrl: string;
+  private _baseUrl: string;
+  private _projectSlug?: string;
+  private _shardResolution?: ResolvedProjectShard;
   public readonly neurons: NeuronsModule;
   public readonly batch: BatchModule;
   public readonly chronicle: ChronicleModule;
   public readonly stream: StreamModule;
   private readonly http: HttpClient;
 
-  constructor(private readonly options: CoreCombinatorClientOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, '');
+  constructor(
+    private readonly options: CoreCombinatorClientOptions,
+    shardResolution?: ResolvedProjectShard,
+  ) {
+    this._baseUrl = options.baseUrl.replace(/\/+$/, '');
+    this._projectSlug = options.projectSlug;
+    this._shardResolution = shardResolution;
 
     this.http = {
       get: async <T>(path: string, params?: Record<string, any>): Promise<T> => {
-        const url = new URL(`${this.baseUrl}${path.startsWith('/') ? path : '/' + path}`);
+        const url = new URL(`${this._baseUrl}${path.startsWith('/') ? path : '/' + path}`);
         if (params) {
           for (const [k, v] of Object.entries(params)) {
             if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
@@ -44,7 +75,7 @@ export class CoreCombinatorClient {
         return res.json() as Promise<T>;
       },
       post: async <T>(path: string, body?: any): Promise<T> => {
-        const url = `${this.baseUrl}${path.startsWith('/') ? path : '/' + path}`;
+        const url = `${this._baseUrl}${path.startsWith('/') ? path : '/' + path}`;
         const res = await fetch(url, {
           method: 'POST',
           headers: this.buildHeaders(),
@@ -56,7 +87,7 @@ export class CoreCombinatorClient {
         return res.json() as Promise<T>;
       },
       patch: async <T>(path: string, body?: any): Promise<T> => {
-        const url = `${this.baseUrl}${path.startsWith('/') ? path : '/' + path}`;
+        const url = `${this._baseUrl}${path.startsWith('/') ? path : '/' + path}`;
         const res = await fetch(url, {
           method: 'PATCH',
           headers: this.buildHeaders(),
@@ -69,10 +100,34 @@ export class CoreCombinatorClient {
       },
     };
 
-    this.stream = new StreamModule(this.baseUrl);
+    this.stream = new StreamModule(() => this._baseUrl);
     this.neurons = new NeuronsModule(this.http);
     this.batch = new BatchModule(this.http, this.stream);
     this.chronicle = new ChronicleModule(this.http);
+  }
+
+  get baseUrl(): string {
+    return this._baseUrl;
+  }
+
+  get shardResolution(): ResolvedProjectShard | undefined {
+    return this._shardResolution;
+  }
+
+  /**
+   * Resolves the target shard for `projectSlug` and retargets this client instance in-place.
+   */
+  async resolveAndAttachShard(
+    options: ProjectShardResolutionOptions,
+  ): Promise<ResolvedProjectShard> {
+    const resolution = await CoreCombinatorClient.resolveShard({
+      ...options,
+      fallbackBaseUrl: options.fallbackBaseUrl ?? this._baseUrl,
+    });
+    this._baseUrl = resolution.apiBaseUrl.replace(/\/+$/, '');
+    this._projectSlug = resolution.projectSlug;
+    this._shardResolution = resolution;
+    return resolution;
   }
 
   /**
@@ -92,7 +147,7 @@ export class CoreCombinatorClient {
   }
 
   async updateFlowStatus(flowId: string, status: string): Promise<any> {
-    const url = `${this.baseUrl}/flows/${flowId}/status`;
+    const url = `${this._baseUrl}/flows/${flowId}/status`;
     const res = await fetch(url, {
       method: 'PATCH',
       headers: this.buildHeaders(),
@@ -105,7 +160,7 @@ export class CoreCombinatorClient {
   }
 
   async touchFlow(flowId: string): Promise<void> {
-    const url = `${this.baseUrl}/flows/${flowId}/trigger`;
+    const url = `${this._baseUrl}/flows/${flowId}/trigger`;
     await fetch(url, {
       method: 'POST',
       headers: this.buildHeaders(),
@@ -180,6 +235,81 @@ export class CoreCombinatorClient {
     return this.http.get('/flows/agent/history', { repoName });
   }
 
+  /**
+   * Resolves the target Core Shard base URL for a given projectSlug via Projectarium,
+   * falling back to Main Shard (shared-logical) when no dedicated shard is active.
+   */
+  static async resolveShard(
+    options: ProjectShardResolutionOptions,
+  ): Promise<ResolvedProjectShard> {
+    const slug = options.projectSlug.trim().toLowerCase();
+    const projectariumBase = options.projectariumUrl.replace(/\/+$/, '');
+    const fallbackUrl = (options.fallbackBaseUrl || projectariumBase).replace(/\/+$/, '');
+    const cacheKey = `${projectariumBase}::${slug}`;
+    const ttlMs = options.cacheTtlMs ?? 30_000;
+
+    if (!options.forceRefresh) {
+      const cached = shardResolutionCache.get(cacheKey);
+      if (cached && Date.now() < cached.expiresAt) {
+        return cached.resolution;
+      }
+    }
+
+    try {
+      const url = `${projectariumBase}/projectarium/shards/resolve?projectSlug=${encodeURIComponent(slug)}`;
+      const headers: Record<string, string> = {};
+      if (options.token) headers['Authorization'] = `Bearer ${options.token}`;
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        const data = (await res.json()) as ResolvedProjectShard;
+        const resolution: ResolvedProjectShard = {
+          projectSlug: data.projectSlug || slug,
+          mode: data.mode || 'shared-logical',
+          apiBaseUrl: (data.apiBaseUrl || fallbackUrl).replace(/\/+$/, ''),
+          shard: data.shard ?? null,
+          resolvedAt: data.resolvedAt || new Date().toISOString(),
+        };
+        shardResolutionCache.set(cacheKey, {
+          resolution,
+          expiresAt: Date.now() + ttlMs,
+        });
+        return resolution;
+      }
+    } catch {
+      // Fallback to shared-logical Main Shard when Projectarium discovery is unreachable
+    }
+
+    return {
+      projectSlug: slug,
+      mode: 'shared-logical',
+      apiBaseUrl: fallbackUrl,
+      shard: null,
+      resolvedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Creates a shard-aware CoreCombinatorClient bound to a specific projectSlug.
+   */
+  static async forProject(
+    options: ProjectShardResolutionOptions,
+  ): Promise<CoreCombinatorClient> {
+    const resolution = await CoreCombinatorClient.resolveShard(options);
+    return new CoreCombinatorClient(
+      {
+        baseUrl: resolution.apiBaseUrl,
+        token: options.token,
+        profileId: options.profileId,
+        projectSlug: resolution.projectSlug,
+      },
+      resolution,
+    );
+  }
+
+  static clearShardCache(): void {
+    shardResolutionCache.clear();
+  }
+
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -189,6 +319,9 @@ export class CoreCombinatorClient {
     }
     if (this.options.profileId) {
       headers['x-profile-id'] = this.options.profileId;
+    }
+    if (this._projectSlug) {
+      headers['x-project-slug'] = this._projectSlug;
     }
     return headers;
   }

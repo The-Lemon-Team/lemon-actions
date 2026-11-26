@@ -18,6 +18,9 @@ import {
   ProjectariumRegisterResponse,
   ProjectariumReleaseResponse,
   ProjectariumScope,
+  ProjectariumShardInfo,
+  ProjectariumShardResolution,
+  ProjectariumShardTier,
   ProjectariumTodoItem,
   ProjectShieldStats,
 } from '../types/projectarium.types';
@@ -284,7 +287,12 @@ export class ProjectariumEngine {
       host,
     });
     const allocatedPort = this.allocatePort(payload.preferredPort, host, networkMode, machine.machineId);
-    const healthUrl = payload.healthUrl || buildDefaultHealthUrl(host, allocatedPort, networkMode);
+    const resolvedContext = payload.context
+      ? JSON.parse(JSON.stringify(payload.context).replace(/\{port\}/g, String(allocatedPort)))
+      : undefined;
+    const healthUrl = payload.healthUrl
+      ? payload.healthUrl.replace(/\{port\}/g, String(allocatedPort))
+      : buildDefaultHealthUrl(host, allocatedPort, networkMode);
     const instanceId = `inst_${project.slug}_${appName.toLowerCase().replace(/[^a-z0-9]/g, '')}_${Date.now().toString(36)}`;
     const leaseToken = `lease_${Math.random().toString(36).substring(2, 12)}`;
 
@@ -306,7 +314,7 @@ export class ProjectariumEngine {
       consecutiveFailures: 0,
       registeredAt: now,
       metadata: {
-        ...(payload.context ?? {}),
+        ...(resolvedContext ?? {}),
         host,
         machineId: machine.machineId,
         machineName: machine.machineName,
@@ -1032,6 +1040,94 @@ export class ProjectariumEngine {
       publicAppsCount,
       localAppsCount,
       activeMachinesCount: activeMachines.size,
+    };
+  }
+
+  private toShardInfo(project: ProjectariumProject, app: ProjectariumApp): ProjectariumShardInfo | null {
+    const meta = (app.metadata ?? {}) as Record<string, any>;
+    const shardMeta = (meta['shard'] ?? {}) as Record<string, any>;
+    const isShard = meta['role'] === 'core-shard' || Boolean(meta['shard']);
+    if (!isShard) return null;
+
+    const host = resolveAppHost(app.host || meta['host'], app.healthUrl);
+    const defaultApiBaseUrl = `http://${host}:${app.port}/api`;
+    const apiBaseUrl = String(shardMeta['apiBaseUrl'] || defaultApiBaseUrl).replace(/\/+$/, '');
+    const tier: ProjectariumShardTier =
+      shardMeta['tier'] === 'logical' || shardMeta['tier'] === 'embedded' || shardMeta['tier'] === 'dedicated'
+        ? shardMeta['tier']
+        : 'dedicated';
+
+    return {
+      projectSlug: project.slug,
+      projectName: project.name,
+      shardId: String(shardMeta['shardId'] || app.instanceId),
+      tier,
+      status: app.status,
+      instanceId: app.instanceId,
+      appName: app.appName,
+      apiBaseUrl,
+      healthUrl: app.healthUrl,
+      pingLatencyMs: app.pingLatencyMs,
+      lastPingAt: app.lastPingAt,
+      capabilities: Array.isArray(shardMeta['capabilities']) ? shardMeta['capabilities'] : [],
+      customFlowTypes: Array.isArray(shardMeta['customFlowTypes']) ? shardMeta['customFlowTypes'] : [],
+      customReducers: Array.isArray(shardMeta['customReducers']) ? shardMeta['customReducers'] : [],
+    };
+  }
+
+  public listShards(includeEvicted = false): ProjectariumShardInfo[] {
+    const shards: ProjectariumShardInfo[] = [];
+    for (const project of this.projects.values()) {
+      for (const app of project.apps) {
+        if (!includeEvicted && app.status === 'EVICTED') continue;
+        const info = this.toShardInfo(project, app);
+        if (info) shards.push(info);
+      }
+    }
+    return shards;
+  }
+
+  public resolveShard(
+    projectSlug: string,
+    fallbackApiBaseUrl = 'http://localhost:3000/api',
+  ): ProjectariumShardResolution {
+    const normalizedSlug = this.slugify(projectSlug);
+    const project = this.findProject(normalizedSlug) ?? this.findProject(projectSlug);
+    const nowIso = new Date().toISOString();
+
+    if (project) {
+      const candidates = project.apps
+        .filter((a) => a.status !== 'EVICTED')
+        .map((a) => ({ app: a, info: this.toShardInfo(project, a) }))
+        .filter((x): x is { app: ProjectariumApp; info: ProjectariumShardInfo } => x.info !== null);
+
+      if (candidates.length > 0) {
+        const statusRank = (s: ProjectariumApp['status']) =>
+          s === 'ONLINE' ? 0 : s === 'CHECKING' ? 1 : 2;
+        candidates.sort((a, b) => {
+          const rankDiff = statusRank(a.app.status) - statusRank(b.app.status);
+          if (rankDiff !== 0) return rankDiff;
+          const latDiff = (a.app.pingLatencyMs ?? 9999) - (b.app.pingLatencyMs ?? 9999);
+          if (latDiff !== 0) return latDiff;
+          return b.app.registeredAt.localeCompare(a.app.registeredAt);
+        });
+        const best = candidates[0].info;
+        return {
+          projectSlug: project.slug,
+          mode: 'dedicated-shard',
+          apiBaseUrl: best.apiBaseUrl,
+          shard: best,
+          resolvedAt: nowIso,
+        };
+      }
+    }
+
+    return {
+      projectSlug: project?.slug ?? (normalizedSlug || projectSlug),
+      mode: 'shared-logical',
+      apiBaseUrl: fallbackApiBaseUrl.replace(/\/+$/, ''),
+      shard: null,
+      resolvedAt: nowIso,
     };
   }
 }

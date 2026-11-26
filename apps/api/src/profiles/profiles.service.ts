@@ -89,12 +89,14 @@ export class ProfilesService {
       data: { profileId: profile.id },
     });
 
-    const homeFolders = await this.foldersRepo.findAll({
-      profileId: profile.id,
-      scope: 'home',
-    });
-    if (homeFolders.length === 0) {
-      await this.provisionStarterSpace(profile.id, false);
+    if (process.env.LEMON_SHARD_TIER !== 'dedicated') {
+      const homeFolders = await this.foldersRepo.findAll({
+        profileId: profile.id,
+        scope: 'home',
+      });
+      if (homeFolders.length === 0) {
+        await this.provisionStarterSpace(profile.id, false);
+      }
     }
 
     return profile;

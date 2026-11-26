@@ -81,7 +81,10 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       `http://127.0.0.1:${process.env.PORT ?? 3000}/api`
     ).replace(/\/+$/, '');
 
-    this.combinatorClient = new CoreCombinatorClient({ baseUrl: combinatorUrl });
+    this.combinatorClient = new CoreCombinatorClient({
+      baseUrl: combinatorUrl,
+      projectSlug: (process.env.LEMON_MEDIA_PROJECT_SLUG || 'lemon-media-hub').trim(),
+    });
     this.axon = new MediaLifecycleAxon({
       baseUrl: this.baseUrl,
       token,
@@ -426,6 +429,15 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async bootstrapConnections(): Promise<void> {
+    const projectariumUrl = (
+      process.env.LEMON_PROJECTARIUM_URL ||
+      `http://127.0.0.1:${process.env.PORT ?? 3000}/api`
+    ).replace(/\/+$/, '');
+    await this.combinatorClient.resolveAndAttachShard({
+      projectSlug: (process.env.LEMON_MEDIA_PROJECT_SLUG || 'lemon-media-hub').trim(),
+      projectariumUrl,
+      fallbackBaseUrl: this.combinatorClient.baseUrl,
+    });
     await this.ensureCombinatorNeurons();
     await this.ensureAuthenticated();
   }

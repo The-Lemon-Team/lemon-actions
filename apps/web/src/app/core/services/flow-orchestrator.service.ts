@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, OnDestroy, inject } from '@angular/core';
 import {
   BehaviorSubject,
   Observable,
@@ -30,6 +30,7 @@ import {
   ProjectInfo,
   TagWithCount,
 } from '../models/flow.models';
+import { ActiveShardTarget } from '../models/project-stand.models';
 import { buildFolderTree, isInSubtree } from '../utils/folder-tree';
 import { getProjectTheme } from '../utils/flow-ui';
 
@@ -40,7 +41,7 @@ const isExecuting = (s: FlowStatus) => s === FlowStatus.ACTIVE || s === FlowStat
  * streams: components never hold monolithic state and never subscribe manually.
  */
 @Injectable({ providedIn: 'root' })
-export class FlowOrchestratorService {
+export class FlowOrchestratorService implements OnDestroy {
   private readonly flowsSubject = new BehaviorSubject<Flow[]>([]);
   private readonly foldersSubject = new BehaviorSubject<Folder[]>([]);
   private readonly expandedIds = new BehaviorSubject<ReadonlySet<string>>(new Set<string>());
@@ -48,6 +49,8 @@ export class FlowOrchestratorService {
   private readonly selectedFolderId = new BehaviorSubject<string | null>(null);
   private readonly selectedTagName = new BehaviorSubject<string | null>(null);
   private readonly searchTerm = new BehaviorSubject<string>('');
+  private streamSource: EventSource | null = null;
+  private streamRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Mutex-style lock: true while a global exclusive flow is holding the system. */
   readonly mutexLocked$ = new BehaviorSubject<boolean>(false);
@@ -68,6 +71,7 @@ export class FlowOrchestratorService {
   readonly search$ = this.searchTerm.asObservable();
   readonly selectedProjectId$ = this.selectedProjectId.asObservable();
   readonly selectedFolderId$ = this.selectedFolderId.asObservable();
+  readonly activeShard$: Observable<ActiveShardTarget | null> = this.api.activeShard$ ?? of(null);
 
   /** Projects list derived from root folders and flows. */
   readonly projects$: Observable<ProjectInfo[]> = combineLatest([
@@ -239,6 +243,19 @@ export class FlowOrchestratorService {
         this.selectedFolderId.next(null);
       }
     }
+  }
+
+  /** Switches Core Console target between Main Shard (null) and a Dedicated Project Shard. */
+  switchShard(shard: ActiveShardTarget | null): void {
+    this.api.setActiveShard(shard);
+    this.selectedProjectId.next(null);
+    this.selectedFolderId.next(null);
+    this.selectedTagName.next(null);
+    this.searchTerm.next('');
+    this.rowCache.clear();
+    this.profileService.loadProfiles?.();
+    this.connectStream();
+    this.refresh();
   }
 
   /** (Re)loads flows and folders from the API for the active profile. */
@@ -416,6 +433,43 @@ export class FlowOrchestratorService {
       this.selectedFolderId.next(null);
       this.refresh();
     });
+    this.connectStream();
+  }
+
+  ngOnDestroy(): void {
+    this.disconnectStream();
+  }
+
+  private connectStream(): void {
+    this.disconnectStream();
+    if (typeof EventSource === 'undefined' || typeof this.api.streamUrl !== 'function') {
+      return;
+    }
+
+    try {
+      const es = new EventSource(this.api.streamUrl());
+      es.onmessage = () => {
+        if (this.streamRefreshTimer) return;
+        this.streamRefreshTimer = setTimeout(() => {
+          this.streamRefreshTimer = null;
+          this.refresh();
+        }, 800);
+      };
+      this.streamSource = es;
+    } catch {
+      // Ignore SSE errors in unsupported/test contexts
+    }
+  }
+
+  private disconnectStream(): void {
+    if (this.streamRefreshTimer) {
+      clearTimeout(this.streamRefreshTimer);
+      this.streamRefreshTimer = null;
+    }
+    if (this.streamSource) {
+      this.streamSource.close();
+      this.streamSource = null;
+    }
   }
 
   private syncMutexLock(flows: Flow[]): void {

@@ -96,6 +96,56 @@ export class FlowsRepository {
     return db.flow.findUnique({ where: { id }, include });
   }
 
+  /** Lightweight flow lookup without tag joins for hot paths (events, heartbeats, batch). */
+  findByIdLite(id: string, db: Db = this.prisma): Promise<Flow | null> {
+    return db.flow.findUnique({ where: { id } });
+  }
+
+  /**
+   * Acquires a transaction-scoped advisory lock for exclusive flow operations within a folder
+   * (or global scope when folderId is null) to prevent READ COMMITTED race conditions.
+   */
+  async acquireExclusiveScopeLock(folderId: string | null, db: Db = this.prisma): Promise<void> {
+    const lockKey = `flows:exclusive:${folderId ?? '__global__'}`;
+    await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+  }
+
+  /**
+   * Selects only flows that have active scheduler responsibilities (active timers, lease timeouts,
+   * active non-empty batches, OPEN circuit breakers, or scheduled windows) without joining tags.
+   */
+  findSchedulableFlows(db: Db = this.prisma): Promise<Flow[]> {
+    return db.$queryRaw<Flow[]>`
+      SELECT
+        id,
+        name,
+        description,
+        type,
+        status,
+        is_exclusive AS "isExclusive",
+        folder_id AS "folderId",
+        profile_id AS "profileId",
+        project_slug AS "projectSlug",
+        config,
+        orchestrator_rules AS "orchestratorRules",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM flows
+      WHERE
+        (status = 'ACTIVE' AND type = 'TIMER')
+        OR (status = 'ACTIVE' AND type = 'BATCH' AND COALESCE((config->>'pendingCount')::int, 0) > 0)
+        OR (status = 'ACTIVE' AND (orchestrator_rules->>'leaseTimeoutSeconds') IS NOT NULL)
+        OR (type = 'CIRCUIT_BREAKER' AND config->>'state' = 'OPEN')
+        OR (
+          orchestrator_rules->'schedule'->'windows' IS NOT NULL
+          AND jsonb_typeof(orchestrator_rules->'schedule'->'windows') = 'array'
+          AND jsonb_array_length(orchestrator_rules->'schedule'->'windows') > 0
+          AND COALESCE((orchestrator_rules->'schedule'->>'enabled')::boolean, true) = true
+        )
+      ORDER BY created_at ASC
+    `;
+  }
+
   create(data: Prisma.FlowCreateInput, tagNames: string[], db: Db = this.prisma): Promise<FlowWithTags> {
     return db.flow.create({
       data: { ...data, tags: { create: tagNames.map((name) => ({ tag: { connectOrCreate: { where: { name }, create: { name } } } })) } },
@@ -122,6 +172,11 @@ export class FlowsRepository {
       },
       include,
     });
+  }
+
+  /** Lightweight flow update without tag joins for internal state updates (config, rules). */
+  updateLite(id: string, data: Prisma.FlowUpdateInput, db: Db = this.prisma): Promise<Flow> {
+    return db.flow.update({ where: { id }, data });
   }
 
   async delete(id: string): Promise<void> {
@@ -240,6 +295,69 @@ export class FlowsRepository {
     });
   }
 
+  /**
+   * Bulk-enqueues batch buffer items in at most 1 lookup + 1 createMany + updates for matched dedupKeys,
+   * avoiding N+1 roundtrips and returning the accurate pending item count.
+   */
+  async pushBufferItemsBatch(
+    flowId: string,
+    items: Array<{ payload: Prisma.InputJsonObject; dedupKey?: string }>,
+    db: Db = this.prisma,
+  ): Promise<{ inserted: number; updated: number; pendingTotal: number }> {
+    const now = new Date();
+    const dedupMap = new Map<string, Prisma.InputJsonObject>();
+    const nonDedupPayloads: Prisma.InputJsonObject[] = [];
+
+    for (const item of items) {
+      if (item.dedupKey) {
+        dedupMap.set(item.dedupKey, item.payload);
+      } else {
+        nonDedupPayloads.push(item.payload);
+      }
+    }
+
+    let updated = 0;
+    const toInsert: Array<{ flowId: string; dedupKey?: string; payload: Prisma.InputJsonObject; enqueuedAt: Date }> =
+      nonDedupPayloads.map((payload) => ({ flowId, payload, enqueuedAt: now }));
+
+    if (dedupMap.size > 0) {
+      const keys = Array.from(dedupMap.keys());
+      const existingRows = await db.flowBufferItem.findMany({
+        where: { flowId, flushedAt: null, dedupKey: { in: keys } },
+        select: { id: true, dedupKey: true },
+      });
+      const existingByKey = new Map<string, string>();
+      for (const row of existingRows) {
+        if (row.dedupKey && !existingByKey.has(row.dedupKey)) {
+          existingByKey.set(row.dedupKey, row.id);
+        }
+      }
+
+      for (const [dedupKey, payload] of dedupMap.entries()) {
+        const existingId = existingByKey.get(dedupKey);
+        if (existingId) {
+          await db.flowBufferItem.update({
+            where: { id: existingId },
+            data: { payload, enqueuedAt: now },
+          });
+          updated++;
+        } else {
+          toInsert.push({ flowId, dedupKey, payload, enqueuedAt: now });
+        }
+      }
+    }
+
+    if (toInsert.length > 0) {
+      await db.flowBufferItem.createMany({ data: toInsert });
+    }
+
+    const pendingTotal = await db.flowBufferItem.count({
+      where: { flowId, flushedAt: null },
+    });
+
+    return { inserted: toInsert.length, updated, pendingTotal };
+  }
+
   async pushBufferItem(
     flowId: string,
     payload: Prisma.InputJsonObject,
@@ -282,5 +400,36 @@ export class FlowsRepository {
       });
     }
     return items;
+  }
+
+  /**
+   * Purges historical flow_events and flushed flow_buffer_items older than `cutoffDate`
+   * according to the shard's `eventRetentionDays` policy.
+   */
+  async purgeExpiredEvents(
+    cutoffDate: Date,
+    projectSlug?: string,
+    db: Db = this.prisma,
+  ): Promise<{ deletedEvents: number; deletedBufferItems: number }> {
+    const scopeFilter = projectSlug ? { flow: { projectSlug } } : {};
+
+    const deletedEventsRes = await db.flowEvent.deleteMany({
+      where: {
+        createdAt: { lt: cutoffDate },
+        ...scopeFilter,
+      },
+    });
+
+    const deletedBufferRes = await db.flowBufferItem.deleteMany({
+      where: {
+        flushedAt: { not: null, lt: cutoffDate },
+        ...scopeFilter,
+      },
+    });
+
+    return {
+      deletedEvents: deletedEventsRes.count,
+      deletedBufferItems: deletedBufferRes.count,
+    };
   }
 }

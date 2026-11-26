@@ -112,4 +112,27 @@ describe('FlowOrchestratorService (Projects -> Sub-Neurons hierarchy)', () => {
     expect(await firstValueFrom(service.selectedProject$)).toBeNull();
     expect(await firstValueFrom(service.selectedFolderId$)).toBeNull();
   });
+
+  it('switches active shard target and resets to Main Shard cleanly', async () => {
+    const setActiveShardSpy = jasmine.createSpy('setActiveShard');
+    const api = TestBed.inject(ApiService) as any;
+    api.setActiveShard = setActiveShardSpy;
+
+    service.switchShard({
+      shardId: 'shard-watchers-01',
+      projectSlug: 'lemon-watchers',
+      tier: 'dedicated',
+      apiBaseUrl: 'http://localhost:4320/api',
+    });
+
+    expect(setActiveShardSpy).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        shardId: 'shard-watchers-01',
+        apiBaseUrl: 'http://localhost:4320/api',
+      }),
+    );
+
+    service.switchShard(null);
+    expect(setActiveShardSpy).toHaveBeenCalledWith(null);
+  });
 });

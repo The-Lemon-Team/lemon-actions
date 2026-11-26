@@ -120,3 +120,71 @@ export interface ProjectStand {
   createdAt: string;
   updatedAt: string;
 }
+
+export type ShardTier = 'logical' | 'embedded' | 'dedicated';
+
+export interface ActiveShardTarget {
+  shardId: string;
+  projectSlug: string;
+  projectName?: string;
+  tier: ShardTier;
+  apiBaseUrl: string;
+}
+
+export interface ShardAnalyticsSnapshotPoint {
+  timestamp: string;
+  activeFlows: number;
+  openSessions: number;
+  openCircuitBreakers: number;
+  reductionRatePct: number;
+  dbLatencyMs: number | null;
+  schedulerDurationMs: number;
+}
+
+export interface ShardAnalyticsAlert {
+  timestamp: string;
+  topic: string;
+  severity: 'warn' | 'critical';
+  message: string;
+}
+
+export interface ShardAnalyticsEntry {
+  projectSlug: string;
+  shardId: string;
+  tier: string;
+  status: string;
+  lastMetricsAt: string | null;
+  lastFlowEventAt: string | null;
+  latestSnapshot: Record<string, any> | null;
+  snapshotHistory: ShardAnalyticsSnapshotPoint[];
+  totalFlowEvents: number;
+  eventsByType: Record<string, number>;
+  recentAlerts: ShardAnalyticsAlert[];
+}
+
+export interface ShardAnalyticsSummary {
+  generatedAt: string;
+  totalShards: number;
+  healthyShards?: number;
+  degradedShards?: number;
+  totalFlowEvents?: number;
+  shards: ShardAnalyticsEntry[];
+}
+
+export interface RegisteredShardView {
+  projectSlug: string;
+  projectName: string;
+  shardId: string;
+  tier: ShardTier;
+  status: string;
+  instanceId: string;
+  appName: string;
+  apiBaseUrl: string;
+  healthUrl?: string;
+  pingLatencyMs?: number;
+  lastPingAt?: string;
+  capabilities: string[];
+  customFlowTypes: string[];
+  customReducers: string[];
+  analytics?: ShardAnalyticsEntry | null;
+}

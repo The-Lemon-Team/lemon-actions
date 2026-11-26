@@ -54,6 +54,49 @@ services:
       retries: 5
       start_period: 15s
 
+  watchers-shard:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: lemon-core-api:latest
+    container_name: lemon-watchers-shard
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${WATCHERS_SHARD_PORT:-4320}:4320"
+    environment:
+      NODE_ENV: production
+      LEMON_SHARD_TIER: dedicated
+      LEMON_SHARD_PROJECT_SLUG: lemon-watchers
+      LEMON_SHARD_PROJECT_NAME: Lemon Watchers
+      LEMON_SHARD_ID: ${WATCHERS_SHARD_ID:-shard-lemon-watchers-01}
+      LEMON_SHARD_PREFERRED_PORT: ${WATCHERS_SHARD_PORT:-4320}
+      LEMON_SHARD_HOST: ${LEMON_SHARD_PUBLIC_HOST:-192.168.1.100}
+      LEMON_SHARD_HEALTH_HOST: ${LEMON_SHARD_HEALTH_HOST:-watchers-shard}
+      LEMON_SHARD_ENV: ${LEMON_SHARD_ENV:-production}
+      LEMON_SHARD_NETWORK_MODE: ${LEMON_SHARD_NETWORK_MODE:-lan}
+      LEMON_PROJECTARIUM_URL: http://api:3000/api
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lemon}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${POSTGRES_DB:-lemon_db}?schema=watchers_shard
+      AUTO_SEED: "false"
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      LEMON_BUS_DRIVER: ${LEMON_BUS_DRIVER:-auto}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,api,watchers-shard,host.docker.internal,192.168.1.100}
+      no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,api,watchers-shard,host.docker.internal,192.168.1.100}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${WATCHERS_SHARD_PORT:-4320}/api/shard/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   web:
     build:
       context: .

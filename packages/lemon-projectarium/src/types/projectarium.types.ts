@@ -221,3 +221,30 @@ export interface ProjectariumReleaseResponse {
   port: number;
   releasedAt: string;
 }
+
+export type ProjectariumShardTier = 'logical' | 'embedded' | 'dedicated';
+
+export interface ProjectariumShardInfo {
+  projectSlug: string;
+  projectName: string;
+  shardId: string;
+  tier: ProjectariumShardTier;
+  status: ProjectariumAppStatus;
+  instanceId: string;
+  appName: string;
+  apiBaseUrl: string;
+  healthUrl?: string;
+  pingLatencyMs?: number;
+  lastPingAt?: string;
+  capabilities: string[];
+  customFlowTypes: string[];
+  customReducers: string[];
+}
+
+export interface ProjectariumShardResolution {
+  projectSlug: string;
+  mode: 'dedicated-shard' | 'shared-logical';
+  apiBaseUrl: string;
+  shard: ProjectariumShardInfo | null;
+  resolvedAt: string;
+}

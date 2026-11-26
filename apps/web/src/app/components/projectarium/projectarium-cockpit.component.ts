@@ -5,15 +5,22 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { BehaviorSubject, combineLatest, map } from 'rxjs';
+import { Router } from '@angular/router';
+import { BehaviorSubject, combineLatest, finalize, map } from 'rxjs';
+import { FlowOrchestratorService } from '../../core/services/flow-orchestrator.service';
 import { ProjectStandService } from '../../core/services/project-stand.service';
 import { LemonCardColor, getLemonColorDotClass } from '../../core/models/worker.models';
-import { ProjectStand } from '../../core/models/project-stand.models';
+import {
+  ActiveShardTarget,
+  ProjectStand,
+  RegisteredShardView,
+} from '../../core/models/project-stand.models';
 import { AppEnvironment, AppNetworkMode } from '../../core/models/health-checker.models';
 import { ProjectStandCardComponent } from '../lemon-workers/project-stand-card.component';
 import { CreateStandModalComponent } from '../lemon-workers/create-stand-modal.component';
 import { AddAppModalComponent } from '../lemon-workers/add-app-modal.component';
 import { ProjectariumAnalyticsComponent } from './projectarium-analytics.component';
+import { ShardTopologyComponent } from './shard-topology.component';
 
 @Component({
   selector: 'app-projectarium-cockpit',
@@ -25,6 +32,7 @@ import { ProjectariumAnalyticsComponent } from './projectarium-analytics.compone
     CreateStandModalComponent,
     AddAppModalComponent,
     ProjectariumAnalyticsComponent,
+    ShardTopologyComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -71,6 +79,16 @@ import { ProjectariumAnalyticsComponent } from './projectarium-analytics.compone
             >
               <span class="material-symbols-rounded text-sm">monitoring</span>
               <span>Статистика машин</span>
+            </button>
+            <button
+              type="button"
+              data-testid="cockpit-tab-shards"
+              (click)="switchCockpitView('SHARDS')"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+              [class]="getCockpitViewBtnClass(activeCockpitView === 'SHARDS')"
+            >
+              <span class="material-symbols-rounded text-sm">hub</span>
+              <span>Шарды ядра</span>
             </button>
           </div>
 
@@ -273,6 +291,19 @@ import { ProjectariumAnalyticsComponent } from './projectarium-analytics.compone
           [selectedDays]="analyticsDays"
           (daysChange)="onAnalyticsDaysChange($event)"
           (refresh)="standService.fetchAnalytics(analyticsDays)"
+        />
+      } @else if (activeCockpitView === 'SHARDS') {
+        <app-shard-topology
+          [shards]="(standService.shards$ | async) ?? []"
+          [analytics]="standService.shardAnalytics$ | async"
+          [activeShardId]="(flowOrchestrator.activeShard$ | async)?.shardId ?? null"
+          [busyShardId]="busyShardId"
+          [feedbackMessage]="shardFeedback"
+          (refresh)="refreshShards()"
+          (switchToShard)="onSwitchToShard($event)"
+          (resetToMain)="onResetToMainShard()"
+          (publishMetrics)="onPublishShardMetrics($event)"
+          (pruneRetention)="onPruneShardRetention($event)"
         />
       } @else {
       <!-- TOP PORT SHIELD HUD BAR -->
@@ -485,13 +516,17 @@ import { ProjectariumAnalyticsComponent } from './projectarium-analytics.compone
 })
 export class ProjectariumCockpitComponent {
   readonly standService = inject(ProjectStandService);
+  readonly flowOrchestrator = inject(FlowOrchestratorService);
+  private readonly router = inject(Router, { optional: true });
 
   showCreateStandModal = false;
   showAddAppModal = false;
   selectedStandIdForAddApp: string | null = null;
 
-  activeCockpitView: 'STANDS' | 'ANALYTICS' = 'STANDS';
+  activeCockpitView: 'STANDS' | 'ANALYTICS' | 'SHARDS' = 'STANDS';
   analyticsDays = 30;
+  busyShardId: string | null = null;
+  shardFeedback = '';
   showMachinePicker = false;
   customMachineInput = '';
 
@@ -644,11 +679,63 @@ export class ProjectariumCockpitComponent {
     this.selectedStandIdForAddApp = null;
   }
 
-  switchCockpitView(view: 'STANDS' | 'ANALYTICS'): void {
+  switchCockpitView(view: 'STANDS' | 'ANALYTICS' | 'SHARDS'): void {
     this.activeCockpitView = view;
     if (view === 'ANALYTICS') {
       this.standService.fetchAnalytics(this.analyticsDays);
+    } else if (view === 'SHARDS') {
+      this.refreshShards();
     }
+  }
+
+  refreshShards(): void {
+    this.standService.fetchShards();
+    this.standService.fetchShardAnalytics();
+  }
+
+  onSwitchToShard(target: ActiveShardTarget): void {
+    this.flowOrchestrator.switchShard(target);
+    this.shardFeedback = `✓ Контекст Core Console переключён на шард ${target.shardId} (${target.apiBaseUrl})`;
+    if (this.router) {
+      void this.router.navigate(['/core']).catch(() => {});
+    }
+  }
+
+  onResetToMainShard(): void {
+    this.flowOrchestrator.switchShard(null);
+    this.shardFeedback = '✓ Контекст Core Console возвращён на Main Shard';
+  }
+
+  onPublishShardMetrics(shard: RegisteredShardView): void {
+    this.busyShardId = shard.shardId;
+    this.standService
+      .publishShardMetrics(shard.apiBaseUrl)
+      .pipe(finalize(() => (this.busyShardId = null)))
+      .subscribe({
+        next: (res) => {
+          this.shardFeedback = res.published
+            ? `✓ Снапшот метрик шарда ${shard.shardId} опубликован в NATS`
+            : `ℹ Метрики собраны (NATS не подключён)`;
+        },
+        error: (err) => {
+          this.shardFeedback = `Ошибка публикации метрик: ${err?.message || 'сетевой сбой'}`;
+        },
+      });
+  }
+
+  onPruneShardRetention(ev: { shard: RegisteredShardView; retentionDays: number }): void {
+    this.busyShardId = ev.shard.shardId;
+    this.standService
+      .pruneShardRetention(ev.shard.apiBaseUrl, ev.retentionDays)
+      .pipe(finalize(() => (this.busyShardId = null)))
+      .subscribe({
+        next: (res) => {
+          this.shardFeedback = `✓ Retention (> ${res.retentionDays} дн.) на ${ev.shard.shardId}: удалено ${res.deletedEvents} событий и ${res.deletedBufferItems} буферных записей`;
+        },
+        error: (err) => {
+          this.shardFeedback = `Ошибка очистки retention: ${err?.message || 'сетевой сбой'}`;
+        },
+      });
   }
 
   onAnalyticsDaysChange(days: number): void {

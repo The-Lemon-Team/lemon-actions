@@ -25,6 +25,7 @@
     "dev:up": "powershell -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
     "dev:projectarium": "powershell -ExecutionPolicy Bypass -File ./scripts/start-projectarium-dev.ps1",
     "start:api": "npm run --prefix apps/api start:dev",
+    "start:watchers-shard": "cmd /c \"set LEMON_SHARD_PROJECT_SLUG=lemon-watchers&& set LEMON_SHARD_PROJECT_NAME=Lemon Watchers&& set LEMON_SHARD_TIER=dedicated&& npm run --prefix apps/api start:shard:dev\"",
     "start:web": "npm run --prefix apps/web start",
     "start:projectarium": "npm run --prefix apps/web start:projectarium",
     "start:projectarium-mcp": "node packages/lemon-projectarium/dist/mcp/projectarium-mcp.server.js",

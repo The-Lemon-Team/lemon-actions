@@ -83,7 +83,10 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       `http://127.0.0.1:${process.env.PORT ?? 3000}/api`
     ).replace(/\/+$/, '');
 
-    this.combinatorClient = new CoreCombinatorClient({ baseUrl: combinatorUrl });
+    this.combinatorClient = new CoreCombinatorClient({
+      baseUrl: combinatorUrl,
+      projectSlug: (process.env.LEMON_AI_PROJECT_SLUG || 'lemon-ai').trim(),
+    });
     this.axon = new AiStudioAxon({
       baseUrl: this.baseUrl,
       apiKey,
@@ -251,6 +254,15 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async bootstrapConnections(): Promise<void> {
+    const projectariumUrl = (
+      process.env.LEMON_PROJECTARIUM_URL ||
+      `http://127.0.0.1:${process.env.PORT ?? 3000}/api`
+    ).replace(/\/+$/, '');
+    await this.combinatorClient.resolveAndAttachShard({
+      projectSlug: (process.env.LEMON_AI_PROJECT_SLUG || 'lemon-ai').trim(),
+      projectariumUrl,
+      fallbackBaseUrl: this.combinatorClient.baseUrl,
+    });
     await this.ensureCombinatorNeurons();
   }
 

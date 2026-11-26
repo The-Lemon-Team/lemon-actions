@@ -5,6 +5,8 @@ import {
   MachineSummary,
   ProjectariumAnalytics,
   ProjectStand,
+  RegisteredShardView,
+  ShardAnalyticsSummary,
   StandAppItem,
   StandAppStatus,
   StandNoteItem,
@@ -35,12 +37,16 @@ export class ProjectStandService {
   private readonly selectedMachineNameSubject$ = new BehaviorSubject<string>(this.loadSavedMachineName());
   private readonly machinesSubject$ = new BehaviorSubject<MachineSummary[]>([]);
   private readonly analyticsSubject$ = new BehaviorSubject<ProjectariumAnalytics | null>(null);
+  private readonly shardsSubject$ = new BehaviorSubject<RegisteredShardView[]>([]);
+  private readonly shardAnalyticsSubject$ = new BehaviorSubject<ShardAnalyticsSummary | null>(null);
 
   readonly allStands$: Observable<ProjectStand[]> = this.stands$.asObservable();
   readonly selectedMachineId$: Observable<string> = this.selectedMachineIdSubject$.asObservable();
   readonly selectedMachineName$: Observable<string> = this.selectedMachineNameSubject$.asObservable();
   readonly machines$: Observable<MachineSummary[]> = this.machinesSubject$.asObservable();
   readonly analytics$: Observable<ProjectariumAnalytics | null> = this.analyticsSubject$.asObservable();
+  readonly shards$: Observable<RegisteredShardView[]> = this.shardsSubject$.asObservable();
+  readonly shardAnalytics$: Observable<ShardAnalyticsSummary | null> = this.shardAnalyticsSubject$.asObservable();
 
   private nextDynamicPort = 4320;
 
@@ -96,6 +102,52 @@ export class ProjectStandService {
       },
       error: () => {},
     });
+  }
+
+  fetchShards(): void {
+    this.http.get<RegisteredShardView[]>(`${PROJECTARIUM_API_BASE}/shards`).subscribe({
+      next: (shards) => {
+        if (Array.isArray(shards)) {
+          this.shardsSubject$.next(shards);
+        }
+      },
+      error: () => {},
+    });
+  }
+
+  fetchShardAnalytics(projectSlug?: string): void {
+    const qs = projectSlug ? `?projectSlug=${encodeURIComponent(projectSlug)}` : '';
+    this.http.get<ShardAnalyticsSummary>(`${PROJECTARIUM_API_BASE}/shards/analytics${qs}`).subscribe({
+      next: (summary) => {
+        if (summary) {
+          this.shardAnalyticsSubject$.next(summary);
+        }
+      },
+      error: () => {},
+    });
+  }
+
+  publishShardMetrics(apiBaseUrl: string): Observable<{ published: boolean }> {
+    const cleanBase = apiBaseUrl.replace(/\/+$/, '');
+    return this.http
+      .post<{ published: boolean }>(`${cleanBase}/shard/metrics/publish`, {})
+      .pipe(
+        tap(() => {
+          this.fetchShards();
+          this.fetchShardAnalytics();
+        }),
+      );
+  }
+
+  pruneShardRetention(
+    apiBaseUrl: string,
+    retentionDays = 30,
+  ): Observable<{ deletedEvents: number; deletedBufferItems: number; retentionDays: number }> {
+    const cleanBase = apiBaseUrl.replace(/\/+$/, '');
+    return this.http.post<{ deletedEvents: number; deletedBufferItems: number; retentionDays: number }>(
+      `${cleanBase}/shard/retention/prune`,
+      { retentionDays },
+    );
   }
 
   fetchFromBackend(): void {

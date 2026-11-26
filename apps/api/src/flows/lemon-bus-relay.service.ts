@@ -17,13 +17,17 @@ export interface ObserverSelectorConfig {
 }
 
 const MAX_SEEN_EVENT_IDS = 1000;
+const OBSERVER_CACHE_TTL_MS = 30_000;
 
 @Injectable()
 export class LemonBusRelayService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LemonBusRelayService.name);
   private outboundSub: Subscription | null = null;
   private inboundSub: Subscription | null = null;
+  private observerChangedSub: Subscription | null = null;
   private readonly seenEventIds = new Set<string>();
+  private observerCache: { items: FlowView[]; expiresAt: number } | null = null;
+  private observerRefreshPromise: Promise<FlowView[]> | null = null;
 
   constructor(
     private readonly eventBus: FlowsEventBusService,
@@ -38,6 +42,12 @@ export class LemonBusRelayService implements OnModuleInit, OnModuleDestroy {
       void this.relayToBus(packet);
     });
 
+    if (this.flowsService?.observerChanged$) {
+      this.observerChangedSub = this.flowsService.observerChanged$.subscribe(() => {
+        this.invalidateObserverCache();
+      });
+    }
+
     if (this.stackBus) {
       this.inboundSub = this.stackBus.subscribe$({ topicPattern: 'lemon.>' }).subscribe((envelope) => {
         void this.dispatchToObserverFlows(envelope);
@@ -50,6 +60,43 @@ export class LemonBusRelayService implements OnModuleInit, OnModuleDestroy {
     this.outboundSub = null;
     this.inboundSub?.unsubscribe();
     this.inboundSub = null;
+    this.observerChangedSub?.unsubscribe();
+    this.observerChangedSub = null;
+  }
+
+  invalidateObserverCache(): void {
+    this.observerCache = null;
+  }
+
+  private async getActiveObservers(): Promise<FlowView[]> {
+    if (!this.flowsService) return [];
+
+    const now = Date.now();
+    if (this.observerCache && now < this.observerCache.expiresAt) {
+      return this.observerCache.items;
+    }
+
+    if (this.observerRefreshPromise) {
+      return this.observerRefreshPromise;
+    }
+
+    this.observerRefreshPromise = this.flowsService
+      .list({
+        type: FlowType.OBSERVER,
+        status: FlowStatus.ACTIVE,
+      })
+      .then((items) => {
+        this.observerCache = {
+          items,
+          expiresAt: Date.now() + OBSERVER_CACHE_TTL_MS,
+        };
+        return items;
+      })
+      .finally(() => {
+        this.observerRefreshPromise = null;
+      });
+
+    return this.observerRefreshPromise;
   }
 
   /**
@@ -101,10 +148,7 @@ export class LemonBusRelayService implements OnModuleInit, OnModuleDestroy {
 
     let observers: FlowView[];
     try {
-      observers = await this.flowsService.list({
-        type: FlowType.OBSERVER,
-        status: FlowStatus.ACTIVE,
-      });
+      observers = await this.getActiveObservers();
     } catch (err) {
       this.logger.debug(
         `Observer lookup skipped (DB unavailable): ${err instanceof Error ? err.message : String(err)}`,

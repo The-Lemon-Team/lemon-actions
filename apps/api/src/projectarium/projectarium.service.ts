@@ -24,6 +24,8 @@ import {
   ProjectariumReleaseResponse,
   ProjectariumRunEndReason,
   ProjectariumScope,
+  ProjectariumShardInfo,
+  ProjectariumShardResolution,
   ProjectariumAppStatus,
   ProjectariumTodoItem,
   ProjectShieldStats,
@@ -32,6 +34,7 @@ import {
   resolveMachineIdentity,
 } from '@lemon/projectarium';
 import { PrismaService } from '../prisma/prisma.service';
+import { ShardAnalyticsService } from './shard-analytics.service';
 import {
   AddAppToProjectDto,
   AddChronicleEventDto,
@@ -69,6 +72,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly stackBus?: StackBusService,
+    @Optional() private readonly shardAnalytics?: ShardAnalyticsService,
   ) {
     this.engine = new ProjectariumEngine();
     this.projectariumBus = this.stackBus?.forProject('projectarium', 'lemon-projectarium');
@@ -628,6 +632,29 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
 
   getStats(): ProjectShieldStats {
     return this.engine.getStats();
+  }
+
+  listShards(includeEvicted = false): Array<ProjectariumShardInfo & { analytics?: unknown }> {
+    const shards = this.engine.listShards(includeEvicted);
+    if (!this.shardAnalytics) return shards;
+    const summary = this.shardAnalytics.getAnalyticsSummary();
+    const bySlug = new Map(summary.shards.map((s) => [s.projectSlug, s]));
+    return shards.map((sh) => ({
+      ...sh,
+      analytics: bySlug.get(sh.projectSlug) ?? null,
+    }));
+  }
+
+  resolveShard(projectSlug: string, fallbackApiBaseUrl?: string): ProjectariumShardResolution {
+    const defaultMain = fallbackApiBaseUrl || process.env.LEMON_MAIN_API_URL || 'http://localhost:3000/api';
+    return this.engine.resolveShard(projectSlug, defaultMain);
+  }
+
+  getShardAnalytics(projectSlug?: string) {
+    if (!this.shardAnalytics) {
+      return { generatedAt: new Date().toISOString(), totalShards: 0, shards: [] };
+    }
+    return this.shardAnalytics.getAnalyticsSummary(projectSlug);
   }
 
   async getMachines(): Promise<ProjectariumMachineSummary[]> {

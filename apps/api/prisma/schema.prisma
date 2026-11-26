@@ -104,6 +104,8 @@ model Flow {
   @@index([projectSlug])
   @@index([type])
   @@index([status])
+  @@index([type, status])
+  @@index([folderId, isExclusive, status])
   @@map("flows")
 }
 

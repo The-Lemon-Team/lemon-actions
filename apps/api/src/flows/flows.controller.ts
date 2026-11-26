@@ -153,10 +153,12 @@ export class FlowsController {
     @Headers('x-profile-id') headerProfileId?: string,
     @Headers('x-project-slug') headerProjectSlug?: string,
   ) {
+    const defaultShardSlug =
+      process.env.LEMON_SHARD_TIER === 'dedicated' ? process.env.LEMON_SHARD_PROJECT_SLUG : undefined;
     return this.service.create({
       ...dto,
       profileId: dto.profileId ?? headerProfileId ?? null,
-      projectSlug: dto.projectSlug ?? headerProjectSlug ?? null,
+      projectSlug: dto.projectSlug ?? headerProjectSlug ?? defaultShardSlug ?? null,
     });
   }
 

@@ -8,7 +8,12 @@ export interface StreamSubscriptionOptions {
 }
 
 export class StreamModule {
-  constructor(private readonly baseUrl: string) {}
+  private readonly getBaseUrl: () => string;
+
+  constructor(baseUrlOrProvider: string | (() => string)) {
+    this.getBaseUrl =
+      typeof baseUrlOrProvider === 'function' ? baseUrlOrProvider : () => baseUrlOrProvider;
+  }
 
   subscribe(
     options: StreamSubscriptionOptions,
@@ -21,7 +26,7 @@ export class StreamModule {
     if (options.impulseType) params.set('impulseType', options.impulseType);
 
     const qs = params.toString();
-    const url = `${this.baseUrl.replace(/\/+$/, '')}/flows/stream${qs ? '?' + qs : ''}`;
+    const url = `${this.getBaseUrl().replace(/\/+$/, '')}/flows/stream${qs ? '?' + qs : ''}`;
 
     const esFactory = (globalThis as any).EventSource;
     if (typeof esFactory !== 'undefined') {

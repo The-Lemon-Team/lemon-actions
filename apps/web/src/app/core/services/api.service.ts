@@ -1,7 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { ActiveShardTarget } from '../models/project-stand.models';
 import {
   CodeRepoView,
   CreateFlowPayload,
@@ -14,11 +15,85 @@ import {
   Profile,
 } from '../models/flow.models';
 
+const ACTIVE_SHARD_STORAGE_KEY = 'lemon_active_shard_v1';
+
 /** Thin typed wrapper over the NestJS REST API (contracts = flow.models.ts). */
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);
-  private readonly base = environment.apiUrl;
+  private readonly defaultBase = environment.apiUrl;
+  private readonly activeShardSubject = new BehaviorSubject<ActiveShardTarget | null>(
+    this.loadStoredShard(),
+  );
+
+  readonly activeShard$: Observable<ActiveShardTarget | null> = this.activeShardSubject.asObservable();
+
+  get base(): string {
+    return this.activeShardSubject.value?.apiBaseUrl.replace(/\/+$/, '') || this.defaultBase;
+  }
+
+  streamUrl(projectSlug?: string): string {
+    const slug = projectSlug ?? this.activeShardSubject.value?.projectSlug;
+    const qs = slug ? `?projectSlug=${encodeURIComponent(slug)}` : '';
+    return `${this.base}/flows/stream${qs}`;
+  }
+
+  getActiveShard(): ActiveShardTarget | null {
+    return this.activeShardSubject.value;
+  }
+
+  setActiveShard(shard: ActiveShardTarget | null): void {
+    this.activeShardSubject.next(shard);
+    this.saveStoredShard(shard);
+  }
+
+  private loadStoredShard(): ActiveShardTarget | null {
+    try {
+      const raw = localStorage.getItem(ACTIVE_SHARD_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<ActiveShardTarget>;
+      if (parsed && parsed.shardId && parsed.projectSlug && parsed.apiBaseUrl) {
+        return {
+          shardId: parsed.shardId,
+          projectSlug: parsed.projectSlug,
+          projectName: parsed.projectName,
+          tier: parsed.tier || 'dedicated',
+          apiBaseUrl: parsed.apiBaseUrl,
+        };
+      }
+    } catch {
+      // ignore corrupted storage
+    }
+    return null;
+  }
+
+  private saveStoredShard(shard: ActiveShardTarget | null): void {
+    try {
+      if (shard) {
+        localStorage.setItem(ACTIVE_SHARD_STORAGE_KEY, JSON.stringify(shard));
+      } else {
+        localStorage.removeItem(ACTIVE_SHARD_STORAGE_KEY);
+      }
+    } catch {
+      // ignore storage quota errors
+    }
+  }
+
+  pruneShardRetention(
+    apiBaseUrl: string,
+    retentionDays?: number,
+  ): Observable<{ deletedEvents: number; deletedBufferItems: number; retentionDays: number }> {
+    const cleanBase = apiBaseUrl.replace(/\/+$/, '');
+    return this.http.post<{ deletedEvents: number; deletedBufferItems: number; retentionDays: number }>(
+      `${cleanBase}/shard/retention/prune`,
+      retentionDays ? { retentionDays } : {},
+    );
+  }
+
+  publishShardMetrics(apiBaseUrl: string): Observable<{ published: boolean }> {
+    const cleanBase = apiBaseUrl.replace(/\/+$/, '');
+    return this.http.post<{ published: boolean }>(`${cleanBase}/shard/metrics/publish`, {});
+  }
 
   getProfiles(): Observable<Profile[]> {
     return this.http.get<Profile[]>(`${this.base}/profiles`);
