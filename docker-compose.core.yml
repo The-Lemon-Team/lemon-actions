@@ -38,14 +38,12 @@ services:
       LEMON_SEASONS_URL: ${LEMON_SEASONS_URL:-http://host.docker.internal:3001}
       LEMON_MEDIA_HUB_URL: ${LEMON_MEDIA_HUB_URL:-http://host.docker.internal:3005}
       LEMON_AI_SERVICE_URL: ${LEMON_AI_SERVICE_URL:-http://host.docker.internal:3006}
-      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      NATS_URL: ${NATS_URL:-nats://host.docker.internal:4222}
       LEMON_BUS_DRIVER: ${LEMON_BUS_DRIVER:-auto}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,host.docker.internal,192.168.1.100}
       no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,host.docker.internal,192.168.1.100}
     depends_on:
       postgres:
-        condition: service_healthy
-      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
@@ -64,34 +62,32 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${WATCHERS_SHARD_PORT:-4320}:4320"
+      - "${WATCHERS_SHARD_PORT:-4326}:${WATCHERS_SHARD_PORT:-4326}"
     environment:
       NODE_ENV: production
       LEMON_SHARD_TIER: dedicated
       LEMON_SHARD_PROJECT_SLUG: lemon-watchers
       LEMON_SHARD_PROJECT_NAME: Lemon Watchers
       LEMON_SHARD_ID: ${WATCHERS_SHARD_ID:-shard-lemon-watchers-01}
-      LEMON_SHARD_PREFERRED_PORT: ${WATCHERS_SHARD_PORT:-4320}
+      LEMON_SHARD_PREFERRED_PORT: ${WATCHERS_SHARD_PORT:-4326}
       LEMON_SHARD_HOST: ${LEMON_SHARD_PUBLIC_HOST:-192.168.1.100}
       LEMON_SHARD_HEALTH_HOST: ${LEMON_SHARD_HEALTH_HOST:-watchers-shard}
       LEMON_SHARD_ENV: ${LEMON_SHARD_ENV:-production}
       LEMON_SHARD_NETWORK_MODE: ${LEMON_SHARD_NETWORK_MODE:-lan}
       LEMON_PROJECTARIUM_URL: http://api:3000/api
-      DATABASE_URL: postgresql://${POSTGRES_USER:-lemon}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${POSTGRES_DB:-lemon_db}?schema=watchers_shard
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lemon}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${WATCHERS_SHARD_DB:-lemon_watchers_shard}?schema=public
       AUTO_SEED: "false"
-      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      NATS_URL: ${NATS_URL:-nats://host.docker.internal:4222}
       LEMON_BUS_DRIVER: ${LEMON_BUS_DRIVER:-auto}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,api,watchers-shard,host.docker.internal,192.168.1.100}
       no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,api,watchers-shard,host.docker.internal,192.168.1.100}
     depends_on:
       postgres:
         condition: service_healthy
-      nats:
-        condition: service_healthy
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${WATCHERS_SHARD_PORT:-4320}/api/shard/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${WATCHERS_SHARD_PORT:-4326}/api/shard/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -120,6 +116,7 @@ services:
       start_period: 10s
 
   nats:
+    profiles: ["bundled-nats"]
     image: nats:2.10-alpine
     container_name: lemon-core-nats
     restart: unless-stopped

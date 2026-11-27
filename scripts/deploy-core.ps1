@@ -30,7 +30,9 @@ Invoke-DockerCompose @("build", "api")
 Write-Host "🌐 Building Unified Lemon App Shell ($BuildConfig) image on $DockerHost ..." -ForegroundColor Cyan
 Invoke-DockerCompose @("build", "web")
 
-Write-Host "📦 Starting Unified Lemon Stack (postgres, nats, api, watchers-shard, web) on $DockerHost ..." -ForegroundColor Cyan
+$watchersShardPort = if ($env:WATCHERS_SHARD_PORT) { $env:WATCHERS_SHARD_PORT } else { "4326" }
+
+Write-Host "📦 Starting Unified Lemon Stack (postgres, api, watchers-shard:$watchersShardPort, web) on $DockerHost ..." -ForegroundColor Cyan
 Invoke-DockerCompose @("up", "-d", "--remove-orphans")
 
 Write-Host "✅ Active containers on ${DockerHost}:" -ForegroundColor Green
@@ -47,10 +49,10 @@ foreach ($ep in @("health", "seasons/status", "media/status", "ai/status", "proj
 }
 
 try {
-  $shardResp = Invoke-RestMethod -Uri "http://$($hostIp):4320/api/shard/health" -TimeoutSec 10
-  Write-Host "    Watchers Shard :4320/api/shard/health: $($shardResp | ConvertTo-Json -Compress)" -ForegroundColor Green
+  $shardResp = Invoke-RestMethod -Uri "http://$($hostIp):$($watchersShardPort)/api/shard/health" -TimeoutSec 10
+  Write-Host "    Watchers Shard :$watchersShardPort/api/shard/health: $($shardResp | ConvertTo-Json -Compress)" -ForegroundColor Green
 } catch {
-  Write-Warning "Watchers Shard :4320 probe failed: $_"
+  Write-Warning "Watchers Shard :$watchersShardPort probe failed: $_"
 }
 
 foreach ($port in @(80, 4201)) {
