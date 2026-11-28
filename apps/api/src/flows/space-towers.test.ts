@@ -275,6 +275,49 @@ async function runSpaceTowersTests() {
   assert.equal(mcpTask.stepsTotal, 3);
   console.log('✓ 6. Unified Task Pool filters by actorId/status/tower & updates task steps cleanly');
 
+  // 7. Transaction ledger tracks participants in format user (ПК-1/ПК-2/ПК-3) + character & workstationStats
+  await flowsService.appendEvent(fireVault.id, {
+    eventType: 'REWARD_MINTED',
+    payload: {
+      txId: 'tx-pc-multi-1',
+      taskId: 'bounty-24-test',
+      tower: 'FIRE',
+      amount: 200,
+      currency: 'ancient_point',
+      reason: 'Тестовая выплата с привязкой к ПК-1 и ПК-2',
+      participants: [
+        { user: 'PC-1', actorId: 'actor-professor', actorName: 'Профессор Разум' },
+        { user: 'ПК-2', actorId: 'actor-alisa', actorName: 'Алиса' },
+      ],
+    },
+  });
+  await flowsService.appendEvent(fireVault.id, {
+    eventType: 'REWARD_MINTED',
+    payload: {
+      txId: 'tx-pc-backfill-1',
+      taskId: 'bounty-legacy-seed',
+      tower: 'FIRE',
+      amount: 500,
+      currency: 'golden_ancient_point',
+      balanceAlreadyApplied: true,
+      participants: [{ user: 'ПК-3', actorId: 'actor-starleader' }],
+    },
+  });
+
+  const fireAfterTx = ((await flowsService.findOne(fireVault.id)).config as any).projectionState;
+  assert.equal(fireAfterTx.balances.ancient_point, 500, '300 + 200 AP, backfill does not re-add');
+  assert.equal(fireAfterTx.balances.fire_point, 100);
+  assert.equal(fireAfterTx.balances.golden_ancient_point ?? 0, 0, 'balanceAlreadyApplied=true skips balance mutation');
+  assert.equal(fireAfterTx.transactions.length, 2);
+  assert.deepEqual(
+    fireAfterTx.transactions[0].participants.map((p: any) => `${p.user}:${p.actorId}`),
+    ['ПК-1:actor-professor', 'ПК-2:actor-alisa'],
+  );
+  assert.equal(fireAfterTx.workstationStats['ПК-1'].totalsByCurrency.ancient_point, 200);
+  assert.equal(fireAfterTx.workstationStats['ПК-2'].actors['actor-alisa'].ancient_point, 200);
+  assert.equal(fireAfterTx.workstationStats['ПК-3'].actors['actor-starleader'].golden_ancient_point, 500);
+  console.log('✓ 7. Transaction ledger & workstationStats attribute user (ПК-1/ПК-2/ПК-3) + character cleanly');
+
   console.log('\n=== All Space Towers & Emitter Tests Passed! ===');
 }
 

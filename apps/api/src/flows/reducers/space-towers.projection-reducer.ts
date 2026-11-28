@@ -18,6 +18,33 @@ const SPACE_TOWER_EVENTS = new Set([
   'OWN_LOT_PUBLISHED',
 ]);
 
+const TX_EVENTS = new Set(['DEPOSIT', 'REWARD_MINTED', 'LEDGER_CREDIT', 'WITHDRAW', 'LEDGER_DEBIT']);
+const MAX_TRANSACTIONS_HISTORY = 200;
+
+export interface TransactionParticipantRecord {
+  user: string;
+  actorId: string;
+  actorName?: string;
+  role?: string;
+}
+
+export interface TransactionLedgerRecord {
+  txId: string;
+  eventType: string;
+  direction: 'CREDIT' | 'DEBIT';
+  taskId: string | null;
+  tower: string | null;
+  currency: string;
+  amount: number;
+  reason: string | null;
+  issuer: string;
+  balanceAlreadyApplied: boolean;
+  participants: TransactionParticipantRecord[];
+  recipients: string[];
+  timestamp: string;
+  txHash?: string;
+}
+
 /**
  * Domain projection reducer for Space Towers & Main Emitter (balances, resources, participants, tasks).
  * Extracted from FlowsService so project-specific projections remain pluggable per shard.
@@ -51,16 +78,23 @@ export class SpaceTowersProjectionReducer implements ProjectionReducer {
     const participants: Array<Record<string, any>> = Array.isArray(prev.participants) ? [...prev.participants] : [];
     const emitterTasks: Array<Record<string, any>> = Array.isArray(prev.emitterTasks) ? [...prev.emitterTasks] : [];
     const ownLots: Array<Record<string, any>> = Array.isArray(prev.ownLots) ? [...prev.ownLots] : [];
+    const transactions: TransactionLedgerRecord[] = Array.isArray(prev.transactions) ? [...prev.transactions] : [];
 
     switch (eventType) {
       case 'DEPOSIT':
       case 'REWARD_MINTED':
       case 'LEDGER_CREDIT':
-        this.applyBalanceDelta(balances, payload, 1, Boolean(cfg.allowNegative));
+        if (!payload.balanceAlreadyApplied) {
+          this.applyBalanceDelta(balances, payload, 1, Boolean(cfg.allowNegative));
+        }
+        this.recordTransaction(transactions, eventType, 'CREDIT', payload, cfg, isoAt);
         break;
       case 'WITHDRAW':
       case 'LEDGER_DEBIT':
-        this.applyBalanceDelta(balances, payload, -1, Boolean(cfg.allowNegative));
+        if (!payload.balanceAlreadyApplied) {
+          this.applyBalanceDelta(balances, payload, -1, Boolean(cfg.allowNegative));
+        }
+        this.recordTransaction(transactions, eventType, 'DEBIT', payload, cfg, isoAt);
         break;
       case 'RESOURCE_PRODUCED':
       case 'RESTOCKED':
@@ -100,6 +134,7 @@ export class SpaceTowersProjectionReducer implements ProjectionReducer {
     }
 
     const canPublishOwnLots = this.hasStarterCapital(prev, balances);
+    const workstationStats = this.computeWorkstationStats(transactions);
 
     return {
       ...prev,
@@ -108,6 +143,8 @@ export class SpaceTowersProjectionReducer implements ProjectionReducer {
       participants,
       emitterTasks,
       ownLots,
+      transactions,
+      workstationStats,
       canPublishOwnLots,
       lastEventType: eventType,
       lastUpdatedAt: isoAt,
@@ -136,6 +173,164 @@ export class SpaceTowersProjectionReducer implements ProjectionReducer {
     if (!Number.isFinite(amount) || amount <= 0) return;
     const nextVal = (balances[currency] ?? 0) + sign * amount;
     balances[currency] = sign < 0 && !allowNegative ? Math.max(0, nextVal) : nextVal;
+  }
+
+  private normalizeWorkstationUser(raw: unknown): string {
+    const cleaned = String(raw || '').trim();
+    if (!cleaned) return 'ПК-1';
+    const upper = cleaned.toUpperCase();
+    if (upper === 'PC-1' || upper === 'PC1' || upper === 'ПК1') return 'ПК-1';
+    if (upper === 'PC-2' || upper === 'PC2' || upper === 'ПК2') return 'ПК-2';
+    if (upper === 'PC-3' || upper === 'PC3' || upper === 'ПК3') return 'ПК-3';
+    return cleaned;
+  }
+
+  private normalizeTxParticipants(payload: Record<string, any>): TransactionParticipantRecord[] {
+    const defaultUser = this.normalizeWorkstationUser(payload.workstation ?? payload.user ?? payload.pc);
+    const out: TransactionParticipantRecord[] = [];
+    const seen = new Set<string>();
+
+    const pushEntry = (userRaw: unknown, actorRaw: unknown, actorName?: unknown, role?: unknown) => {
+      const actorId = String(actorRaw || '').trim();
+      if (!actorId) return;
+      const user = this.normalizeWorkstationUser(userRaw ?? defaultUser);
+      const key = `${user}::${actorId}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({
+        user,
+        actorId,
+        ...(typeof actorName === 'string' && actorName.trim() ? { actorName: actorName.trim() } : {}),
+        ...(typeof role === 'string' && role.trim() ? { role: role.trim() } : {}),
+      });
+    };
+
+    if (Array.isArray(payload.participants)) {
+      for (const item of payload.participants) {
+        if (typeof item === 'string') {
+          pushEntry(defaultUser, item);
+        } else if (item && typeof item === 'object') {
+          pushEntry(
+            (item as any).user ?? (item as any).workstation ?? (item as any).pc ?? defaultUser,
+            (item as any).actorId ?? (item as any).characterId ?? (item as any).id,
+            (item as any).actorName,
+            (item as any).role,
+          );
+        }
+      }
+    }
+
+    if (Array.isArray(payload.recipients)) {
+      for (const item of payload.recipients) {
+        if (typeof item === 'string') {
+          pushEntry(defaultUser, item);
+        } else if (item && typeof item === 'object') {
+          pushEntry(
+            (item as any).user ?? (item as any).workstation ?? (item as any).pc ?? defaultUser,
+            (item as any).actorId ?? (item as any).characterId ?? (item as any).id,
+            (item as any).actorName,
+            (item as any).role,
+          );
+        }
+      }
+    }
+
+    if (out.length === 0) {
+      const fallbackActor = payload.recipientActorId ?? payload.actorId ?? payload.assigneeActorId;
+      if (fallbackActor) {
+        pushEntry(defaultUser, fallbackActor);
+      }
+    }
+
+    return out;
+  }
+
+  private recordTransaction(
+    transactions: TransactionLedgerRecord[],
+    eventType: string,
+    direction: 'CREDIT' | 'DEBIT',
+    payload: Record<string, any>,
+    cfg: Record<string, any>,
+    isoAt: string,
+  ): void {
+    if (!TX_EVENTS.has(eventType)) return;
+    const amount = Number(payload.amount ?? payload.delta ?? 0);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+
+    const currency = String(payload.currency || 'ancient_point');
+    const participants = this.normalizeTxParticipants(payload);
+    const recipients = [...new Set(participants.map((p) => p.actorId))];
+    const txId = String(
+      payload.txId ||
+        `${payload.taskId || eventType}:${currency}:${amount}:${isoAt}`,
+    );
+
+    const record: TransactionLedgerRecord = {
+      txId,
+      eventType,
+      direction,
+      taskId: typeof payload.taskId === 'string' && payload.taskId.trim() ? payload.taskId.trim() : null,
+      tower:
+        typeof payload.tower === 'string' && payload.tower.trim()
+          ? payload.tower.trim()
+          : typeof payload.claimedByTower === 'string' && payload.claimedByTower.trim()
+            ? payload.claimedByTower.trim()
+            : typeof cfg.towerElement === 'string'
+              ? cfg.towerElement
+              : null,
+      currency,
+      amount,
+      reason: typeof payload.reason === 'string' && payload.reason.trim() ? payload.reason.trim() : null,
+      issuer: String(payload.issuer || 'genesis-emitter'),
+      balanceAlreadyApplied: Boolean(payload.balanceAlreadyApplied),
+      participants,
+      recipients,
+      timestamp: typeof payload.timestamp === 'string' && payload.timestamp.trim() ? payload.timestamp : isoAt,
+      ...(typeof payload.txHash === 'string' && payload.txHash.trim() ? { txHash: payload.txHash.trim() } : {}),
+    };
+
+    const existingIdx = payload.txId ? transactions.findIndex((t) => t.txId === record.txId) : -1;
+    if (existingIdx >= 0) {
+      transactions[existingIdx] = record;
+    } else {
+      transactions.push(record);
+      if (transactions.length > MAX_TRANSACTIONS_HISTORY) {
+        transactions.splice(0, transactions.length - MAX_TRANSACTIONS_HISTORY);
+      }
+    }
+  }
+
+  private computeWorkstationStats(
+    transactions: TransactionLedgerRecord[],
+  ): Record<string, { txCount: number; totalsByCurrency: Record<string, number>; actors: Record<string, Record<string, number>> }> {
+    const stats: Record<
+      string,
+      { txCount: number; totalsByCurrency: Record<string, number>; actors: Record<string, Record<string, number>> }
+    > = {};
+
+    for (const tx of transactions) {
+      const sign = tx.direction === 'DEBIT' ? -1 : 1;
+      const entries = tx.participants.length > 0 ? tx.participants : [{ user: 'ПК-1', actorId: 'unassigned' }];
+      const touchedUsers = new Set<string>();
+
+      for (const p of entries) {
+        const userBucket = (stats[p.user] ??= {
+          txCount: 0,
+          totalsByCurrency: {},
+          actors: {},
+        });
+        if (!touchedUsers.has(p.user)) {
+          userBucket.txCount += 1;
+          userBucket.totalsByCurrency[tx.currency] =
+            (userBucket.totalsByCurrency[tx.currency] ?? 0) + sign * tx.amount;
+          touchedUsers.add(p.user);
+        }
+        const actorCurrencies = (userBucket.actors[p.actorId] ??= {});
+        actorCurrencies[tx.currency] = (actorCurrencies[tx.currency] ?? 0) + sign * tx.amount;
+      }
+    }
+
+    return stats;
   }
 
   private applyResourceDelta(
