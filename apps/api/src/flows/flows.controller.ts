@@ -158,7 +158,7 @@ export class FlowsController {
     return this.service.create({
       ...dto,
       profileId: dto.profileId ?? headerProfileId ?? null,
-      projectSlug: dto.projectSlug ?? headerProjectSlug ?? defaultShardSlug ?? null,
+      projectSlug: dto.projectSlug ?? headerProjectSlug ?? defaultShardSlug,
     });
   }
 

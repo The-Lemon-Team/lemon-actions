@@ -14,6 +14,27 @@ try {
 
 const prisma = new PrismaClient();
 
+function inferSeedProjectSlug(folderPath?: string | null): string | null {
+  if (!folderPath) return 'lemon-core';
+  const root = folderPath.trim().toLowerCase().split('.')[0];
+  switch (root) {
+    case 'space':
+      return 'lemon-space';
+    case 'arena':
+      return 'lemon-universe';
+    case 'code':
+      return 'lemon-code';
+    case 'home':
+      return 'home';
+    case 'seasons':
+      return 'lemon-seasons';
+    case 'watchers':
+      return 'lemon-watchers';
+    default:
+      return 'lemon-core';
+  }
+}
+
 async function ensureFoldersForProfile(profileId: string): Promise<Map<string, string>> {
   const folderIds = new Map<string, string>();
   for (const f of CORE_FOLDERS) {
@@ -44,11 +65,13 @@ async function seedFlowsForProfile(
       where: { name: f.name, profileId },
     });
 
+    const projectSlug = inferSeedProjectSlug(f.folder);
     if (existingFlow) {
       await prisma.flow.update({
         where: { id: existingFlow.id },
         data: {
           description: f.description,
+          projectSlug,
           folderId: folderIds.get(f.folder) ?? existingFlow.folderId,
           config: (f.config ?? undefined) as any,
           orchestratorRules: (f.orchestratorRules ?? undefined) as any,
@@ -72,6 +95,7 @@ async function seedFlowsForProfile(
         type: f.type,
         status: f.status,
         isExclusive: f.isExclusive,
+        projectSlug,
         folderId: folderIds.get(f.folder),
         profileId,
         config: (f.config ?? undefined) as any,

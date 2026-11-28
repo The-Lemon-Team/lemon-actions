@@ -43,8 +43,9 @@ Invoke-DockerCompose @("build", "web")
 
 $watchersShardPort = if ($env:WATCHERS_SHARD_PORT) { $env:WATCHERS_SHARD_PORT } else { "4326" }
 $seasonsShardPort = if ($env:SEASONS_SHARD_PORT) { $env:SEASONS_SHARD_PORT } else { "4327" }
+$spaceShardPort = if ($env:SPACE_SHARD_PORT) { $env:SPACE_SHARD_PORT } else { "4328" }
 
-Write-Host "📦 Starting Unified Lemon Stack (postgres, api, watchers-shard:$watchersShardPort, seasons-shard:$seasonsShardPort, web) on $targetDesc ..." -ForegroundColor Cyan
+Write-Host "📦 Starting Unified Lemon Stack (postgres, api, watchers-shard:$watchersShardPort, seasons-shard:$seasonsShardPort, space-shard:$spaceShardPort, web) on $targetDesc ..." -ForegroundColor Cyan
 Invoke-DockerCompose @("up", "-d", "--remove-orphans")
 
 Write-Host "✅ Active containers on ${targetDesc}:" -ForegroundColor Green
@@ -62,7 +63,8 @@ foreach ($ep in @("health", "seasons/status", "media/status", "ai/status", "proj
 
 foreach ($shardProbe in @(
   @{ Name = "Watchers Shard"; Port = $watchersShardPort },
-  @{ Name = "Seasons Shard"; Port = $seasonsShardPort }
+  @{ Name = "Seasons Shard"; Port = $seasonsShardPort },
+  @{ Name = "Space Shard"; Port = $spaceShardPort }
 )) {
   $ok = $false
   for ($attempt = 1; $attempt -le 5; $attempt++) {

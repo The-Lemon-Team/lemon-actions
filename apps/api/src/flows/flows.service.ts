@@ -117,7 +117,10 @@ export class FlowsService {
     const resolvedProfileId = await this.resolveProfileId(rawProfileId);
 
     const resolvedProjectSlug = this.normalizeProjectSlug(
-      dto.projectSlug ?? (dto.config as any)?.projectSlug,
+      dto.projectSlug ??
+        (dto.config as any)?.projectSlug ??
+        this.inferProjectSlugFromFolderPath(folderMeta?.path) ??
+        null,
     );
 
     const flow = await this.repo.create(
@@ -831,6 +834,37 @@ export class FlowsService {
 
   private uniqueTags(tags?: string[]): string[] {
     return [...new Set((tags ?? []).map((t) => t.trim()).filter(Boolean))];
+  }
+
+  private inferProjectSlugFromFolderPath(folderPath?: string | null): string | null {
+    if (!folderPath) return null;
+    const root = folderPath.trim().toLowerCase().split('.')[0];
+    switch (root) {
+      case 'space':
+        return 'lemon-space';
+      case 'arena':
+        return 'lemon-universe';
+      case 'code':
+        return 'lemon-code';
+      case 'home':
+        return 'home';
+      case 'seasons':
+        return 'lemon-seasons';
+      case 'watchers':
+        return 'lemon-watchers';
+      case 'media_hub':
+        return 'lemon-media-hub';
+      case 'ai_neurons':
+        return 'lemon-ai';
+      case 'workspace':
+      case 'focus_modes':
+      case 'event_hooks':
+      case 'infrastructure':
+      case 'archival':
+        return 'lemon-core';
+      default:
+        return null;
+    }
   }
 
   private normalizeProjectSlug(raw?: string | null): string | null | undefined {

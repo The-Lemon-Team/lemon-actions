@@ -40,8 +40,8 @@ services:
       LEMON_AI_SERVICE_URL: ${LEMON_AI_SERVICE_URL:-http://host.docker.internal:3006}
       NATS_URL: ${NATS_URL:-nats://host.docker.internal:4222}
       LEMON_BUS_DRIVER: ${LEMON_BUS_DRIVER:-auto}
-      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,host.docker.internal,192.168.1.100}
-      no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,host.docker.internal,192.168.1.100}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,watchers-shard,seasons-shard,space-shard,host.docker.internal,192.168.1.100}
+      no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,watchers-shard,seasons-shard,space-shard,host.docker.internal,192.168.1.100}
     depends_on:
       postgres:
         condition: service_healthy
@@ -129,6 +129,47 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${SEASONS_SHARD_PORT:-4327}/api/shard/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  space-shard:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: lemon-core-api:latest
+    container_name: lemon-space-shard
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${SPACE_SHARD_PORT:-4328}:${SPACE_SHARD_PORT:-4328}"
+    environment:
+      NODE_ENV: production
+      LEMON_SHARD_TIER: dedicated
+      LEMON_SHARD_PROJECT_SLUG: lemon-space
+      LEMON_SHARD_PROJECT_NAME: Lemon Space
+      LEMON_SHARD_ID: ${SPACE_SHARD_ID:-shard-lemon-space-01}
+      LEMON_SHARD_PREFERRED_PORT: ${SPACE_SHARD_PORT:-4328}
+      LEMON_SHARD_HOST: ${LEMON_SHARD_PUBLIC_HOST:-192.168.1.100}
+      LEMON_SHARD_HEALTH_HOST: ${SPACE_SHARD_HEALTH_HOST:-space-shard}
+      LEMON_SHARD_ENV: ${LEMON_SHARD_ENV:-production}
+      LEMON_SHARD_NETWORK_MODE: ${LEMON_SHARD_NETWORK_MODE:-lan}
+      LEMON_PROJECTARIUM_URL: http://api:3000/api
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lemon}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${SPACE_SHARD_DB:-lemon_space_shard}?schema=public
+      AUTO_SEED: "false"
+      NATS_URL: ${NATS_URL:-nats://host.docker.internal:4222}
+      LEMON_BUS_DRIVER: ${LEMON_BUS_DRIVER:-auto}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,api,watchers-shard,seasons-shard,space-shard,host.docker.internal,192.168.1.100}
+      no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,api,watchers-shard,seasons-shard,space-shard,host.docker.internal,192.168.1.100}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${SPACE_SHARD_PORT:-4328}/api/shard/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

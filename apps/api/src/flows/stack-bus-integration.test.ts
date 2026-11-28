@@ -12,6 +12,13 @@ import { LemonBusRelayService } from './lemon-bus-relay.service';
 
 function createMockFlowsRepo() {
   const flows = new Map<string, any>();
+  const folders = new Map<string, { id: string; profileId: string | null; path: string | null }>([
+    ['fld-space', { id: 'fld-space', profileId: null, path: 'space.emitter' }],
+    ['fld-arena', { id: 'fld-arena', profileId: null, path: 'arena.actors' }],
+    ['fld-code', { id: 'fld-code', profileId: null, path: 'code.js_practice' }],
+    ['fld-home', { id: 'fld-home', profileId: null, path: 'home.supplies' }],
+    ['fld-core', { id: 'fld-core', profileId: null, path: 'workspace.core' }],
+  ]);
   const events: any[] = [];
   const sessions: any[] = [];
   let seq = 0;
@@ -28,7 +35,7 @@ function createMockFlowsRepo() {
     },
     findFlowsByFolder: async () => [],
     findRunningExclusive: async () => [],
-    getFolderMeta: async () => null,
+    getFolderMeta: async (id: string) => folders.get(id) ?? null,
     create: async (data: any, tagNames: string[]) => {
       const id = `flow-${++seq}`;
       const record = {
@@ -234,6 +241,26 @@ async function runStackBusIntegrationTests() {
   );
   assert.equal(crossProjectariumEvents.length, 4);
   console.log('✓ 4. ProjectariumService emits stand/app/todo/chronicle events & coalesces heartbeats');
+
+  // 5. Folder path automatically infers projectSlug when explicit slug is omitted
+  const inferredSpace = await flowsService.create({ name: 'Space Tower Lot', type: FlowType.CONTEXT, folderId: 'fld-space' });
+  const inferredArena = await flowsService.create({ name: 'Arena Card', type: FlowType.CONTEXT, folderId: 'fld-arena' });
+  const inferredCode = await flowsService.create({ name: 'Code Task', type: FlowType.MUTEX, folderId: 'fld-code' });
+  const inferredHome = await flowsService.create({ name: 'Home Supply', type: FlowType.MUTEX, folderId: 'fld-home' });
+  const inferredCore = await flowsService.create({ name: 'Core Mutex', type: FlowType.MUTEX, folderId: 'fld-core' });
+  const overridden = await flowsService.create({
+    name: 'Explicit Override',
+    type: FlowType.CONTEXT,
+    folderId: 'fld-core',
+    projectSlug: 'custom-stand',
+  });
+  assert.equal(inferredSpace.projectSlug, 'lemon-space');
+  assert.equal(inferredArena.projectSlug, 'lemon-universe');
+  assert.equal(inferredCode.projectSlug, 'lemon-code');
+  assert.equal(inferredHome.projectSlug, 'home');
+  assert.equal(inferredCore.projectSlug, 'lemon-core');
+  assert.equal(overridden.projectSlug, 'custom-stand');
+  console.log('✓ 5. FlowsService auto-derives projectSlug from ltree folder path unless explicitly overridden');
 
   relay.onModuleDestroy();
   await stackBus.onModuleDestroy();

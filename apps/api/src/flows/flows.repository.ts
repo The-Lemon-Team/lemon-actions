@@ -236,11 +236,10 @@ export class FlowsRepository {
     return out;
   }
 
-  async getFolderMeta(id: string): Promise<{ id: string; profileId: string | null } | null> {
-    return this.prisma.folder.findUnique({
-      where: { id },
-      select: { id: true, profileId: true },
-    });
+  async getFolderMeta(id: string): Promise<{ id: string; profileId: string | null; path?: string | null } | null> {
+    const rows = await this.prisma.$queryRaw<{ id: string; profileId: string | null; path: string | null }[]>`
+      SELECT id, profile_id AS "profileId", path::text AS path FROM folders WHERE id = ${id}::uuid LIMIT 1`;
+    return rows[0] ?? null;
   }
 
   listSessions(flowId: string) {
