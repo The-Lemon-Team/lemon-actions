@@ -316,6 +316,24 @@ async function runSpaceTowersTests() {
   assert.equal(fireAfterTx.workstationStats['ПК-1'].totalsByCurrency.ancient_point, 200);
   assert.equal(fireAfterTx.workstationStats['ПК-2'].actors['actor-alisa'].ancient_point, 200);
   assert.equal(fireAfterTx.workstationStats['ПК-3'].actors['actor-starleader'].golden_ancient_point, 500);
+
+  // Legacy transaction entry missing participants (like old Main Emitter entries) should never throw on TASK_COMPLETED
+  await flowsService.update(fireVault.id, {
+    config: {
+      ...((await flowsService.findOne(fireVault.id)).config as any),
+      projectionState: {
+        ...fireAfterTx,
+        transactions: [
+          ...fireAfterTx.transactions,
+          { txId: 'legacy-no-participants', amount: 100, currency: 'ancient_point', toActorId: 'actor-easy' },
+        ],
+      },
+    },
+  });
+  await flowsService.appendEvent(fireVault.id, {
+    eventType: 'TASK_STEP_UPDATED',
+    payload: { taskId: 'bounty-4-fire-tower-cards-app', stepId: 'step-1', status: 'DONE' },
+  });
   console.log('✓ 7. Transaction ledger & workstationStats attribute user (ПК-1/ПК-2/ПК-3) + character cleanly');
 
   console.log('\n=== All Space Towers & Emitter Tests Passed! ===');

@@ -158,7 +158,7 @@ async function migrateDatabase(label: string, databaseUrl: string) {
       SELECT fl.id, fl.name, fl.config
       FROM flows fl
       JOIN folders fo ON fl.folder_id = fo.id
-      WHERE fo.path::text ~ '^space\.towers(\.|$)' AND fl.type = 'PROJECTION'
+      WHERE (fo.path::text ~ '^space\.towers(\.|$)' OR fo.path::text = 'space.emitter') AND fl.type = 'PROJECTION'
       ORDER BY fo.path::text
     `;
 
@@ -175,9 +175,30 @@ async function migrateDatabase(label: string, databaseUrl: string) {
       const prevState = (cfg.projectionState ?? {}) as Record<string, any>;
       const preservedBalances = { ...(prevState.balances ?? {}) };
 
+      // Normalize any legacy pre-existing projectionState.transactions entries (e.g. on Main Emitter)
+      const legacyTxs = Array.isArray(prevState.transactions) ? prevState.transactions : [];
+      const normalizedLegacyTxs = legacyTxs.map((tx: any) => {
+        const participants = buildStructuredParticipants(
+          {
+            ...tx,
+            recipients: tx.recipients ?? (tx.toActorId ? [tx.toActorId] : undefined),
+          },
+          'ПК-1',
+        );
+        return {
+          ...tx,
+          direction: tx.direction || 'CREDIT',
+          tower: tx.tower || tx.toTower || null,
+          issuer: tx.issuer || tx.from || 'genesis-emitter',
+          timestamp: tx.timestamp || tx.createdAt || new Date().toISOString(),
+          participants,
+          recipients: participants.map((p) => p.actorId),
+        };
+      });
+
       let rebuiltState: Record<string, any> = {
         ...prevState,
-        transactions: [],
+        transactions: cfg.cardRole === 'EMITTER_MINT_AND_REGISTRY' ? normalizedLegacyTxs : [],
         workstationStats: {},
       };
 
@@ -212,6 +233,12 @@ async function migrateDatabase(label: string, databaseUrl: string) {
           cfg,
           ev.createdAt,
         );
+      }
+
+      if (events.length === 0 && cfg.cardRole === 'EMITTER_MINT_AND_REGISTRY') {
+        // Trigger stats calculation on normalized legacy emitter transactions
+        const tmp = reducer.reduce(rebuiltState, 'NOOP', {}, cfg, new Date());
+        rebuiltState.workstationStats = tmp.workstationStats;
       }
 
       rebuiltState.balances = preservedBalances;

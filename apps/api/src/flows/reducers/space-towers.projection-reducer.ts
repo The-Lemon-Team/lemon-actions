@@ -309,24 +309,39 @@ export class SpaceTowersProjectionReducer implements ProjectionReducer {
     > = {};
 
     for (const tx of transactions) {
+      if (!tx || typeof tx !== 'object') continue;
       const sign = tx.direction === 'DEBIT' ? -1 : 1;
-      const entries = tx.participants.length > 0 ? tx.participants : [{ user: 'ПК-1', actorId: 'unassigned' }];
+      const currency = String((tx as any).currency || 'ancient_point');
+      const amount = Number((tx as any).amount ?? 0);
+      const rawParticipants = Array.isArray(tx.participants) ? tx.participants : [];
+      const fallbackActor = String((tx as any).toActorId ?? (tx as any).recipientActorId ?? '').trim();
+      const entries =
+        rawParticipants.length > 0
+          ? rawParticipants
+          : [
+              {
+                user: this.normalizeWorkstationUser((tx as any).workstation ?? (tx as any).user),
+                actorId: fallbackActor || 'unassigned',
+              },
+            ];
       const touchedUsers = new Set<string>();
 
       for (const p of entries) {
-        const userBucket = (stats[p.user] ??= {
+        const user = this.normalizeWorkstationUser(p?.user);
+        const actorId = String(p?.actorId || '').trim() || 'unassigned';
+        const userBucket = (stats[user] ??= {
           txCount: 0,
           totalsByCurrency: {},
           actors: {},
         });
-        if (!touchedUsers.has(p.user)) {
+        if (!touchedUsers.has(user)) {
           userBucket.txCount += 1;
-          userBucket.totalsByCurrency[tx.currency] =
-            (userBucket.totalsByCurrency[tx.currency] ?? 0) + sign * tx.amount;
-          touchedUsers.add(p.user);
+          userBucket.totalsByCurrency[currency] =
+            (userBucket.totalsByCurrency[currency] ?? 0) + sign * amount;
+          touchedUsers.add(user);
         }
-        const actorCurrencies = (userBucket.actors[p.actorId] ??= {});
-        actorCurrencies[tx.currency] = (actorCurrencies[tx.currency] ?? 0) + sign * tx.amount;
+        const actorCurrencies = (userBucket.actors[actorId] ??= {});
+        actorCurrencies[currency] = (actorCurrencies[currency] ?? 0) + sign * amount;
       }
     }
 
