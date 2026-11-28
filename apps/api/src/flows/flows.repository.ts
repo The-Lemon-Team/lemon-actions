@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Flow, FlowStatus, Prisma, Tag } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListFlowsQueryDto } from './flow.dto';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Db = PrismaService | Prisma.TransactionClient;
 const include = { tags: { include: { tag: true } } } satisfies Prisma.FlowInclude;
@@ -54,6 +56,15 @@ export class FlowsRepository {
 
   transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     return this.prisma.$transaction(fn);
+  }
+
+  async resolveProfileId(raw: string, db: Db = this.prisma): Promise<string> {
+    const trimmed = raw.trim();
+    if (UUID_RE.test(trimmed)) return trimmed;
+    const rows = await db.$queryRaw<{ id: string }[]>`
+      SELECT id::text AS id FROM profiles WHERE LOWER(handle) = LOWER(${trimmed}) LIMIT 1`;
+    if (rows[0]?.id) return rows[0].id;
+    throw new BadRequestException(`Unknown profile identifier "${trimmed}" (expected UUID or handle)`);
   }
 
   async findMany(q: ListFlowsQueryDto): Promise<FlowWithTags[]> {

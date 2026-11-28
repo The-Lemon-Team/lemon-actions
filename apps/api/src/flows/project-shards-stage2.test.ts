@@ -300,6 +300,34 @@ async function runStage2Tests() {
       assert.equal(fallbackClient.shardResolution?.mode, 'shared-logical');
       assert.equal(fallbackClient.baseUrl, 'http://127.0.0.1:3000/api');
       console.log('✓ 4. CoreCombinatorClient.forProject() resolves, caches, sets x-project-slug, and falls back cleanly');
+
+      // 5. Re-registering the same dedicated shardId supersedes stale instance & keeps preferredPort
+      const reregistered = await projectarium.registerOrAttach({
+        projectSlug: 'lemon-space',
+        projectName: 'Lemon Space',
+        appName: 'lemon-core-shard',
+        role: 'core-shard',
+        host: '127.0.0.1',
+        preferredPort: 4399,
+        environment: 'dev',
+        networkMode: 'local',
+        healthUrl: 'http://127.0.0.1:4399/api/shard/health',
+        context: {
+          shard: {
+            shardId: 'shard-space-01',
+            tier: 'dedicated',
+            apiBaseUrl: 'http://127.0.0.1:4399/api',
+            capabilities: ['MUTEX', 'PROJECTION', 'CIRCUIT_BREAKER'],
+            customReducers: ['space-towers'],
+          },
+        },
+      });
+      assert.equal(reregistered.allocatedApp.port, 4399, 'Restarting shard must reclaim preferredPort');
+      const spaceShardsAfterRestart = projectariumController
+        .listShards()
+        .filter((s: any) => s.projectSlug === 'lemon-space');
+      assert.equal(spaceShardsAfterRestart.length, 1, 'Stale shard instance must be superseded cleanly');
+      console.log('✓ 5. Re-registering same dedicated shardId supersedes stale lease and retains preferredPort');
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

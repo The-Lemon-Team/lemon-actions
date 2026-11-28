@@ -134,6 +134,13 @@ export class ProjectBusClient {
   }
 }
 
+interface ManagedSubscription<TPayload = any> {
+  options: StackBusSubscriptionOptions;
+  handler: (envelope: StackBusEnvelope<TPayload>) => void | Promise<void>;
+  currentHandle: StackBusSubscriptionHandle | null;
+  unsubscribed: boolean;
+}
+
 /**
  * Central StackBus Hub:
  * - `forProject(slug)` gives each project its own namespaced bus (`lemon.<slug>.*`)
@@ -141,6 +148,7 @@ export class ProjectBusClient {
  */
 export class StackBusHub {
   private readonly projectClients = new Map<string, ProjectBusClient>();
+  private readonly managedSubscriptions = new Set<ManagedSubscription>();
   private readonly transportSubject: BehaviorSubject<IStackBusTransport>;
 
   constructor(private _transport: IStackBusTransport) {
@@ -152,8 +160,10 @@ export class StackBusHub {
   }
 
   set transport(next: IStackBusTransport) {
+    if (next === this._transport) return;
     this._transport = next;
     this.transportSubject.next(next);
+    void this.reattachManagedSubscriptions(next);
   }
 
   get driver(): StackBusDriverKind {
@@ -165,6 +175,14 @@ export class StackBusHub {
   }
 
   async disconnect(): Promise<void> {
+    for (const entry of this.managedSubscriptions) {
+      entry.unsubscribed = true;
+      if (entry.currentHandle) {
+        await Promise.resolve(entry.currentHandle.unsubscribe()).catch(() => {});
+        entry.currentHandle = null;
+      }
+    }
+    this.managedSubscriptions.clear();
     await this._transport.disconnect();
   }
 
@@ -198,11 +216,61 @@ export class StackBusHub {
     return this._transport.publish(input);
   }
 
-  subscribe<TPayload = Record<string, unknown>>(
+  async subscribe<TPayload = Record<string, unknown>>(
     options: StackBusSubscriptionOptions,
     handler: (envelope: StackBusEnvelope<TPayload>) => void | Promise<void>,
   ): Promise<StackBusSubscriptionHandle> {
-    return this._transport.subscribe(options, handler);
+    const entry: ManagedSubscription<TPayload> = {
+      options,
+      handler,
+      currentHandle: null,
+      unsubscribed: false,
+    };
+    this.managedSubscriptions.add(entry);
+    await this.attachSubscriptionOn(entry, this._transport);
+
+    return {
+      unsubscribe: async () => {
+        entry.unsubscribed = true;
+        this.managedSubscriptions.delete(entry);
+        if (entry.currentHandle) {
+          const h = entry.currentHandle;
+          entry.currentHandle = null;
+          await Promise.resolve(h.unsubscribe());
+        }
+      },
+    };
+  }
+
+  private async attachSubscriptionOn<TPayload>(
+    entry: ManagedSubscription<TPayload>,
+    targetTransport: IStackBusTransport,
+  ): Promise<void> {
+    if (entry.unsubscribed || targetTransport !== this._transport) {
+      return;
+    }
+    const prev = entry.currentHandle;
+    entry.currentHandle = null;
+    if (prev) {
+      await Promise.resolve(prev.unsubscribe()).catch(() => {});
+    }
+    const handle = await targetTransport.subscribe(entry.options, entry.handler);
+    if (entry.unsubscribed || targetTransport !== this._transport) {
+      await Promise.resolve(handle.unsubscribe()).catch(() => {});
+      return;
+    }
+    entry.currentHandle = handle;
+  }
+
+  private async reattachManagedSubscriptions(targetTransport: IStackBusTransport): Promise<void> {
+    const entries = [...this.managedSubscriptions];
+    await Promise.all(
+      entries.map((entry) =>
+        this.attachSubscriptionOn(entry, targetTransport).catch(() => {
+          // Best-effort reattach on transport upgrade
+        }),
+      ),
+    );
   }
 
   subscribe$<TPayload = Record<string, unknown>>(

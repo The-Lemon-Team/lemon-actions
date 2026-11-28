@@ -40,7 +40,10 @@ export class MediaCombinatorBridge {
     this.sseBus = options.sseBus;
     this.combinator = options.combinator;
     this.profileId = options.profileId;
-    this.basePath = (options.basePath || '/media-hub').replace(/\/+$/, '');
+    this.basePath = (options.basePath || 'media_hub')
+      .replace(/^\/+|\/+$/g, '')
+      .replace(/\//g, '.')
+      .replace(/-/g, '_') || 'media_hub';
     this.bestEffortTelemetry = options.bestEffortTelemetry ?? true;
   }
 
@@ -59,7 +62,7 @@ export class MediaCombinatorBridge {
     const [library, ingest, del, view] = await Promise.all([
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'Media Library',
-        path: `${this.basePath}/library`,
+        path: `${this.basePath}.library`,
         profileId: this.profileId,
         flows: {
           context: {
@@ -73,7 +76,7 @@ export class MediaCombinatorBridge {
       }),
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'Media Ingest Flow',
-        path: `${this.basePath}/ingest`,
+        path: `${this.basePath}.ingest`,
         profileId: this.profileId,
         flows: {
           context: {
@@ -102,7 +105,7 @@ export class MediaCombinatorBridge {
       }),
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'Media Delete Flow',
-        path: `${this.basePath}/delete`,
+        path: `${this.basePath}.delete`,
         profileId: this.profileId,
         flows: {
           context: {
@@ -120,7 +123,7 @@ export class MediaCombinatorBridge {
       }),
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'Media View Flow',
-        path: `${this.basePath}/view`,
+        path: `${this.basePath}.view`,
         profileId: this.profileId,
         flows: {
           context: {

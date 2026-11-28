@@ -140,6 +140,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     const existing =
       (dto.projectToken ? this.engine.getProject(dto.projectToken) : undefined) ??
       (dto.projectSlug ? this.engine.getProject(dto.projectSlug) : undefined);
+    const prevAppIds = new Set(existing?.apps.map((a) => a.instanceId) ?? []);
     const prevTodoIds = new Set(existing?.todos.map((t) => t.id) ?? []);
     const prevChronicleIds = new Set(existing?.chronicle.map((e) => e.id) ?? []);
 
@@ -167,9 +168,12 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
     if (!existing) {
       await this.persistNewStand(response.project);
     } else {
+      const currentAppIds = new Set(response.project.apps.map((a) => a.instanceId));
+      const removedInstanceIds = Array.from(prevAppIds).filter((id) => !currentAppIds.has(id));
       await this.persistGranularDelta(response.project, {
         appsToUpsert: [response.allocatedApp],
         todosToUpsert: response.project.todos.filter((t) => !prevTodoIds.has(t.id)),
+        removedInstanceIds,
         prevChronicleIds,
       });
     }
@@ -209,6 +213,7 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
 
   async addAppToProject(slugOrToken: string, dto: AddAppToProjectDto): Promise<ProjectariumRegisterResponse> {
     const project = this.getProject(slugOrToken);
+    const prevAppIds = new Set(project.apps.map((a) => a.instanceId));
     const prevChronicleIds = new Set(project.chronicle.map((e) => e.id));
     const appContext = {
       ...(dto.role ? { role: dto.role } : {}),
@@ -227,8 +232,11 @@ export class ProjectariumService implements OnModuleInit, OnModuleDestroy {
       context: Object.keys(appContext).length > 0 ? appContext : undefined,
       author: dto.author,
     });
+    const currentAppIds = new Set(response.project.apps.map((a) => a.instanceId));
+    const removedInstanceIds = Array.from(prevAppIds).filter((id) => !currentAppIds.has(id));
     await this.persistGranularDelta(response.project, {
       appsToUpsert: [response.allocatedApp],
+      removedInstanceIds,
       prevChronicleIds,
     });
     await this.safeRecordAppRunStarted(response.project, response.allocatedApp);

@@ -90,7 +90,7 @@ export class MediaService implements OnModuleInit, OnModuleDestroy {
       token,
       apiKey,
       combinator: this.combinatorClient,
-      basePath: '/media-hub',
+      basePath: 'media_hub',
       autoConnectSse: false,
     });
 

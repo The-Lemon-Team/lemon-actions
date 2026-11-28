@@ -170,7 +170,7 @@ function createMockCombinator() {
           flows: {
             context: { id: `ctx_${slug}` },
             observer: { id: `obs_${slug}` },
-            batch: cfg.path.endsWith('/images') ? { id: `batch_${slug}` } : undefined,
+            batch: cfg.path.endsWith('.images') || cfg.path.endsWith('/images') ? { id: `batch_${slug}` } : undefined,
           },
         };
       },
@@ -210,10 +210,10 @@ describe('@lemon/ai-neurons', () => {
     await axon.start({ ensureCombinatorTopology: true, loadHistory: true });
 
     assert.equal(ensuredPaths.length, 4);
-    assert.ok(ensuredPaths.includes('/ai-neurons/studio'));
-    assert.ok(ensuredPaths.includes('/ai-neurons/text'));
-    assert.ok(ensuredPaths.includes('/ai-neurons/images'));
-    assert.ok(ensuredPaths.includes('/ai-neurons/history'));
+    assert.ok(ensuredPaths.includes('ai_neurons.studio'));
+    assert.ok(ensuredPaths.includes('ai_neurons.text'));
+    assert.ok(ensuredPaths.includes('ai_neurons.images'));
+    assert.ok(ensuredPaths.includes('ai_neurons.history'));
     assert.equal(axon.history.value.items.length, 1);
 
     const textRes = await axon.generateText({ prompt: 'Hello Umniy Lemon' });

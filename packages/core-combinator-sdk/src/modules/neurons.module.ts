@@ -7,6 +7,23 @@ import {
   NeuronMetricsView,
 } from '../types';
 
+function normalizeLtreePath(rawPath: string): string {
+  const cleaned = rawPath
+    .trim()
+    .replace(/^\/+|\/+$/g, '')
+    .split(/[./]+/)
+    .map((seg) =>
+      seg
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_]+/g, '_')
+        .replace(/^_+|_+$/g, ''),
+    )
+    .filter(Boolean)
+    .join('.');
+  return cleaned || 'neuron';
+}
+
 export class NeuronsModule {
   constructor(
     private readonly http: {
@@ -31,19 +48,57 @@ export class NeuronsModule {
   async ensureCompositeNeuron(
     def: CompositeNeuronDefinition,
   ): Promise<CompositeNeuronInstance> {
-    // 1. Find or create folder
+    const normalizedPath = normalizeLtreePath(def.path);
+    const segments = normalizedPath.split('.');
+
+    // 1. Find or create folder hierarchy deterministically along `normalizedPath`
     const allFolders = await this.http.get<FolderDto[]>('/folders', {
       profileId: def.profileId,
-      scope: def.path,
+      scope: normalizedPath,
     });
-    let folder = allFolders.find((f) => f.path === def.path);
+    let folder = allFolders.find((f) => f.path === normalizedPath);
 
     if (!folder) {
-      folder = await this.http.post<FolderDto>('/folders', {
-        name: def.name,
-        parentId: def.parentId ?? null,
-        profileId: def.profileId ?? null,
-      });
+      if (def.parentId || segments.length === 1) {
+        folder = await this.http.post<FolderDto>('/folders', {
+          name: def.name,
+          slug: segments[segments.length - 1],
+          parentId: def.parentId ?? null,
+          profileId: def.profileId ?? null,
+        });
+      } else {
+        const rootFolders = await this.http.get<FolderDto[]>('/folders', {
+          profileId: def.profileId,
+          scope: segments[0],
+        });
+        const byPath = new Map(rootFolders.map((f) => [f.path, f]));
+        let parentId: string | null = null;
+        let currentPath = '';
+
+        for (let i = 0; i < segments.length; i++) {
+          const seg = segments[i];
+          currentPath = currentPath ? `${currentPath}.${seg}` : seg;
+          const isLeaf = i === segments.length - 1;
+          let existing = byPath.get(currentPath);
+          if (!existing) {
+            existing = await this.http.post<FolderDto>('/folders', {
+              name: isLeaf ? def.name : seg,
+              slug: seg,
+              parentId,
+              profileId: def.profileId ?? null,
+            });
+            byPath.set(existing.path, existing);
+          }
+          parentId = existing.id;
+          if (isLeaf) {
+            folder = existing;
+          }
+        }
+      }
+    }
+
+    if (!folder) {
+      throw new Error(`Failed to resolve or create folder for neuron path "${normalizedPath}"`);
     }
 
     // 2. Fetch existing flows in folder

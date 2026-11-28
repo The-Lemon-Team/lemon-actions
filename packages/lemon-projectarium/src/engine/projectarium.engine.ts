@@ -276,7 +276,7 @@ export class ProjectariumEngine {
       });
     }
 
-    // 3. Allocate port & create application instance
+    // 3. Supersede stale instances for the same dedicated shard identity in this scope so restarts reclaim preferredPort cleanly
     const appName = payload.appName || `${project.slug}-core`;
     const networkMode: ProjectariumNetworkMode = payload.networkMode || 'local';
     const host = resolveAppHost(payload.host, payload.healthUrl);
@@ -286,6 +286,29 @@ export class ProjectariumEngine {
       networkMode,
       host,
     });
+    const incomingShardId =
+      typeof (payload.context?.['shard'] as { shardId?: unknown } | undefined)?.shardId === 'string'
+        ? ((payload.context?.['shard'] as { shardId: string }).shardId || '').trim()
+        : '';
+    if (incomingShardId) {
+      const targetScope = this.buildPortScopeKey(host, networkMode, machine.machineId);
+      project.apps = project.apps.filter((app) => {
+        const existingShardId =
+          typeof (app.metadata?.['shard'] as { shardId?: unknown } | undefined)?.shardId === 'string'
+            ? ((app.metadata?.['shard'] as { shardId: string }).shardId || '').trim()
+            : '';
+        if (app.appName !== appName || existingShardId !== incomingShardId) {
+          return true;
+        }
+        const appHost = app.host || (app.metadata?.['host'] as string | undefined);
+        const appMachineId =
+          app.machineId || (app.metadata?.['machineId'] as string | undefined) || 'local-default';
+        const appScope = this.buildPortScopeKey(appHost, app.networkMode, appMachineId);
+        return appScope !== targetScope;
+      });
+    }
+
+    // 4. Allocate port & create application instance
     const allocatedPort = this.allocatePort(payload.preferredPort, host, networkMode, machine.machineId);
     const resolvedContext = payload.context
       ? JSON.parse(JSON.stringify(payload.context).replace(/\{port\}/g, String(allocatedPort)))

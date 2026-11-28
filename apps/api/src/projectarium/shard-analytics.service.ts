@@ -46,18 +46,22 @@ export class ShardAnalyticsService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    const durableName = (process.env.LEMON_ANALYTICS_CONSUMER || 'main_shard_analytics')
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]/g, '_');
+
     try {
       this.subscription = await this.stackBus.subscribe(
         {
           topicPattern: ['lemon.*.shard.>', 'lemon.*.flow.>'],
-          durableName: 'main_shard_analytics',
+          durableName,
           deliverPolicy: 'new',
         },
         (envelope) => {
           this.ingestEnvelope(envelope);
         },
       );
-      this.logger.log('ShardAnalyticsService attached durable consumer (main_shard_analytics)');
+      this.logger.log(`ShardAnalyticsService attached durable consumer (${durableName})`);
     } catch (err) {
       this.logger.warn(
         `ShardAnalyticsService durable subscription skipped: ${err instanceof Error ? err.message : String(err)}`,

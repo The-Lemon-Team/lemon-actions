@@ -1,41 +1,52 @@
 ﻿param(
-  [string]$DockerHost = "tcp://192.168.1.100:2375",
+  [string]$DockerContext = "lemon-remote",
+  [string]$DockerHost = "",
+  [string]$TargetHost = "192.168.1.100",
   [string]$BuildConfig = "production"
 )
 
 $ErrorActionPreference = "Stop"
 
 # Ensure local network Docker host bypasses any local HTTP/SOCKS proxy
-$hostIp = ($DockerHost -replace '^tcp://', '' -replace ':\d+$', '')
+$hostIp = if ($DockerHost) { ($DockerHost -replace '^tcp://', '' -replace ':\d+$', '') } else { $TargetHost }
 $noProxyItems = @($env:NO_PROXY -split ',' | Where-Object { $_ -and $_.Trim() -ne '' })
 if ($noProxyItems -notcontains $hostIp) {
   $noProxyItems += $hostIp
 }
 $env:NO_PROXY = ($noProxyItems -join ',')
 $env:no_proxy = $env:NO_PROXY
-$env:DOCKER_HOST = $DockerHost
+if ($DockerHost) {
+  $env:DOCKER_HOST = $DockerHost
+} else {
+  Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue
+}
 $env:WEB_BUILD_CONFIG = $BuildConfig
+$targetDesc = if ($DockerHost) { $DockerHost } else { "context:$DockerContext ($hostIp)" }
 
 function Invoke-DockerCompose {
   param([string[]]$ComposeArgs)
-  & docker compose -p lemon-core -f docker-compose.core.yml @ComposeArgs
+  if ($DockerHost) {
+    & docker compose -p lemon-core -f docker-compose.core.yml @ComposeArgs
+  } else {
+    & docker --context $DockerContext compose -p lemon-core -f docker-compose.core.yml @ComposeArgs
+  }
   if ($LASTEXITCODE -ne 0) {
     throw "docker compose failed with exit code $LASTEXITCODE (args: $($ComposeArgs -join ' '))"
   }
 }
 
-Write-Host "🚀 Building Unified Core & Shield API image on $DockerHost ..." -ForegroundColor Cyan
+Write-Host "🚀 Building Unified Core & Shield API image on $targetDesc ..." -ForegroundColor Cyan
 Invoke-DockerCompose @("build", "api")
 
-Write-Host "🌐 Building Unified Lemon App Shell ($BuildConfig) image on $DockerHost ..." -ForegroundColor Cyan
+Write-Host "🌐 Building Unified Lemon App Shell ($BuildConfig) image on $targetDesc ..." -ForegroundColor Cyan
 Invoke-DockerCompose @("build", "web")
 
 $watchersShardPort = if ($env:WATCHERS_SHARD_PORT) { $env:WATCHERS_SHARD_PORT } else { "4326" }
 
-Write-Host "📦 Starting Unified Lemon Stack (postgres, api, watchers-shard:$watchersShardPort, web) on $DockerHost ..." -ForegroundColor Cyan
+Write-Host "📦 Starting Unified Lemon Stack (postgres, api, watchers-shard:$watchersShardPort, web) on $targetDesc ..." -ForegroundColor Cyan
 Invoke-DockerCompose @("up", "-d", "--remove-orphans")
 
-Write-Host "✅ Active containers on ${DockerHost}:" -ForegroundColor Green
+Write-Host "✅ Active containers on ${targetDesc}:" -ForegroundColor Green
 Invoke-DockerCompose @("ps")
 
 Write-Host "==> Verifying unified HTTP endpoints on $hostIp ..." -ForegroundColor Cyan

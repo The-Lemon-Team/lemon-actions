@@ -254,6 +254,12 @@ async function runCoreCombinatorTests() {
           (!q.scope || f.path === q.scope || f.path.startsWith(q.scope + '.')),
       );
     },
+    resolveProfileId: async (idOrHandle: string) => {
+      for (const p of db.profiles.values()) {
+        if (p.id === idOrHandle || p.handle === idOrHandle) return p.id;
+      }
+      return idOrHandle;
+    },
   };
   const foldersService = new FoldersService(mockFoldersRepo);
   const ctx = await foldersService.context(folderId);

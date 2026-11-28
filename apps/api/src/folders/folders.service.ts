@@ -17,8 +17,12 @@ export function toLtreeLabel(name: string): string {
 export class FoldersService {
   constructor(private readonly repo: FoldersRepository) {}
 
-  findAll(q: ListFoldersQueryDto = {}): Promise<FolderDto[]> {
-    return this.repo.findAll(q);
+  async findAll(q: ListFoldersQueryDto = {}): Promise<FolderDto[]> {
+    const profileId =
+      q.profileId && typeof this.repo.resolveProfileId === 'function'
+        ? await this.repo.resolveProfileId(q.profileId)
+        : q.profileId;
+    return this.repo.findAll({ ...q, profileId: profileId ?? undefined });
   }
 
   async findOne(id: string): Promise<FolderDto> {
@@ -121,8 +125,13 @@ export class FoldersService {
   create(dto: CreateFolderDto): Promise<FolderDto> {
     return this.repo.transaction(async (tx) => {
       const parent = dto.parentId ? await this.requireFolder(dto.parentId, tx) : null;
-      const profileId = dto.profileId ?? parent?.profileId ?? null;
-      const path = await this.uniquePath(parent?.path ?? null, toLtreeLabel(dto.name), profileId, tx);
+      const rawProfileId = dto.profileId ?? parent?.profileId ?? null;
+      const profileId =
+        rawProfileId && typeof this.repo.resolveProfileId === 'function'
+          ? await this.repo.resolveProfileId(rawProfileId, tx)
+          : rawProfileId;
+      const label = toLtreeLabel(dto.slug?.trim() ? dto.slug : dto.name);
+      const path = await this.uniquePath(parent?.path ?? null, label, profileId, tx);
       return this.repo.insert(dto.name, parent?.id ?? null, path, profileId, tx);
     });
   }

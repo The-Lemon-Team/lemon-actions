@@ -91,7 +91,7 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
       baseUrl: this.baseUrl,
       apiKey,
       combinator: this.combinatorClient,
-      basePath: '/ai-neurons',
+      basePath: 'ai_neurons',
     });
   }
 

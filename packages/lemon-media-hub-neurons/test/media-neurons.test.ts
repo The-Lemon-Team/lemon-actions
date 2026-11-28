@@ -239,10 +239,10 @@ test('MediaIngestFlow deduplicates concurrent uploads and bridges to CoreCombina
   assert.equal(uploadCalls, 1);
   assert.equal(r1.asset.id, r2.asset.id);
   assert.deepEqual(ensuredPaths, [
-    '/media-hub/library',
-    '/media-hub/ingest',
-    '/media-hub/delete',
-    '/media-hub/view',
+    'media_hub.library',
+    'media_hub.ingest',
+    'media_hub.delete',
+    'media_hub.view',
   ]);
   assert.ok(chronicleEvents.some((c) => c.ev.eventType === 'MEDIA_ADDED'));
 

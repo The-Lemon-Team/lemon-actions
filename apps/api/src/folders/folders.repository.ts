@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListFoldersQueryDto } from './folder.dto';
 import { FolderDto } from './folder.types';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Db = PrismaService | Prisma.TransactionClient;
 
@@ -14,6 +16,15 @@ const COLUMNS = Prisma.sql`id, name, parent_id AS "parentId", profile_id AS "pro
 @Injectable()
 export class FoldersRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  async resolveProfileId(raw: string, db: Db = this.prisma): Promise<string> {
+    const trimmed = raw.trim();
+    if (UUID_RE.test(trimmed)) return trimmed;
+    const rows = await db.$queryRaw<{ id: string }[]>`
+      SELECT id::text AS id FROM profiles WHERE LOWER(handle) = LOWER(${trimmed}) LIMIT 1`;
+    if (rows[0]?.id) return rows[0].id;
+    throw new BadRequestException(`Unknown profile identifier "${trimmed}" (expected UUID or handle)`);
+  }
 
   transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     return this.prisma.$transaction(fn);

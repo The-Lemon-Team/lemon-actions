@@ -7,6 +7,11 @@ export class CreateFolderDto {
   name: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  slug?: string;
+
+  @IsOptional()
   @IsUUID()
   parentId?: string | null;
 
@@ -30,7 +35,8 @@ export class UpdateFolderDto {
 
 export class ListFoldersQueryDto {
   @IsOptional()
-  @IsUUID()
+  @IsString()
+  @MaxLength(120)
   profileId?: string;
 
   /** ltree scope prefix, e.g. 'home' or 'home.supplies' */

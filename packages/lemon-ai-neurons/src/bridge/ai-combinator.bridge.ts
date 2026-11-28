@@ -42,7 +42,10 @@ export class AiCombinatorBridge {
     this.impulseBus = options.impulseBus;
     this.combinator = options.combinator;
     this.profileId = options.profileId;
-    this.basePath = (options.basePath || '/ai-neurons').replace(/\/+$/, '');
+    this.basePath = (options.basePath || 'ai_neurons')
+      .replace(/^\/+|\/+$/g, '')
+      .replace(/\//g, '.')
+      .replace(/-/g, '_') || 'ai_neurons';
     this.bestEffortTelemetry = options.bestEffortTelemetry ?? true;
   }
 
@@ -61,7 +64,7 @@ export class AiCombinatorBridge {
     const [studio, text, images, history] = await Promise.all([
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'AI Neurons Studio (Umniy Lemon)',
-        path: `${this.basePath}/studio`,
+        path: `${this.basePath}.studio`,
         profileId: this.profileId,
         flows: {
           context: {
@@ -77,7 +80,7 @@ export class AiCombinatorBridge {
       }),
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'AI Text & Notes Flow',
-        path: `${this.basePath}/text`,
+        path: `${this.basePath}.text`,
         profileId: this.profileId,
         flows: {
           context: {
@@ -95,7 +98,7 @@ export class AiCombinatorBridge {
       }),
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'AI Images & Vision Flow',
-        path: `${this.basePath}/images`,
+        path: `${this.basePath}.images`,
         profileId: this.profileId,
         flows: {
           context: {
@@ -124,7 +127,7 @@ export class AiCombinatorBridge {
       }),
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'AI History Projection',
-        path: `${this.basePath}/history`,
+        path: `${this.basePath}.history`,
         profileId: this.profileId,
         flows: {
           context: {

@@ -1,5 +1,7 @@
 param(
-    [string]$DockerHost = "tcp://192.168.1.100:2375",
+    [string]$DockerContext = "lemon-remote",
+    [string]$DockerHost = "",
+    [string]$TargetHost = "192.168.1.100",
     [string]$ProjectName = "lemon-projectarium",
     [string]$ComposeFile = "docker-compose.projectarium.yml",
     [string]$BuildConfig = "projectarium-production",
@@ -8,29 +10,36 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$targetHost = ($DockerHost -replace "^tcp://", "" -replace ":\d+$", "")
+$targetHost = if ($DockerHost) { ($DockerHost -replace "^tcp://", "" -replace ":\d+$", "") } else { $TargetHost }
 if ($env:NO_PROXY -notmatch [regex]::Escape($targetHost)) {
     $env:NO_PROXY = if ($env:NO_PROXY) { "$($env:NO_PROXY),$targetHost" } else { $targetHost }
 }
 $env:no_proxy = $env:NO_PROXY
-$env:DOCKER_HOST = $DockerHost
+if ($DockerHost) {
+    $env:DOCKER_HOST = $DockerHost
+} else {
+    Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue
+}
 $env:WEB_BUILD_CONFIG = $BuildConfig
+$targetDesc = if ($DockerHost) { $DockerHost } else { "context:$DockerContext ($targetHost)" }
+$dockerPrefix = if ($DockerHost) { @() } else { @("--context", $DockerContext) }
 
-Write-Host "==> Deploying $ProjectName ($BuildConfig) to $DockerHost ..." -ForegroundColor Cyan
+Write-Host "==> Deploying $ProjectName ($BuildConfig) to $targetDesc ..." -ForegroundColor Cyan
 
-$composeArgs = @("compose", "-p", $ProjectName, "-f", $ComposeFile, "up", "-d", "--build")
+$composeArgs = $dockerPrefix + @("compose", "-p", $ProjectName, "-f", $ComposeFile, "up", "-d", "--build")
 if ($NoCache) {
-    $composeArgs = @("compose", "-p", $ProjectName, "-f", $ComposeFile, "build", "--no-cache")
-    & docker @composeArgs
+    $buildArgs = $dockerPrefix + @("compose", "-p", $ProjectName, "-f", $ComposeFile, "build", "--no-cache")
+    & docker @buildArgs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $composeArgs = @("compose", "-p", $ProjectName, "-f", $ComposeFile, "up", "-d")
+    $composeArgs = $dockerPrefix + @("compose", "-p", $ProjectName, "-f", $ComposeFile, "up", "-d")
 }
 
 & docker @composeArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "==> Container status:" -ForegroundColor Green
-& docker compose -p $ProjectName -f $ComposeFile ps
+$psArgs = $dockerPrefix + @("compose", "-p", $ProjectName, "-f", $ComposeFile, "ps")
+& docker @psArgs
 
 $apiPort = if ($env:API_PORT) { $env:API_PORT } else { "3200" }
 $webPort = if ($env:WEB_PORT) { $env:WEB_PORT } else { "8088" }

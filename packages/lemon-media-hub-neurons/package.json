@@ -11,7 +11,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "watch": "tsc --watch",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/test/media-neurons.test.js"
   },
   "dependencies": {
     "@lemon/core-combinator-sdk": "file:../core-combinator-sdk",

@@ -7,6 +7,7 @@ import {
   InMemoryStackBusTransport,
   matchesTopicPattern,
   parseStackTopic,
+  StackBusHub,
   WELL_KNOWN_TOPICS,
 } from '../dist/index.js';
 
@@ -93,4 +94,47 @@ test('InMemoryStackBusTransport durable replay policies (all / last / sinceSeq)'
 
   await handleAll.unsubscribe();
   await transport.disconnect();
+});
+
+test('StackBusHub.subscribe re-attaches managed subscriptions on transport upgrade', async () => {
+  const initialTransport = new InMemoryStackBusTransport();
+  await initialTransport.connect();
+  const hub = new StackBusHub(initialTransport);
+
+  const received = [];
+  const handle = await hub.subscribe(
+    { topicPattern: 'lemon.*.shard.>', durableName: 'main_shard_analytics', deliverPolicy: 'new' },
+    (env) => {
+      received.push({ seq: env.seq, slug: env.projectSlug, driver: hub.driver });
+    },
+  );
+
+  // Publish on initial transport
+  await hub.publish({
+    projectSlug: 'lemon-watchers',
+    domain: 'shard',
+    event: 'metrics',
+    payload: { ok: true },
+  });
+  assert.equal(received.length, 1);
+
+  // Upgrade transport (simulates StackBusService.onModuleInit swapping InMemory -> NATS)
+  const upgradedTransport = new InMemoryStackBusTransport();
+  await upgradedTransport.connect();
+  hub.transport = upgradedTransport;
+
+  // Give async reattach microtask a tick to attach on upgradedTransport
+  await new Promise((r) => setTimeout(r, 20));
+
+  await upgradedTransport.publish({
+    projectSlug: 'lemon-seasons',
+    domain: 'shard',
+    event: 'metrics',
+    payload: { ok: true },
+  });
+  assert.equal(received.length, 2);
+  assert.equal(received[1].slug, 'lemon-seasons');
+
+  await handle.unsubscribe();
+  await hub.disconnect();
 });

@@ -91,11 +91,13 @@ export class FlowsService {
   }
 
   async list(q: ListFlowsQueryDto): Promise<FlowView[]> {
-    return (await this.repo.findMany(q)).map(toFlowView);
+    const profileId = q.profileId ? await this.resolveProfileId(q.profileId) : undefined;
+    return (await this.repo.findMany({ ...q, profileId: profileId ?? undefined })).map(toFlowView);
   }
 
   async metrics(profileId?: string) {
-    const c = await this.repo.countByStatus(profileId);
+    const resolved = profileId ? await this.resolveProfileId(profileId) : undefined;
+    const c = await this.repo.countByStatus(resolved ?? undefined);
     return {
       registered: c.INACTIVE + c.ACTIVE + c.PAUSED + c.PROCESSING,
       executing: c.ACTIVE + c.PROCESSING,
@@ -111,7 +113,8 @@ export class FlowsService {
   async create(dto: CreateFlowDto): Promise<FlowView> {
     this.registry.get(dto.type).validateConfig(dto.config);
     const folderMeta = await this.assertFolder(dto.folderId);
-    const resolvedProfileId = dto.profileId ?? folderMeta?.profileId ?? null;
+    const rawProfileId = dto.profileId ?? folderMeta?.profileId ?? null;
+    const resolvedProfileId = await this.resolveProfileId(rawProfileId);
 
     const resolvedProjectSlug = this.normalizeProjectSlug(
       dto.projectSlug ?? (dto.config as any)?.projectSlug,
@@ -715,6 +718,14 @@ export class FlowsService {
         };
       }),
     };
+  }
+
+  private async resolveProfileId(profileId?: string | null): Promise<string | null> {
+    if (!profileId) return null;
+    if (typeof (this.repo as any).resolveProfileId === 'function') {
+      return (this.repo as any).resolveProfileId(profileId);
+    }
+    return profileId;
   }
 
   private async require(id: string) {

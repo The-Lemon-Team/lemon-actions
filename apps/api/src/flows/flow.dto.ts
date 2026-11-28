@@ -87,7 +87,7 @@ export class ListFlowsQueryDto {
   @IsOptional() @IsUUID()
   folderId?: string;
 
-  @IsOptional() @IsUUID()
+  @IsOptional() @IsString() @MaxLength(120)
   profileId?: string;
 
   @IsOptional() @IsString() @MaxLength(120)

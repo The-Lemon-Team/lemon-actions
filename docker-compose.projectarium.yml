@@ -38,6 +38,8 @@ services:
       PROJECTARIUM_LOCALHOST_ALIAS: ${PROJECTARIUM_LOCALHOST_ALIAS:-host.docker.internal}
       NATS_URL: ${NATS_URL:-nats://host.docker.internal:4222}
       LEMON_BUS_DRIVER: ${LEMON_BUS_DRIVER:-auto}
+      LEMON_SHARD_PROJECT_SLUG: ${LEMON_SHARD_PROJECT_SLUG:-lemon-projectarium}
+      LEMON_ANALYTICS_CONSUMER: ${LEMON_ANALYTICS_CONSUMER:-projectarium_shard_analytics}
       LEMON_SEASONS_URL: ${LEMON_SEASONS_URL:-http://host.docker.internal:3001}
       LEMON_MEDIA_HUB_URL: ${LEMON_MEDIA_HUB_URL:-http://host.docker.internal:3005}
       LEMON_AI_SERVICE_URL: ${LEMON_AI_SERVICE_URL:-http://host.docker.internal:3006}
