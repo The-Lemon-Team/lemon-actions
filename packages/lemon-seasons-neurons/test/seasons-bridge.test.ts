@@ -24,6 +24,7 @@ async function runSeasonsBridgeTests() {
 
   const combinatorDb = {
     chronicleEvents: [] as any[],
+    ensuredPaths: [] as string[],
     subscribers: [] as Array<(packet: any) => void>,
   };
 
@@ -88,15 +89,18 @@ async function runSeasonsBridgeTests() {
       onFlush: (_flowId: string, _cb: any) => () => {},
     },
     neurons: {
-      ensureCompositeNeuron: async (def: any) => ({
-        neuron: { id: 'neuron-daily-1', name: def.name, path: def.path },
-        flows: {
-          batch: { id: 'batch-flow-1', name: 'Day Influx' },
-          timer: { id: 'timer-flow-1', name: 'Evening Timer' },
-          mutex: { id: 'mutex-flow-1', name: 'Review Mutex' },
-          observer: { id: 'observer-flow-1', name: 'Timeline Observer' },
-        },
-      }),
+      ensureCompositeNeuron: async (def: any) => {
+        combinatorDb.ensuredPaths.push(def.path);
+        return {
+          neuron: { id: 'neuron-daily-1', name: def.name, path: def.path },
+          flows: {
+            batch: { id: 'batch-flow-1', name: 'Day Influx' },
+            timer: { id: 'timer-flow-1', name: 'Evening Timer' },
+            mutex: { id: 'mutex-flow-1', name: 'Review Mutex' },
+            observer: { id: 'observer-flow-1', name: 'Timeline Observer' },
+          },
+        };
+      },
     },
   } as any;
 
@@ -120,7 +124,13 @@ async function runSeasonsBridgeTests() {
   if (seasonsDb.feeds.size !== 2 || !seasonsDb.streams.has('developer-workspace')) {
     throw new Error('Expected topology (stream + 2 feeds) to be registered');
   }
-  console.log('  ✓ Топология Stream ("developer-workspace") и 2 Feeds успешно зарегистрирована в Lemon Seasons!');
+  await bridge.ensureSeasonsCompositeNeurons();
+  for (const expectedPath of ['seasons.topology', 'seasons.ingest', 'seasons.todos', 'seasons.media']) {
+    if (!combinatorDb.ensuredPaths.includes(expectedPath)) {
+      throw new Error(`Expected valid ltree neuron path "${expectedPath}", got ${combinatorDb.ensuredPaths.join(', ')}`);
+    }
+  }
+  console.log('  ✓ Топология Stream ("developer-workspace"), 2 Feeds и ltree нейроны (seasons.*) зарегистрированы!');
 
   // 2. Тестирование прямой вставки заметок с зеркалированием в Combinator Chronicle
   console.log('\nTest 2: Note Ingestion with Mirror Chronicle Snapshot');

@@ -42,8 +42,9 @@ Write-Host "🌐 Building Unified Lemon App Shell ($BuildConfig) image on $targe
 Invoke-DockerCompose @("build", "web")
 
 $watchersShardPort = if ($env:WATCHERS_SHARD_PORT) { $env:WATCHERS_SHARD_PORT } else { "4326" }
+$seasonsShardPort = if ($env:SEASONS_SHARD_PORT) { $env:SEASONS_SHARD_PORT } else { "4327" }
 
-Write-Host "📦 Starting Unified Lemon Stack (postgres, api, watchers-shard:$watchersShardPort, web) on $targetDesc ..." -ForegroundColor Cyan
+Write-Host "📦 Starting Unified Lemon Stack (postgres, api, watchers-shard:$watchersShardPort, seasons-shard:$seasonsShardPort, web) on $targetDesc ..." -ForegroundColor Cyan
 Invoke-DockerCompose @("up", "-d", "--remove-orphans")
 
 Write-Host "✅ Active containers on ${targetDesc}:" -ForegroundColor Green
@@ -59,11 +60,24 @@ foreach ($ep in @("health", "seasons/status", "media/status", "ai/status", "proj
   }
 }
 
-try {
-  $shardResp = Invoke-RestMethod -Uri "http://$($hostIp):$($watchersShardPort)/api/shard/health" -TimeoutSec 10
-  Write-Host "    Watchers Shard :$watchersShardPort/api/shard/health: $($shardResp | ConvertTo-Json -Compress)" -ForegroundColor Green
-} catch {
-  Write-Warning "Watchers Shard :$watchersShardPort probe failed: $_"
+foreach ($shardProbe in @(
+  @{ Name = "Watchers Shard"; Port = $watchersShardPort },
+  @{ Name = "Seasons Shard"; Port = $seasonsShardPort }
+)) {
+  $ok = $false
+  for ($attempt = 1; $attempt -le 5; $attempt++) {
+    try {
+      $shardResp = Invoke-RestMethod -Uri "http://$($hostIp):$($shardProbe.Port)/api/shard/health" -TimeoutSec 5
+      Write-Host "    $($shardProbe.Name) :$($shardProbe.Port)/api/shard/health: $($shardResp | ConvertTo-Json -Compress)" -ForegroundColor Green
+      $ok = $true
+      break
+    } catch {
+      Start-Sleep -Seconds 2
+    }
+  }
+  if (-not $ok) {
+    Write-Warning "$($shardProbe.Name) :$($shardProbe.Port) probe failed after retries"
+  }
 }
 
 foreach ($port in @(80, 4201)) {

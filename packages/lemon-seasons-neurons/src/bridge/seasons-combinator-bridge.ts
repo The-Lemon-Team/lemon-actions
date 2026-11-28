@@ -56,7 +56,10 @@ export class SeasonsCombinatorBridge {
     this.seasons = options.seasons;
     this.sseBus = options.sseBus;
     this.profileId = options.profileId;
-    this.basePath = (options.basePath || '/seasons').replace(/\/+$/, '');
+    this.basePath = (options.basePath || 'seasons')
+      .replace(/^\/+|\/+$/g, '')
+      .replace(/\//g, '.')
+      .replace(/-/g, '_') || 'seasons';
     this.defaultStreamSlug = options.defaultStreamSlug || 'core-combinator';
     this.defaultPrivacy = options.defaultPrivacy || 'private';
     this.bestEffortTelemetry = options.bestEffortTelemetry ?? true;
@@ -68,10 +71,10 @@ export class SeasonsCombinatorBridge {
 
   /**
    * Idempotently registers Composite Neurons for Lemon Seasons operations in Core Combinator:
-   * - `/seasons/topology`
-   * - `/seasons/ingest`
-   * - `/seasons/todos`
-   * - `/seasons/media`
+   * - `seasons.topology`
+   * - `seasons.ingest`
+   * - `seasons.todos`
+   * - `seasons.media`
    */
   async ensureSeasonsCompositeNeurons(): Promise<SeasonsCompositeNeurons> {
     if (!this.combinator) {
@@ -81,7 +84,7 @@ export class SeasonsCombinatorBridge {
     const [topology, ingest, todos, media] = await Promise.all([
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'Seasons Topology & Streams',
-        path: `${this.basePath}/topology`,
+        path: `${this.basePath}.topology`,
         profileId: this.profileId,
         flows: {
           context: {
@@ -99,7 +102,7 @@ export class SeasonsCombinatorBridge {
       }),
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'Seasons Note Ingest Flow',
-        path: `${this.basePath}/ingest`,
+        path: `${this.basePath}.ingest`,
         profileId: this.profileId,
         flows: {
           context: {
@@ -128,7 +131,7 @@ export class SeasonsCombinatorBridge {
       }),
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'Seasons TodoList Sync Flow',
-        path: `${this.basePath}/todos`,
+        path: `${this.basePath}.todos`,
         profileId: this.profileId,
         flows: {
           context: {
@@ -146,7 +149,7 @@ export class SeasonsCombinatorBridge {
       }),
       this.combinator.neurons.ensureCompositeNeuron({
         name: 'Seasons Note Media Bridge',
-        path: `${this.basePath}/media`,
+        path: `${this.basePath}.media`,
         profileId: this.profileId,
         flows: {
           context: {

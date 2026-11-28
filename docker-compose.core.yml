@@ -93,6 +93,47 @@ services:
       retries: 5
       start_period: 20s
 
+  seasons-shard:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: lemon-core-api:latest
+    container_name: lemon-seasons-shard
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${SEASONS_SHARD_PORT:-4327}:${SEASONS_SHARD_PORT:-4327}"
+    environment:
+      NODE_ENV: production
+      LEMON_SHARD_TIER: dedicated
+      LEMON_SHARD_PROJECT_SLUG: lemon-seasons
+      LEMON_SHARD_PROJECT_NAME: Lemon Seasons
+      LEMON_SHARD_ID: ${SEASONS_SHARD_ID:-shard-lemon-seasons-01}
+      LEMON_SHARD_PREFERRED_PORT: ${SEASONS_SHARD_PORT:-4327}
+      LEMON_SHARD_HOST: ${LEMON_SHARD_PUBLIC_HOST:-192.168.1.100}
+      LEMON_SHARD_HEALTH_HOST: ${SEASONS_SHARD_HEALTH_HOST:-seasons-shard}
+      LEMON_SHARD_ENV: ${LEMON_SHARD_ENV:-production}
+      LEMON_SHARD_NETWORK_MODE: ${LEMON_SHARD_NETWORK_MODE:-lan}
+      LEMON_PROJECTARIUM_URL: http://api:3000/api
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lemon}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${SEASONS_SHARD_DB:-lemon_seasons_shard}?schema=public
+      AUTO_SEED: "false"
+      NATS_URL: ${NATS_URL:-nats://host.docker.internal:4222}
+      LEMON_BUS_DRIVER: ${LEMON_BUS_DRIVER:-auto}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,api,watchers-shard,seasons-shard,host.docker.internal,192.168.1.100}
+      no_proxy: ${NO_PROXY:-localhost,127.0.0.1,postgres,nats,api,watchers-shard,seasons-shard,host.docker.internal,192.168.1.100}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${SEASONS_SHARD_PORT:-4327}/api/shard/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   web:
     build:
       context: .
