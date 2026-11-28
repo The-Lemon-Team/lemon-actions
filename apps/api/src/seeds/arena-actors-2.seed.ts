@@ -453,6 +453,33 @@ export const ARENA_ACTORS_PART_2: SeedArenaActor[] = [
     isLead: false,
     voicesCount: 0,
   },
+  {
+    id: 'actor-poseidon',
+    handle: 'poseidon_ocean',
+    flowId: 'flow-actor-poseidon',
+    name: 'Посейдон',
+    title: 'Повелитель Океанических Глубин & Штормов · Башня Воды (WATER)',
+    category: 'MYTHIC',
+    categoryLabel: 'Олимпийский Бог · Вода (WATER)',
+    avatarIcon: 'poseidon',
+    accentColor: 'cyan',
+    rankLabel: 'MYTHIC · ВЛАДЫКА МОРЕЙ',
+    quote: '«Волны шепчут о великом шторме. В пати с Зевсом, Аидом и Башней Воды мы неостановимы!»',
+    paradoxPhilosophy:
+      'Неукротимая стихия океана, глубина мысли и сплочённость вокруг реактивных потоков воды.',
+    favoriteDesire: 'Океанический бриз и морские легенды',
+    affinities: ['#посейдон', '#океан', '#шторм', '#вода', 'башня воды'],
+    traits: { charisma: 93, analytical: 84, rebelVersus: 85 },
+    voicePitch: 0.88,
+    voiceRate: 0.98,
+    sampleVoices: {
+      support: 'Океан поддерживает это решение всей мощью прилива Башни Воды!',
+      counter: 'Не поднимайте шторм в стакане воды — направьте поток в правильное русло!',
+      paradox: 'Стихия воды очищает разум для ясных тактик и надёжных потоков.',
+    },
+    isLead: false,
+    voicesCount: 7,
+  },
 ];
 
 export const ALL_ARENA_ACTORS_SEED: SeedArenaActor[] = [
